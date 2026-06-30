@@ -1,0 +1,4 @@
+-- Deprecated entrypoint: kept for backward compatibility.
+-- Use one of the explicit schemas below based on DB driver:
+--   - mysql/mariadb: sql/schema.mysql.sql
+--   - sqlite:       sql/schema.sqlite.sql
