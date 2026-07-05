@@ -130,6 +130,9 @@ MVC principles must be strictly followed.
 ## When Codex Works
 
 - Always explain the plan before coding
+- Before working on Plan, Routine, Calendar, Retrospect, or Goal menu behavior, read `docs/menu-feature-overview.md`
+- Before working on shared header, aside menu, bottom navigator, or common layout behavior, read `docs/common-layout.md`
+- Before working on dashboard calendar entry points, calendar pages, toast reuse, or calendar data sources, read `docs/calendar-feature-roles.md`
 - Only implement what is requested
 - Do not modify unrelated files
 - List changed files after completion

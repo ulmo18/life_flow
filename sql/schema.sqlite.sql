@@ -94,3 +94,53 @@ CREATE TABLE IF NOT EXISTS social_accounts (
 
 CREATE INDEX IF NOT EXISTS idx_social_accounts_user_id ON social_accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_social_accounts_email ON social_accounts(email);
+
+CREATE TABLE IF NOT EXISTS plan_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  goal_id INTEGER NULL,
+  title TEXT NOT NULL,
+  importance TEXT NOT NULL DEFAULT 'D',
+  deleted_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_templates_user_id ON plan_templates(user_id);
+CREATE INDEX IF NOT EXISTS idx_plan_templates_goal_id ON plan_templates(goal_id);
+CREATE INDEX IF NOT EXISTS idx_plan_templates_deleted_at ON plan_templates(deleted_at);
+
+CREATE TABLE IF NOT EXISTS plan_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  source_plan_group_id INTEGER NULL,
+  version_no INTEGER NOT NULL DEFAULT 1,
+  name TEXT NOT NULL,
+  deleted_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (source_plan_group_id) REFERENCES plan_groups(id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_groups_source_id ON plan_groups(source_plan_group_id);
+CREATE INDEX IF NOT EXISTS idx_plan_groups_user_deleted ON plan_groups(user_id, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_plan_groups_user_updated ON plan_groups(user_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS plan_blocks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_group_id INTEGER NOT NULL,
+  plan_template_id INTEGER NOT NULL,
+  start_index INTEGER NOT NULL,
+  end_index INTEGER NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (plan_group_id) REFERENCES plan_groups(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (plan_template_id) REFERENCES plan_templates(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CHECK (start_index >= 0 AND end_index <= 144 AND start_index < end_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_blocks_group_order ON plan_blocks(plan_group_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_plan_blocks_template_id ON plan_blocks(plan_template_id);

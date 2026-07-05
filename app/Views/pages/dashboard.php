@@ -2,31 +2,30 @@
 <?php require __DIR__ . '/../layouts/header.php'; ?>
 
 <main class="page">
-    <h1 class="page-title">환영합니다 👋</h1>
-    <section class="section">
-        <p>LifeFlow에 로그인하셨습니다.</p>
-        <p class="muted">추후 이곳에 개인화된 핵심 콘텐츠가 표시됩니다.</p>
+    <h1 class="page-title">대시보드</h1>
+
+    <section class="section dashboard-hero">
+        <div>
+            <p class="eyebrow">오늘의 첫 화면</p>
+            <h2>캘린더에서 하루 흐름을 확인하세요</h2>
+            <p class="muted">현재는 캘린더 테스트 기능으로 이동하며, 추후 계획/실제 기록 요약이 이곳에 표시됩니다.</p>
+        </div>
+        <a class="btn btn-primary dashboard-action" href="/calendar">캘린더 열기</a>
     </section>
 
     <section class="section">
-        <h2>콘텐츠 영역 (Placeholder)</h2>
+        <h2>빠른 메뉴</h2>
         <div class="card-grid">
-            <article class="placeholder-card">카드 Placeholder 1</article>
-            <article class="placeholder-card">카드 Placeholder 2</article>
-            <article class="placeholder-card">카드 Placeholder 3</article>
+            <a class="placeholder-card dashboard-menu-card" href="/calendar">
+                <strong>캘린더</strong>
+                <span class="muted">10분 단위 일정 테스트</span>
+            </a>
+            <a class="placeholder-card dashboard-menu-card" href="/settings">
+                <strong>설정</strong>
+                <span class="muted">계정 및 알림 설정</span>
+            </a>
         </div>
     </section>
-
-    <section class="section">
-        <h2>알림 권한 안내</h2>
-        <p class="muted">알림 권한 흐름은 설정 또는 아래 링크에서 확인할 수 있습니다.</p>
-        <p><a class="link" href="/notification-guide">알림 권한 안내로 이동</a></p>
-    </section>
-
-    <form method="post" action="/logout">
-        <input type="hidden" name="_csrf_token" value="<?= e(\App\Core\Csrf::token()) ?>">
-        <button type="submit" class="btn btn-ghost">로그아웃</button>
-    </form>
 </main>
 
 <?php require __DIR__ . '/../layouts/footer.php'; ?>

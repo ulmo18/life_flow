@@ -326,6 +326,21 @@ final class AuthController
         $this->render('pages/dashboard');
     }
 
+    public function retrospect(): void
+    {
+        $this->render('pages/retrospect');
+    }
+
+    public function routine(): void
+    {
+        $this->render('pages/routine');
+    }
+
+    public function plan(): void
+    {
+        $this->render('pages/plan');
+    }
+
     public function settings(): void
     {
         $this->render('pages/settings');

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-$explicitDriver = getenv('DB_CONNECTION') ?: '';
+$explicitDriver = getenv('DB_CONNECTION') ?: (getenv('DB_DRIVER') ?: '');
 
 $hasNetworkDbEnv = (getenv('DB_HOST') ?: '') !== ''
     || (getenv('DB_NAME') ?: '') !== ''

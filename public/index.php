@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Controllers\AuthController;
+use App\Controllers\CalendarController;
+use App\Controllers\PlanController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\GuestMiddleware;
@@ -38,6 +40,8 @@ $rememberMeService->autoLoginFromCookie();
 
 $router = new Router();
 $authController = new AuthController();
+$calendarController = new CalendarController();
+$planController = new PlanController();
 
 $router->aliasMiddleware('auth', AuthMiddleware::class);
 $router->aliasMiddleware('guest', GuestMiddleware::class);
@@ -51,6 +55,17 @@ $router->get('/auth/google/callback', [$authController, 'handleGoogleCallback'],
 $router->get('/auth/google/callback.php', [$authController, 'handleGoogleCallback'], ['guest']);
 
 $router->get('/dashboard', [$authController, 'dashboard'], ['auth']);
+$router->get('/retrospect', [$authController, 'retrospect'], ['auth']);
+$router->get('/calendar', [$calendarController, 'index'], ['auth']);
+$router->get('/routine', [$authController, 'routine'], ['auth']);
+$router->get('/plan', [$planController, 'index'], ['auth']);
+$router->get('/plan/show', [$planController, 'show'], ['auth']);
+$router->get('/plan/new', [$planController, 'create'], ['auth']);
+$router->get('/plan/edit', [$planController, 'edit'], ['auth']);
+$router->post('/plan', [$planController, 'store'], ['auth']);
+$router->post('/plan/update', [$planController, 'update'], ['auth']);
+$router->post('/plan/copy', [$planController, 'copy'], ['auth']);
+$router->post('/plan/delete', [$planController, 'delete'], ['auth']);
 $router->get('/settings', [$authController, 'settings'], ['auth']);
 $router->get('/notification-guide', [$authController, 'notificationGuide'], ['auth']);
 $router->get('/privacy-policy', [$authController, 'privacyPolicy']);
