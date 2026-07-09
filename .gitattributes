@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.php text
+*.js text
+*.css text
+*.html text
+*.md text
+*.sql text
+*.json text
+*.yml text
+*.yaml text
+*.env.example text

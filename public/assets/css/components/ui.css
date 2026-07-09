@@ -1,7 +1,7 @@
 .ui-layer {
   position: fixed;
   inset: 0;
-  z-index: 1100;
+  z-index: 1300;
 }
 
 .ui-layer[hidden] {

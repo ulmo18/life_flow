@@ -5,7 +5,7 @@
         <div>
             <p class="eyebrow">Plan</p>
             <h1 class="calendar-date"><?= e((string) $plan['name']) ?></h1>
-            <p class="calendar-subtitle">v<?= e((string) $plan['versionNo']) ?> · <?= count($plan['blocks']) ?>개 블록</p>
+            <p class="calendar-subtitle"><?= count($plan['blocks']) ?>개 블록</p>
         </div>
         <a class="calendar-icon-button" href="/plan" aria-label="계획 리스트로 이동">←</a>
     </section>
@@ -65,7 +65,10 @@
                         <span class="importance-badge"><?= e((string) $block['importanceBadge']) ?></span>
                         <strong><?= e((string) $block['title']) ?></strong>
                     </div>
-                    <span><?= e((string) $block['timeRange']) ?> · template #<?= e((string) $block['templateId']) ?> · <?= e((string) $block['importanceLabel']) ?></span>
+                    <span><?= e((string) $block['timeRange']) ?> · <?= e((string) $block['importanceLabel']) ?></span>
+                    <?php if (!empty($block['goalTitle'])): ?>
+                        <span class="plan-block-goal">목표 · <?= e((string) $block['goalTitle']) ?></span>
+                    <?php endif; ?>
                 </li>
             <?php endforeach; ?>
         </ul>

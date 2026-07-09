@@ -9,7 +9,7 @@
     </section>
 
     <?php if (!empty($flashSuccess)): ?>
-        <div class="msg msg-success" data-toast-message="<?= e((string) $flashSuccess) ?>"><?= e((string) $flashSuccess) ?></div>
+        <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
     <?php endif; ?>
 
     <?php if (!empty($errors['general'])): ?>
@@ -31,8 +31,14 @@
                             <span>
                                 <?= e((string) $plan['timeRange']) ?>
                                 · <?= e((string) $plan['blockCount']) ?>개 블록
-                                · v<?= e((string) $plan['versionNo']) ?>
                             </span>
+                            <?php if (!empty($plan['goalTitles'])): ?>
+                                <div class="plan-goal-list" aria-label="연결된 목표">
+                                    <?php foreach ($plan['goalTitles'] as $goalTitle): ?>
+                                        <span><?= e((string) $goalTitle) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <div class="plan-list-actions">
                             <a class="btn btn-secondary" href="/plan/show?id=<?= e((string) $plan['id']) ?>">상세</a>

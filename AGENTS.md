@@ -101,6 +101,7 @@ MVC principles must be strictly followed.
 
 ## Coding Conventions
 
+- Save all text source files as UTF-8 without BOM.
 - DB: snake_case
 - Classes: PascalCase
 - Functions: camelCase

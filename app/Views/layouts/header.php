@@ -13,9 +13,19 @@
 <?php
 $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $showAppChrome = !($hideNav ?? false) && isset($_SESSION['user_id']);
+$asideNickname = trim((string) ($_SESSION['user_nickname'] ?? ''));
+$asideEmail = trim((string) ($_SESSION['user_email'] ?? ''));
+$asideDisplayName = $asideNickname !== '' ? $asideNickname : '회원 #' . (string) ($_SESSION['user_id'] ?? '');
+$isCalendarActive = $currentPath === '/calendar';
+$isPlanActive = $currentPath === '/plan' || strpos($currentPath, '/plan/') === 0;
+$isRoutineActive = $currentPath === '/routine';
+$isRetrospectActive = $currentPath === '/retrospect';
+$isGoalActive = $currentPath === '/goal';
+$themePreference = (string) ($_SESSION['theme_preference'] ?? 'light');
+$themePreference = $themePreference === 'dark' ? 'dark' : 'light';
 ?>
 </head>
-<body class="<?= $showAppChrome ? 'has-app-chrome-body' : '' ?>">
+<body class="<?= $showAppChrome ? 'has-app-chrome-body' : '' ?>" data-theme="<?= e($themePreference) ?>">
 <div class="app-shell<?= $showAppChrome ? ' has-app-chrome' : '' ?>">
     <header class="site-header">
         <div class="site-header-inner">
@@ -40,17 +50,39 @@ $showAppChrome = !($hideNav ?? false) && isset($_SESSION['user_id']);
         <div class="app-overlay" data-menu-close hidden></div>
         <aside class="app-aside" id="appAside" aria-label="앱 메뉴" aria-hidden="true">
             <div class="app-aside-header">
-                <strong>LifeFlow</strong>
+                <a
+                    class="aside-settings-link"
+                    href="/settings"
+                    aria-label="설정"
+                    <?= $currentPath === '/settings' ? 'aria-current="page"' : '' ?>
+                >&#9881;</a>
                 <button class="aside-close" type="button" aria-label="메뉴 닫기" data-menu-close>×</button>
             </div>
+            <section class="aside-user" aria-label="로그인 회원 정보">
+                <span class="aside-user-avatar" aria-hidden="true"><?= e(mb_substr($asideDisplayName, 0, 1)) ?></span>
+                <div class="aside-user-text">
+                    <strong><?= e($asideDisplayName) ?></strong>
+                    <?php if ($asideEmail !== ''): ?>
+                        <small><?= e($asideEmail) ?></small>
+                    <?php else: ?>
+                        <small>로그인 중</small>
+                    <?php endif; ?>
+                </div>
+            </section>
             <nav class="aside-nav" aria-label="관리 메뉴">
-                <a href="/dashboard" <?= $currentPath === '/dashboard' ? 'aria-current="page"' : '' ?>>대시보드</a>
-                <a href="/calendar" <?= $currentPath === '/calendar' ? 'aria-current="page"' : '' ?>>캘린더</a>
-                <a href="/settings" <?= $currentPath === '/settings' ? 'aria-current="page"' : '' ?>>설정</a>
+                <div class="aside-nav-group">
+                    <a href="/dashboard" <?= $currentPath === '/dashboard' ? 'aria-current="page"' : '' ?>>대시보드</a>
+                </div>
+                <div class="aside-nav-group">
+                    <a href="/calendar" <?= $isCalendarActive ? 'aria-current="page"' : '' ?>>캘린더</a>
+                    <a href="/plan" <?= $isPlanActive ? 'aria-current="page"' : '' ?>>계획</a>
+                    <a href="/routine" <?= $isRoutineActive ? 'aria-current="page"' : '' ?>>루틴</a>
+                    <a href="/retrospect" <?= $isRetrospectActive ? 'aria-current="page"' : '' ?>>회고</a>
+                    <a href="/goal" <?= $isGoalActive ? 'aria-current="page"' : '' ?>>목표</a>
+                </div>
+                <div class="aside-nav-group">
+                    <a href="/tags" <?= $currentPath === '/tags' ? 'aria-current="page"' : '' ?>>일정 태그 관리</a>
+                </div>
             </nav>
-            <form class="aside-logout" method="post" action="/logout">
-                <input type="hidden" name="_csrf_token" value="<?= e(\App\Core\Csrf::token()) ?>">
-                <button type="submit" class="btn btn-ghost">로그아웃</button>
-            </form>
         </aside>
     <?php endif; ?>

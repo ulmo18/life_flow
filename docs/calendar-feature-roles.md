@@ -1,7 +1,7 @@
 # Calendar Feature Roles
 
 ## Purpose
-This document defines the ownership boundaries for the dashboard calendar entry point, the calendar feature page, shared toast UI, and temporary fixture data.
+This document defines the ownership boundaries for the dashboard calendar entry point, the calendar feature page, shared toast UI, actual-event persistence, routine check entry points, and Retrospect preview UI.
 
 Read this file before changing calendar, toast, dashboard entry, or calendar data-source behavior.
 
@@ -16,7 +16,14 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Calendar views live under `app/Views/pages/calendar/`.
 - Page-specific calendar CSS lives under `public/assets/css/pages/`.
 - Page-specific calendar JavaScript lives under `public/assets/js/pages/`.
-- Keep drag selection and temporary client-side event creation in page JavaScript until persistence is added.
+- Keep drag selection in page JavaScript. Actual event creation and deletion should go through Calendar POST routes.
+- On touch devices, the day grid is reserved for schedule tap/drag selection and the right-side scroll lane is reserved for vertical page scrolling.
+- Calendar bottom sheets and popups should close from the close button and dimmed overlay through click handlers only; avoid mixing pointerup and click for the same close action.
+- Calendar bottom sheets should scroll internally when their content exceeds the mobile viewport.
+- The expanded "today's plan" summary should stay compact on mobile, using an internal scroll area once it reaches about 40% of the viewport height.
+- Calendar floating action buttons should share the same size, padding, and alignment, while preserving their distinct colors.
+- Shared confirmation modals opened from calendar sheets must appear above the calendar-local layer.
+- Calendar block title tooltips should remain hover-only and should not appear during mobile touch editing.
 
 ## Controller
 - `CalendarController` handles request and response flow only.
@@ -25,8 +32,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 
 ## Model
 - `CalendarRepository` is the data access boundary for calendar events.
-- Current implementation reads fixture data.
-- Future MySQL/SQLite queries should be added here or behind this model boundary.
+- Current implementation persists actual events with `calendar_days`, `calendar_events`, and `calendar_date_meta`.
 - Keep returned event shapes stable so views and JavaScript do not depend on the data source.
 
 ## Service
@@ -34,13 +40,26 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Use it for formatting, segment generation, and data-source normalization.
 - Keep DB queries out of services.
 
-## Fixture Data
-- `app/Data/calendar_fixture.php` contains temporary test data.
-- Preserve the fixture as a development fallback when adding DB persistence.
-- Fixture and DB-backed events should normalize to the same structure:
-  - `title`
-  - `start`
-  - `end`
+## Persistence
+- `calendar_days` stores one user/date row and the one selected `plan_group_id` for that day.
+- `calendar_events` stores actual schedule blocks and optional `plan_template_id` links.
+- `calendar_tag_palettes` stores the shared 15-color palette for actual-event tags.
+- `calendar_tags` stores four default system tags plus user-created personal tags.
+- `calendar_date_meta` stores holiday/substitute-holiday metadata for date coloring.
+- See `docs/calendar-feature-implementation.md` for table, route, and UI details.
+
+## Routine Entry Point
+- The Calendar routine popup reads active routines for the selected date.
+- Routine execution toggles from Calendar and Routine page must write to the same `routine_logs` table.
+- Routine execution toggles should update in place with JSON when JavaScript is available, while keeping POST redirect fallback behavior.
+- Keep the popup light enough that it does not block actual schedule input.
+
+## Retrospect Entry Point
+- Calendar shows a Retrospect button as a daily reminder entry point.
+- The button opens the latest submitted Retrospect report on or before the selected calendar date.
+- If there is no submitted Retrospect report yet, the button is disabled.
+- Retrospect owns report creation, draft editing, publishing, history, and report snapshots.
+- Calendar should only render submitted Retrospect snapshots and must not provide Retrospect editing.
 
 ## Toast
 - Toast is a shared UI component.
@@ -48,6 +67,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - CSS lives in `public/assets/css/components/toast.css`.
 - JavaScript lives in `public/assets/js/components/toast.js`.
 - Use `window.LifeFlowToast.show(message, options)` from page scripts.
+- Calendar may render an initial toast when the selected date has no plan group so the user is nudged to set a baseline plan.
 
 ## Future DB Extension Notes
 - Support both MySQL and SQLite.

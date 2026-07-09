@@ -11,13 +11,15 @@
   const sheetInput = document.getElementById('lifeFlowSheetInput');
   const sheetImportanceGroup = document.getElementById('lifeFlowSheetImportanceGroup');
   const sheetImportance = document.getElementById('lifeFlowSheetImportance');
+  const sheetGoalGroup = document.getElementById('lifeFlowSheetGoalGroup');
+  const sheetGoal = document.getElementById('lifeFlowSheetGoal');
   const sheetError = document.getElementById('lifeFlowSheetError');
   const sheetForm = document.getElementById('lifeFlowSheetForm');
   const sheetSubmit = sheet ? sheet.querySelector('[data-ui-sheet-submit]') : null;
   const sheetCancel = sheet ? sheet.querySelector('[data-ui-cancel]') : null;
   const closers = layer ? layer.querySelectorAll('[data-ui-close]') : [];
 
-  if (!layer || !modal || !sheet || !modalTitle || !modalBody || !modalConfirm || !modalCancel || !sheetTitle || !sheetLabel || !sheetInput || !sheetImportanceGroup || !sheetImportance || !sheetError || !sheetForm || !sheetSubmit || !sheetCancel) {
+  if (!layer || !modal || !sheet || !modalTitle || !modalBody || !modalConfirm || !modalCancel || !sheetTitle || !sheetLabel || !sheetInput || !sheetImportanceGroup || !sheetImportance || !sheetGoalGroup || !sheetGoal || !sheetError || !sheetForm || !sheetSubmit || !sheetCancel) {
     return;
   }
 
@@ -27,6 +29,7 @@
   let sheetOptions = null;
   let tooltip = null;
   let activeTooltipTarget = null;
+  const supportsHoverTooltip = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
   function ensureTooltip() {
     if (!tooltip) {
@@ -65,6 +68,10 @@
   }
 
   function showTooltip(target, event) {
+    if (!supportsHoverTooltip) {
+      return;
+    }
+
     const message = target.dataset.uiTooltip;
     if (!message) {
       return;
@@ -146,6 +153,15 @@
       sheetCancel.textContent = options.cancelText || '취소';
       sheetImportanceGroup.hidden = !options.showImportance;
       sheetImportance.value = options.importance || 'D';
+      sheetGoalGroup.hidden = !options.showGoal;
+      sheetGoal.innerHTML = '<option value="">연결하지 않음</option>';
+      (options.goalOptions || []).forEach(goal => {
+        const option = document.createElement('option');
+        option.value = String(goal.id || '');
+        option.textContent = String(goal.label || goal.title || '');
+        option.selected = Number(goal.id) === Number(options.goalId || 0);
+        sheetGoal.appendChild(option);
+      });
       sheetError.hidden = true;
       sheetError.textContent = '';
       activeResolve = resolve;
@@ -164,7 +180,12 @@
     }
   }
 
-  function handleCancel() {
+  function handleCancel(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
     if (activeMode === 'modal' || activeMode === 'sheet') {
       closeLayer(null);
     }
@@ -184,6 +205,7 @@
       closeLayer({
         title: value,
         importance: String(sheetImportance.value || 'D').toUpperCase(),
+        goalId: sheetGoalGroup.hidden ? null : (sheetGoal.value || null),
       });
       return;
     }
@@ -195,7 +217,13 @@
   modalCancel.addEventListener('click', handleCancel);
   sheetCancel.addEventListener('click', handleCancel);
   sheetForm.addEventListener('submit', handleSheetSubmit);
-  closers.forEach(button => button.addEventListener('click', () => closeIfOpen(null)));
+  closers.forEach(button => {
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeIfOpen(null);
+    });
+  });
 
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
@@ -204,32 +232,36 @@
     }
   });
 
-  document.addEventListener('mouseover', event => {
-    const target = event.target instanceof Element
-      ? event.target.closest('[data-ui-tooltip]')
-      : null;
+  if (supportsHoverTooltip) {
+    document.addEventListener('mouseover', event => {
+      const target = event.target instanceof Element
+        ? event.target.closest('[data-ui-tooltip]')
+        : null;
 
-    if (target instanceof HTMLElement) {
-      showTooltip(target, event);
-    }
-  });
+      if (target instanceof HTMLElement) {
+        showTooltip(target, event);
+      }
+    });
 
-  document.addEventListener('mousemove', event => {
-    if (activeTooltipTarget) {
-      positionTooltip(event);
-    }
-  });
+    document.addEventListener('mousemove', event => {
+      if (activeTooltipTarget) {
+        positionTooltip(event);
+      }
+    });
 
-  document.addEventListener('mouseout', event => {
-    if (!activeTooltipTarget) {
-      return;
-    }
+    document.addEventListener('mouseout', event => {
+      if (!activeTooltipTarget) {
+        return;
+      }
 
-    const relatedTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
-    if (!relatedTarget || !activeTooltipTarget.contains(relatedTarget)) {
-      hideTooltip();
-    }
-  });
+      const relatedTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+      if (!relatedTarget || !activeTooltipTarget.contains(relatedTarget)) {
+        hideTooltip();
+      }
+    });
+  }
+
+  document.addEventListener('touchstart', hideTooltip, { passive: true });
 
   window.addEventListener('scroll', hideTooltip, true);
 

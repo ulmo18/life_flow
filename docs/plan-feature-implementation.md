@@ -93,7 +93,7 @@ Important columns:
 
 Creation behavior:
 
-When creating or editing a plan group, each block creates its own `plan_templates` row. This lets each block have its own title, importance, and future `goal_id` connection.
+When creating or editing a plan group, each block creates its own `plan_templates` row. This lets each block have its own title, importance, and `goal_id` connection.
 
 Copy behavior:
 
@@ -101,7 +101,7 @@ When copying a plan group, `plan_templates` rows are not copied. The copied `pla
 
 Goal linkage:
 
-`goal_id` is nullable and intentionally has no foreign key yet because the Goal table has not been introduced. When Goal is implemented, connect specific plan template rows to goals here.
+`goal_id` is nullable and connects specific plan template rows to active `goals.id` records. The Plan editor exposes active goals inside the block bottom sheet, and list/detail screens show connected goal labels.
 
 Importance mapping:
 
@@ -125,14 +125,16 @@ All POST routes require CSRF verification.
 
 ## Current UI Behavior
 
-- The list page shows each visible plan group with its name, time range, block count, version, detail button, edit button, copy button, and delete button.
+- The list page shows each visible plan group with its name, time range, block count, detail button, edit button, copy button, and delete button.
+- Plan `version_no` is kept as internal data for versioned editing but is not shown in user-facing Plan or Calendar labels.
 - The list page uses a floating `계획 추가` submit button with the same visual treatment as the editor's floating `계획 저장` button.
 - Plan list action buttons are intentionally compact so repeated plan cards do not become dominated by controls.
 - The detail page shows the saved day grid and a block summary list with block title, time range, importance badge, and template id.
 - The detail page does not show an `Add plan` button.
 - The add/edit page uses the same 24-row, 6-column day-grid shape as Calendar.
 - Dragging cells opens a common bottom sheet and asks for the block title and importance.
-- Plan block titles in the detail and add/edit grids use `data-ui-tooltip` so long names can be shown near the mouse cursor on hover. Detail grid blocks must allow pointer events so short blocks can reveal the same tooltip as editor blocks.
+- The block bottom sheet can also connect the block to one active goal.
+- Plan block titles in the detail and add/edit grids use `data-ui-tooltip` so long names can be shown near the mouse cursor on hover-capable devices. Detail grid blocks must allow pointer events so short blocks can reveal the same tooltip as editor blocks, but touch devices should not show these hover tooltips.
 - Saving and destructive actions use the shared modal popup.
 - `Plan Save` is a floating button.
 - Copying a plan group redirects back to the plan list, not to the copied plan detail page.
@@ -149,9 +151,10 @@ These are rendered once in the shared layout footer and controlled by `window.Li
 
 Toast messages now appear near the top of the viewport instead of the bottom.
 Authenticated pages offset toast messages below the sticky header so they remain visible. Elements with `data-toast-message` trigger the shared toast after page load.
+Success flash messages should be rendered as hidden `data-toast-message` triggers, not visible inline success boxes.
 Toast styling follows the app's organic surface pattern: light surface background, earth-tone border/shadow, text color from the shared tokens, and the main Sunset Red only as an action/progress accent.
 
-The shared UI layer also provides hover tooltips for elements with `data-ui-tooltip`. This is used by plan grid blocks to reveal long block names without changing the grid layout.
+The shared UI layer also provides hover tooltips for elements with `data-ui-tooltip`. This is used by plan grid blocks to reveal long block names without changing the grid layout. Tooltips are limited to hover-capable fine pointers so mobile touch editing does not show tooltip UI at the same time.
 
 ## Editing Policy
 
@@ -172,5 +175,5 @@ This keeps future Calendar and Goal references to older plan data stable.
 - Calendar should link one selected `plan_group` to one day.
 - If a day already has actual schedule entries linked to a plan and the selected plan group changes, the UI should warn that existing actual-plan links must be cleared and re-linked.
 - Deleted plan groups should be displayable later as `Deleted Plan` when historical calendar or retrospect data references them.
-- Goal menu work should connect goals to `plan_templates.goal_id`, not to `plan_groups` or `plan_blocks`.
+- Goal linkage uses `plan_templates.goal_id`, not `plan_groups` or `plan_blocks`.
 - If editing history becomes user-facing, add a history page that groups rows by `source_plan_group_id`.

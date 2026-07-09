@@ -6,11 +6,13 @@ namespace App\Controllers;
 
 use App\Core\Csrf;
 use App\Core\Database;
+use App\Services\GoalService;
 use App\Services\PlanService;
 
 final class PlanController
 {
     private ?PlanService $planService = null;
+    private ?GoalService $goalService = null;
 
     public function index(): void
     {
@@ -102,7 +104,7 @@ final class PlanController
 
         $name = (string) ($_POST['name'] ?? '');
         $rawBlocks = $this->decodeBlocks((string) ($_POST['blocks'] ?? '[]'));
-        $validation = $this->planService()->validateInput($name, $rawBlocks);
+        $validation = $this->planService()->validateInput($this->userId(), $name, $rawBlocks);
 
         if (!$validation['ok']) {
             $this->redirectWithErrors('/plan/new', $validation['errors'], [
@@ -139,7 +141,7 @@ final class PlanController
 
         $name = (string) ($_POST['name'] ?? '');
         $rawBlocks = $this->decodeBlocks((string) ($_POST['blocks'] ?? '[]'));
-        $validation = $this->planService()->validateInput($name, $rawBlocks);
+        $validation = $this->planService()->validateInput($this->userId(), $name, $rawBlocks);
 
         if ($sourceGroupId <= 0 || !$validation['ok']) {
             $this->redirectWithErrors($editPath, $validation['errors'] ?: ['general' => '수정할 계획을 찾을 수 없습니다.'], [
@@ -219,6 +221,7 @@ final class PlanController
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
+            'goalOptions' => $this->goalService()->activeGoalOptions($this->userId()),
             'pageStyles' => [
                 '/assets/css/pages/calendar.css',
                 '/assets/css/pages/plan.css',
@@ -236,6 +239,15 @@ final class PlanController
         }
 
         return $this->planService;
+    }
+
+    private function goalService(): GoalService
+    {
+        if (!$this->goalService instanceof GoalService) {
+            $this->goalService = new GoalService();
+        }
+
+        return $this->goalService;
     }
 
     private function isPlanDatabaseReady(): bool

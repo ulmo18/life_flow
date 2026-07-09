@@ -18,26 +18,45 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 
 ## Aside Menu
 - The aside is opened from the header hamburger button.
+- Show a compact signed-in user summary near the top of the aside.
+- The aside header uses a settings gear link instead of a text brand.
 - The aside owns management navigation:
   - Dashboard
   - Calendar
-  - Settings
-  - Logout
-- Logout must remain a POST form with a CSRF token.
+  - Plan
+  - Routine
+  - Retrospect
+  - Goal
+  - Schedule Tag Management
+- Group aside links with separators:
+  - Dashboard
+  - Calendar, Plan, Routine, Retrospect, Goal
+  - Schedule Tag Management
+- Logout lives inside the Settings page and must remain a POST form with a CSRF token.
 
 ## Bottom Navigator
 - The bottom navigator is fixed to the bottom center of the viewport.
 - It owns the primary feature navigation in this order:
   - Retrospect
-  - Calendar
-  - Routine
   - Plan
+  - Routine
+  - Calendar
 - Keep active page state through `aria-current="page"`.
 
 ## Assets
 - Shared layout CSS lives in `public/assets/css/app.css`.
 - Shared layout JavaScript lives in `public/assets/js/components/app-layout.js`.
 - Page-specific CSS and JavaScript should continue using `$pageStyles` and `$pageScripts`.
+- Shared modal and sheet close actions should use click handlers consistently; avoid registering pointerup and click on the same close control.
+- Shared UI modals must stack above page-local sheets so confirmation dialogs opened from a sheet are never hidden behind it.
+- Shared hover tooltips should only appear on hover-capable fine pointers, not on touch devices.
+- Shared `.input` fields use the app typography, 15px text, soft card-like surfaces, and visible focus states so inputs and textareas match the current visual system.
+
+## Theme
+- The authenticated shell reads `$_SESSION['theme_preference']` and writes it to `body[data-theme]`.
+- Supported values are `light` and `dark`.
+- Settings persists the user choice in `user_preferences.theme`.
+- Shared colors should be expressed through CSS variables so page-specific styles respond to the active theme.
 
 ## Responsive Rules
 - Mobile is the primary layout target.

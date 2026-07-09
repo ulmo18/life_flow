@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\RememberToken;
 use App\Models\User;
+use App\Models\UserPreferenceRepository;
 use DateInterval;
 use DateTimeImmutable;
 
@@ -97,6 +98,10 @@ final class RememberMeService
 
         session_regenerate_id(true);
         $_SESSION['user_id'] = (int) $user['id'];
+        $_SESSION['user_nickname'] = (string) ($user['nickname'] ?? '');
+        $_SESSION['user_email'] = (string) ($user['email'] ?? '');
+        $preferences = (new UserPreferenceRepository())->get((int) $user['id']);
+        $_SESSION['theme_preference'] = (string) ($preferences['theme'] ?? 'light') === 'dark' ? 'dark' : 'light';
 
         // Rotate token after successful auto-login to reduce replay window.
         $this->rememberTokenModel->deleteBySelector($selector);

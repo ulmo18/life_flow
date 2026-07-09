@@ -8,6 +8,11 @@
 - MySQL 8.x 또는 MariaDB 10.x
 - 브라우저(Service Worker / Notification API 지원)
 
+## 개발 환경 규칙
+- 모든 텍스트 소스 파일은 **UTF-8 without BOM**으로 저장합니다.
+- 에디터는 루트의 `.editorconfig` 설정을 따릅니다.
+- Git 텍스트 파일 정규화는 루트의 `.gitattributes` 설정을 따릅니다.
+
 ## DB 준비 방법
 1. 데이터베이스 생성
 2. 드라이버별 스키마 적용

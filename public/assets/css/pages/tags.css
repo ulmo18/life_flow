@@ -1,0 +1,122 @@
+.tag-page {
+  padding-bottom: 128px;
+}
+
+.tag-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tag-form-section h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-lg);
+}
+
+.tag-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tag-form.compact {
+  margin-top: var(--space-3);
+}
+
+.tag-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tag-palette-grid legend {
+  grid-column: 1 / -1;
+  margin-bottom: 2px;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.tag-palette-option {
+  position: relative;
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(216, 200, 179, 0.84);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 250, 242, 0.68);
+  cursor: pointer;
+}
+
+.tag-palette-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tag-palette-option span,
+.tag-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--tag-color);
+  box-shadow: inset 0 0 0 3px rgba(255, 250, 242, 0.72);
+}
+
+.tag-palette-option:has(input:checked) {
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(26, 27, 58, 0.1);
+}
+
+.tag-palette-option.is-disabled {
+  opacity: 0.34;
+  cursor: not-allowed;
+}
+
+.tag-list-section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tag-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid rgba(216, 200, 179, 0.86);
+  border-radius: var(--radius-md);
+  background: rgba(255, 250, 242, 0.84);
+}
+
+.tag-card-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tag-card-title small,
+.tag-edit-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tag-edit-panel {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tag-edit-panel summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.tag-edit-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.tag-edit-label {
+  color: var(--color-primary);
+}

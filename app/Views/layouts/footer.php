@@ -11,17 +11,18 @@
                 <span class="bottom-nav-icon" aria-hidden="true">▥</span>
                 <span>Retrospect</span>
             </a>
-            <a class="bottom-nav-item" href="/calendar" <?= ($currentPath ?? '') === '/calendar' ? 'aria-current="page"' : '' ?>>
-                <span class="bottom-nav-icon" aria-hidden="true">▦</span>
-                <span>Calendar</span>
+            <?php $isPlanNavActive = ($currentPath ?? '') === '/plan' || strpos((string) ($currentPath ?? ''), '/plan/') === 0; ?>
+            <a class="bottom-nav-item" href="/plan" <?= $isPlanNavActive ? 'aria-current="page"' : '' ?>>
+                <span class="bottom-nav-icon" aria-hidden="true">□</span>
+                <span>Plan</span>
             </a>
             <a class="bottom-nav-item" href="/routine" <?= ($currentPath ?? '') === '/routine' ? 'aria-current="page"' : '' ?>>
                 <span class="bottom-nav-icon" aria-hidden="true">✓</span>
                 <span>Routine</span>
             </a>
-            <a class="bottom-nav-item" href="/plan" <?= ($currentPath ?? '') === '/plan' ? 'aria-current="page"' : '' ?>>
-                <span class="bottom-nav-icon" aria-hidden="true">□</span>
-                <span>Plan</span>
+            <a class="bottom-nav-item" href="/calendar" <?= ($currentPath ?? '') === '/calendar' ? 'aria-current="page"' : '' ?>>
+                <span class="bottom-nav-icon" aria-hidden="true">▦</span>
+                <span>Calendar</span>
             </a>
         </nav>
     <?php endif; ?>
@@ -57,6 +58,12 @@
                     <option value="B">B - 중요하지만 긴급하지 않음</option>
                     <option value="C">C - 긴급하지만 중요하지 않음</option>
                     <option value="D" selected>D - 중요하지도 긴급하지도 않음</option>
+                </select>
+            </div>
+            <div class="ui-field" id="lifeFlowSheetGoalGroup" hidden>
+                <label class="form-label" for="lifeFlowSheetGoal">목표</label>
+                <select class="input" id="lifeFlowSheetGoal">
+                    <option value="">연결하지 않음</option>
                 </select>
             </div>
             <p class="field-error" id="lifeFlowSheetError" hidden></p>

@@ -29,9 +29,15 @@ final class PlanRepository
                     pg.updated_at,
                     COUNT(pb.id) AS block_count,
                     MIN(pb.start_index) AS first_start_index,
-                    MAX(pb.end_index) AS last_end_index
+                    MAX(pb.end_index) AS last_end_index,
+                    GROUP_CONCAT(DISTINCT g.title) AS goal_titles
                 FROM plan_groups pg
                 LEFT JOIN plan_blocks pb ON pb.plan_group_id = pg.id
+                LEFT JOIN plan_templates pt ON pt.id = pb.plan_template_id
+                    AND pt.deleted_at IS NULL
+                LEFT JOIN goals g ON g.id = pt.goal_id
+                    AND g.user_id = pg.user_id
+                    AND g.deleted_at IS NULL
                 WHERE pg.user_id = :user_id
                     AND pg.deleted_at IS NULL
                 GROUP BY
@@ -201,14 +207,15 @@ final class PlanRepository
         return (int) $this->db->lastInsertId();
     }
 
-    private function createTemplate(int $userId, string $title, string $importance): int
+    private function createTemplate(int $userId, string $title, string $importance, ?int $goalId): int
     {
         $sql = 'INSERT INTO plan_templates (user_id, goal_id, title, importance, deleted_at, created_at, updated_at)
-                VALUES (:user_id, NULL, :title, :importance, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)';
+                VALUES (:user_id, :goal_id, :title, :importance, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)';
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             'user_id' => $userId,
+            'goal_id' => $goalId,
             'title' => $title,
             'importance' => $importance,
         ]);
@@ -231,7 +238,12 @@ final class PlanRepository
         $stmt = $this->db->prepare($sql);
 
         foreach ($blocks as $sortOrder => $block) {
-            $templateId = $this->createTemplate($userId, $block['title'], $block['importance']);
+            $templateId = $this->createTemplate(
+                $userId,
+                $block['title'],
+                $block['importance'],
+                isset($block['goal_id']) ? (int) $block['goal_id'] : null
+            );
             $stmt->execute([
                 'plan_group_id' => $groupId,
                 'plan_template_id' => $templateId,
@@ -254,9 +266,14 @@ final class PlanRepository
                     pb.sort_order,
                     pt.title,
                     pt.importance,
-                    pt.goal_id
+                    pt.goal_id,
+                    g.title AS goal_title,
+                    g.goal_type AS goal_type
                 FROM plan_blocks pb
                 INNER JOIN plan_templates pt ON pt.id = pb.plan_template_id
+                LEFT JOIN goals g ON g.id = pt.goal_id
+                    AND g.user_id = pt.user_id
+                    AND g.deleted_at IS NULL
                 WHERE pb.plan_group_id = :plan_group_id
                 ORDER BY pb.sort_order ASC, pb.start_index ASC';
 

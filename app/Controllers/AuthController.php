@@ -8,6 +8,7 @@ use App\Core\Csrf;
 use App\Core\Database;
 use App\Models\SocialAccount;
 use App\Models\User;
+use App\Models\UserPreferenceRepository;
 use App\Services\GoogleOAuthService;
 use App\Services\RememberMeService;
 use Throwable;
@@ -127,7 +128,11 @@ final class AuthController
 
             unset($_SESSION['pending_google_registration']);
             session_regenerate_id(true);
-            $_SESSION['user_id'] = $userId;
+            $this->setAuthenticatedUserSession([
+                'id' => $userId,
+                'email' => $email,
+                'nickname' => $nickname,
+            ]);
             $this->setRecentLoginMethodCookie('google');
             $this->redirect('/dashboard');
         }
@@ -191,7 +196,7 @@ final class AuthController
         }
 
         session_regenerate_id(true);
-        $_SESSION['user_id'] = (int) $user['id'];
+        $this->setAuthenticatedUserSession($user);
 
         if ($rememberMe) {
             $this->rememberMeService->issueToken((int) $user['id']);
@@ -304,7 +309,7 @@ final class AuthController
         }
 
         session_regenerate_id(true);
-        $_SESSION['user_id'] = (int) $user['id'];
+        $this->setAuthenticatedUserSession($user);
 
         $this->setRecentLoginMethodCookie('google');
         $this->redirect('/dashboard');
@@ -331,9 +336,9 @@ final class AuthController
         $this->render('pages/retrospect');
     }
 
-    public function routine(): void
+    public function goal(): void
     {
-        $this->render('pages/routine');
+        $this->render('pages/goal');
     }
 
     public function plan(): void
@@ -343,7 +348,37 @@ final class AuthController
 
     public function settings(): void
     {
-        $this->render('pages/settings');
+        $theme = $this->currentTheme();
+
+        $this->render('pages/settings', [
+            'csrfToken' => Csrf::token(),
+            'theme' => $theme,
+            'flashSuccess' => $_SESSION['flash_success'] ?? null,
+            'errors' => $_SESSION['errors'] ?? [],
+        ]);
+
+        unset($_SESSION['flash_success'], $_SESSION['errors']);
+    }
+
+    public function updateTheme(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/settings', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $theme = (string) ($_POST['theme'] ?? 'light');
+        $theme = $theme === 'dark' ? 'dark' : 'light';
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+
+        if ($userId <= 0) {
+            $this->redirectWithErrors('/settings', ['general' => '로그인이 필요합니다.']);
+        }
+
+        (new UserPreferenceRepository())->updateTheme($userId, $theme);
+        $_SESSION['theme_preference'] = $theme;
+        $_SESSION['flash_success'] = '화면 모드를 저장했습니다.';
+
+        $this->redirect('/settings');
     }
 
     public function notificationGuide(): void
@@ -485,6 +520,36 @@ final class AuthController
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
+    }
+
+    private function setAuthenticatedUserSession(array $user): void
+    {
+        $_SESSION['user_id'] = (int) $user['id'];
+        $_SESSION['user_nickname'] = (string) ($user['nickname'] ?? '');
+        $_SESSION['user_email'] = (string) ($user['email'] ?? '');
+        $_SESSION['theme_preference'] = $this->loadTheme((int) $user['id']);
+    }
+
+    private function currentTheme(): string
+    {
+        $theme = (string) ($_SESSION['theme_preference'] ?? '');
+        if (in_array($theme, ['light', 'dark'], true)) {
+            return $theme;
+        }
+
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+        $theme = $userId > 0 ? $this->loadTheme($userId) : 'light';
+        $_SESSION['theme_preference'] = $theme;
+
+        return $theme;
+    }
+
+    private function loadTheme(int $userId): string
+    {
+        $preferences = (new UserPreferenceRepository())->get($userId);
+        $theme = (string) ($preferences['theme'] ?? 'light');
+
+        return $theme === 'dark' ? 'dark' : 'light';
     }
 
     private function validateLoginInput(string $email, string $password): array

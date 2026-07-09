@@ -80,6 +80,8 @@ final class Database
         $exists = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='user' LIMIT 1");
         if ($exists !== false && $exists->fetchColumn() !== false) {
             self::ensureSqliteUserConsentColumns($connection);
+            self::ensureSqliteRoutineGoalColumn($connection);
+            self::ensureSqliteSchemaObjects($connection);
             return;
         }
 
@@ -111,6 +113,36 @@ final class Database
             $connection->exec('ALTER TABLE user ADD COLUMN privacy_agreed_at TEXT NULL');
         }
 
+    }
+
+    private static function ensureSqliteRoutineGoalColumn(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='routines' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+
+        $columns = $connection->query('PRAGMA table_info(routines)');
+        $columnNames = $columns !== false
+            ? array_column($columns->fetchAll(), 'name')
+            : [];
+
+        if (!in_array('goal_id', $columnNames, true)) {
+            $connection->exec('ALTER TABLE routines ADD COLUMN goal_id INTEGER NULL');
+        }
+    }
+
+    private static function ensureSqliteSchemaObjects(PDO $connection): void
+    {
+        $schemaPath = __DIR__ . '/../../sql/schema.sqlite.sql';
+        if (!is_file($schemaPath)) {
+            return;
+        }
+
+        $schemaSql = file_get_contents($schemaPath);
+        if (is_string($schemaSql) && trim($schemaSql) !== '') {
+            $connection->exec($schemaSql);
+        }
     }
 
     public static function configuredDriver(): string

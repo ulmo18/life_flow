@@ -5,6 +5,7 @@
   const blocksInput = document.getElementById('planBlocksInput');
   const nameInput = document.getElementById('planName');
   const sourcePlanInput = document.querySelector('input[name="source_plan_group_id"]');
+  const goalOptionsJson = document.getElementById('planGoalOptionsJson');
   const ui = window.LifeFlowUI;
 
   if (!daygrid || !layer || !form || !blocksInput || !nameInput) {
@@ -17,6 +18,20 @@
   let selectedCells = [];
   let blocks = parseInitialBlocks();
   let allowSubmit = false;
+  const goalOptions = parseGoalOptions();
+
+  function parseGoalOptions() {
+    if (!goalOptionsJson) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(goalOptionsJson.textContent || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
 
   function parseInitialBlocks() {
     try {
@@ -26,6 +41,7 @@
             .map(block => ({
               title: String(block.title || '').trim(),
               importance: normalizeImportance(String(block.importance || 'D')),
+              goal_id: normalizeGoalId(block.goal_id),
               start_index: Number(block.start_index),
               end_index: Number(block.end_index),
             }))
@@ -44,6 +60,16 @@
   function normalizeImportance(value) {
     const importance = String(value || 'D').trim().toUpperCase();
     return ['A', 'B', 'C', 'D'].includes(importance) ? importance : 'D';
+  }
+
+  function normalizeGoalId(value) {
+    const goalId = Number(value);
+    return Number.isInteger(goalId) && goalId > 0 ? goalId : null;
+  }
+
+  function goalLabel(goalId) {
+    const goal = goalOptions.find(option => Number(option.id) === Number(goalId));
+    return goal ? String(goal.label || goal.title || '') : '';
   }
 
   function importanceLabel(value) {
@@ -131,6 +157,9 @@
         requiredMessage: '계획 블록 이름을 입력해주세요.',
         showImportance: true,
         importance: 'D',
+        showGoal: goalOptions.length > 0,
+        goalOptions,
+        goalId: null,
       });
     }
 
@@ -139,7 +168,7 @@
       return null;
     }
 
-    return { title, importance: 'D' };
+    return { title, importance: 'D', goalId: null };
   }
 
   function renderBlocks() {
@@ -154,7 +183,8 @@
         div.style.setProperty('--col', seg.col);
         div.style.setProperty('--span', seg.span);
         div.dataset.blockIndex = String(blockIndex);
-        div.dataset.uiTooltip = block.title;
+        const linkedGoalLabel = goalLabel(block.goal_id);
+        div.dataset.uiTooltip = linkedGoalLabel ? `${block.title} · ${linkedGoalLabel}` : block.title;
         div.setAttribute('aria-label', `${block.title} ${indexToTime(block.start_index)}-${indexToTime(block.end_index)}`);
 
         const badge = document.createElement('span');
@@ -167,6 +197,13 @@
 
         div.appendChild(badge);
         div.appendChild(title);
+
+        if (linkedGoalLabel) {
+          const goalBadge = document.createElement('span');
+          goalBadge.className = 'plan-goal-mini-badge';
+          goalBadge.textContent = '목표';
+          div.appendChild(goalBadge);
+        }
 
         div.addEventListener('click', async () => {
           const confirmed = ui && typeof ui.confirm === 'function'
@@ -244,6 +281,7 @@
 
     block.title = title;
     block.importance = normalizeImportance(details.importance);
+    block.goal_id = normalizeGoalId(details.goalId);
     blocks.push(block);
     renderBlocks();
   });

@@ -26,6 +26,9 @@
             <input type="hidden" name="source_plan_group_id" value="<?= e((string) $sourcePlan['id']) ?>">
         <?php endif; ?>
         <input type="hidden" name="blocks" id="planBlocksInput" value="<?= e((string) ($old['blocks'] ?? '[]')) ?>">
+        <script type="application/json" id="planGoalOptionsJson">
+            <?= json_encode($goalOptions ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]' ?>
+        </script>
 
         <div class="form-group plan-name-field">
             <label class="form-label" for="planName">계획 그룹명</label>
