@@ -67,6 +67,9 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Goal hierarchy is optional. Users can start with a monthly goal only, or connect smaller goals under larger goals.
 - Goal records support a lightweight behavior reminder memo.
 - Goals connect to plan schedules, actual schedules, and routines.
+- Goal list supports status-focused review for active, completed, archived, and paused goals.
+- Time-bound goals show period progress so users can quickly see how far the goal window has advanced.
+- Goal tree view focuses on active goals and helps users see how larger goals break down into smaller execution goals.
 - Goal data is used in retrospective feedback to show how well the user followed through and how much progress was made.
 - See `docs/goal-feature-implementation.md` for table, route, and UI details.
 

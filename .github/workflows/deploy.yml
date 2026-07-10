@@ -20,10 +20,11 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./
-          server-dir: /www/
+          server-dir: /ulmo18/www/
           exclude: |
             **/.git*
             **/.git*/**
             **/node_modules/**
             .env
             uploads/**
+            **/database.php

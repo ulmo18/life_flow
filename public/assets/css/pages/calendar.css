@@ -582,8 +582,25 @@ body[data-theme='dark'] .calendar-plan-settings-fab {
   background: rgba(36, 37, 31, 0.96);
 }
 
+body[data-theme='dark'] .daygrid-wrap::after {
+  border-left-color: rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(90deg, rgba(46, 48, 40, 0.24), rgba(36, 37, 31, 0.96));
+}
+
+body[data-theme='dark'] .calendar-retrospect-button:disabled:hover {
+  background: rgba(36, 37, 31, 0.96);
+}
+
+body[data-theme='dark'] .daygrid-row,
+body[data-theme='dark'] .hour-label,
+body[data-theme='dark'] .cell {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
 body[data-theme='dark'] .hour-label,
 body[data-theme='dark'] .calendar-plan-summary summary,
+body[data-theme='dark'] .calendar-plan-summary[open] summary,
 body[data-theme='dark'] .calendar-plan-summary-list li,
 body[data-theme='dark'] .calendar-tag-link,
 body[data-theme='dark'] .calendar-plan-link,
@@ -591,6 +608,19 @@ body[data-theme='dark'] .calendar-retrospect-summary span,
 body[data-theme='dark'] .calendar-retrospect-preview-text {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(46, 48, 40, 0.82);
+}
+
+body[data-theme='dark'] .calendar-plan-summary summary::after,
+body[data-theme='dark'] .calendar-importance-badge.is-neutral,
+body[data-theme='dark'] .routine-preview-list button {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(36, 37, 31, 0.92);
+  color: var(--color-text-muted);
+}
+
+body[data-theme='dark'] .routine-preview-list li {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(46, 48, 40, 0.78);
 }
 
 .calendar-tag-links,

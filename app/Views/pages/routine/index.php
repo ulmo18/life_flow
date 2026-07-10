@@ -13,7 +13,6 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
             <h1 class="page-title">루틴</h1>
             <p class="muted">매일의 습관 실행 여부를 공백, O, X 순서로 가볍게 기록합니다.</p>
         </div>
-        <button type="button" class="btn btn-primary" data-routine-open="create">루틴 추가</button>
     </section>
 
     <?php if (!empty($flashSuccess)): ?>
@@ -90,6 +89,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
             </ul>
         <?php endif; ?>
     </section>
+    <button type="button" class="btn btn-primary routine-floating-add" data-routine-open="create">루틴 추가</button>
 </main>
 
 <div class="routine-local-layer" data-routine-layer hidden>

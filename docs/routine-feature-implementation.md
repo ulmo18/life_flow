@@ -91,6 +91,7 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - The execution button cycles from blank to `O`, from `O` to `X`, and from `X` back to blank.
 - Routines are shown in the Routine list only while today is inside their active period. If a duration change moves today outside the active period, the routine no longer appears in today's Routine list and today's toggle is not offered.
 - The add and edit forms use bottom sheets to keep the list focused.
+- The add action is fixed near the bottom of the viewport to match the Plan and Goal add interactions.
 - The add and edit forms include an optional goal select that only lists active goals.
 - Routine cards show a compact goal label when a routine is connected to a goal.
 - The detail bottom sheet lists every date in the routine period from start date through end date.

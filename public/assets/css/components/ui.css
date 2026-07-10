@@ -29,6 +29,12 @@
   overflow: auto;
 }
 
+body[data-theme='dark'] .ui-panel {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(36, 37, 31, 0.98);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+}
+
 .ui-panel[hidden] {
   display: none;
 }
@@ -103,6 +109,11 @@
 
 .ui-close-button:hover {
   background: rgba(255, 94, 91, 0.12);
+}
+
+body[data-theme='dark'] .ui-close-button {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text);
 }
 
 .ui-tooltip {

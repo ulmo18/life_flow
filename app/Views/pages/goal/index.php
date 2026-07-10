@@ -3,6 +3,8 @@
 <?php
 $selectedGoalType = (string) ($old['goal_type'] ?? 'monthly');
 $selectedParentId = (int) ($old['parent_goal_id'] ?? 0);
+$selectedStatus = (string) ($selectedStatus ?? 'active');
+$selectedView = (string) ($selectedView ?? 'cards');
 $today = date('Y-m-d');
 
 $statusClass = static function (string $status): string {
@@ -13,6 +15,8 @@ $statusClass = static function (string $status): string {
         default => 'is-active',
     };
 };
+
+$statusFilterOrder = ['active', 'completed', 'archived', 'paused'];
 
 $renderGoalTypeRadios = static function (
     array $goalTypes,
@@ -39,16 +43,53 @@ $renderGoalTypeRadios = static function (
     </div>
     <?php
 };
+
+$renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGoalTree): void {
+    ?>
+    <ol class="goal-tree" <?= $depth > 0 ? 'data-goal-tree-child' : '' ?>>
+        <?php foreach ($nodes as $node): ?>
+            <?php
+            $goalId = (int) $node['id'];
+            $children = $node['children'] ?? [];
+            $linkedPlanCount = count($node['linkedPlans'] ?? []);
+            $linkedRoutineCount = count($node['linkedRoutines'] ?? []);
+            $progress = $node['periodProgress'] ?? ['visible' => false, 'percent' => 0, 'label' => '', 'state' => 'none'];
+            ?>
+            <li class="goal-tree-item" style="--goal-tree-depth: <?= e((string) $depth) ?>;">
+                <div class="goal-tree-node">
+                    <div class="goal-tree-main">
+                        <span class="goal-type-badge"><?= e((string) $node['goalTypeLabel']) ?></span>
+                        <strong><?= e((string) $node['title']) ?></strong>
+                        <small><?= e((string) $node['periodLabel']) ?></small>
+                    </div>
+                    <div class="goal-tree-side">
+                        <?php if (!empty($progress['visible'])): ?>
+                            <span class="goal-tree-progress"><?= e((string) $progress['percent']) ?>%</span>
+                        <?php endif; ?>
+                        <span class="goal-tree-linked">계획 <?= e((string) $linkedPlanCount) ?> · 루틴 <?= e((string) $linkedRoutineCount) ?></span>
+                        <button type="button" class="btn btn-secondary goal-tree-edit" data-goal-open="edit-<?= e((string) $goalId) ?>">수정</button>
+                    </div>
+                </div>
+                <?php if (!empty($children)): ?>
+                    <?php $renderGoalTree($children, $depth + 1); ?>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ol>
+    <?php
+};
 ?>
 
 <main class="page goal-page">
     <section class="goal-hero">
         <div>
             <p class="eyebrow">Goal</p>
-            <h1 class="page-title">목표</h1>
-            <p class="muted">버킷리스트부터 한달 목표까지, 의도한 삶을 작게 쪼개 실행할 수 있게 정리합니다.</p>
+            <div class="goal-title-row">
+                <h1 class="page-title">목표</h1>
+                <button type="button" class="goal-info-button" data-goal-open="guide" aria-label="목표 사용 안내 열기">!</button>
+            </div>
+            <p class="muted">큰 생각부터 작은 실행까지, 지금 보고 싶은 목표만 가볍게 확인해요.</p>
         </div>
-        <button type="button" class="btn btn-primary" data-goal-open="create">목표 추가</button>
     </section>
 
     <?php if (!empty($flashSuccess)): ?>
@@ -59,17 +100,49 @@ $renderGoalTypeRadios = static function (
         <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
     <?php endif; ?>
 
-    <section class="goal-intro-card" aria-label="목표 사용 안내">
-        <strong>목표는 꼭 위에서부터 채우지 않아도 괜찮아요.</strong>
-        <p class="muted">가볍게 한달 목표만 만들 수도 있고, 큰 목표를 연간, 분기, 한달 목표로 연결해 성공 확률을 높일 수도 있습니다.</p>
-    </section>
+    <nav class="goal-view-switch" aria-label="목표 보기 방식">
+        <a href="/goal?status=<?= e($selectedStatus) ?>&view=cards" <?= $selectedView === 'cards' ? 'aria-current="page"' : '' ?>>카드 보기</a>
+        <a href="/goal?view=tree" <?= $selectedView === 'tree' ? 'aria-current="page"' : '' ?>>트리 보기</a>
+    </nav>
 
+    <?php if ($selectedView === 'cards'): ?>
+    <nav class="goal-status-filter" aria-label="목표 상태 필터">
+        <?php foreach ($statusFilterOrder as $statusValue): ?>
+            <?php if (!array_key_exists($statusValue, $statusOptions)) {
+                continue;
+            } ?>
+            <a
+                class="goal-status-filter-link"
+                href="/goal?status=<?= e($statusValue) ?>&view=cards"
+                <?= $selectedStatus === $statusValue ? 'aria-current="page"' : '' ?>
+            >
+                <?= e((string) $statusOptions[$statusValue]) ?>
+            </a>
+        <?php endforeach; ?>
+    </nav>
+    <?php endif; ?>
+
+    <?php if ($selectedView === 'tree'): ?>
+        <section class="goal-tree-section" aria-label="진행 중 목표 트리">
+            <div class="goal-tree-heading">
+                <strong>진행 중 목표 구조</strong>
+                <span>상위 목표부터 하위 실행 목표까지 한 번에 봅니다.</span>
+            </div>
+            <?php if (empty($activeGoalTree)): ?>
+                <div class="goal-empty">
+                    <strong>진행 중인 목표가 없습니다.</strong>
+                    <p class="muted">하단의 목표 추가 버튼으로 지금 이어갈 목표를 만들어보세요.</p>
+                </div>
+            <?php else: ?>
+                <?php $renderGoalTree($activeGoalTree); ?>
+            <?php endif; ?>
+        </section>
+    <?php else: ?>
     <section class="goal-list-section" aria-label="목표 목록">
         <?php if (empty($goals)): ?>
             <div class="goal-empty">
-                <strong>아직 만든 목표가 없습니다.</strong>
-                <p class="muted">오늘의 작은 시도부터 적어보면, 계획과 루틴을 연결할 기준점이 생깁니다.</p>
-                <button type="button" class="btn btn-secondary" data-goal-open="create">첫 목표 만들기</button>
+                <strong>이 상태의 목표가 없습니다.</strong>
+                <p class="muted">하단의 목표 추가 버튼으로 지금 떠오른 생각부터 적어보세요.</p>
             </div>
         <?php else: ?>
             <ul class="goal-list">
@@ -78,6 +151,7 @@ $renderGoalTypeRadios = static function (
                     $goalId = (int) $goal['id'];
                     $linkedPlans = $goal['linkedPlans'] ?? [];
                     $linkedRoutines = $goal['linkedRoutines'] ?? [];
+                    $progress = $goal['periodProgress'] ?? ['visible' => false, 'percent' => 0, 'label' => '', 'state' => 'none'];
                     ?>
                     <li class="goal-card">
                         <div class="goal-card-top">
@@ -100,46 +174,71 @@ $renderGoalTypeRadios = static function (
                             <span><?= e((string) $goal['periodLabel']) ?></span>
                         </div>
 
+                        <?php if (!empty($progress['visible'])): ?>
+                            <div class="goal-progress is-<?= e((string) $progress['state']) ?>">
+                                <div class="goal-progress-meta">
+                                    <span><?= e((string) $progress['label']) ?></span>
+                                    <strong><?= e((string) $progress['percent']) ?>%</strong>
+                                </div>
+                                <div
+                                    class="goal-progress-track"
+                                    role="progressbar"
+                                    aria-label="<?= e((string) $progress['label']) ?>"
+                                    aria-valuemin="0"
+                                    aria-valuemax="100"
+                                    aria-valuenow="<?= e((string) $progress['percent']) ?>"
+                                >
+                                    <span style="width: <?= e((string) $progress['percent']) ?>%;"></span>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
                         <?php if ((string) ($goal['behaviorNote'] ?? '') !== ''): ?>
                             <p class="goal-action-note"><?= e((string) $goal['behaviorNote']) ?></p>
                         <?php else: ?>
                             <p class="goal-action-hint">생각을 행동으로 옮기기 위한 리마인드를 적어두면 좋아요.</p>
                         <?php endif; ?>
 
-                        <div class="goal-linked-wrap">
-                            <div class="goal-linked-list">
-                                <strong>연결된 계획</strong>
-                                <?php if (empty($linkedPlans)): ?>
-                                    <span class="goal-linked-empty">아직 연결된 계획이 없습니다.</span>
-                                <?php else: ?>
-                                    <ul>
-                                        <?php foreach ($linkedPlans as $plan): ?>
-                                            <li>
-                                                <a href="/plan/show?id=<?= e((string) $plan['planGroupId']) ?>">
-                                                    <?= e((string) $plan['planName']) ?>
-                                                </a>
-                                                <span><?= e((string) $plan['blockTitle']) ?> · <?= e((string) $plan['timeRange']) ?></span>
-                                            </li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                <?php endif; ?>
+                        <details class="goal-linked-details">
+                            <summary>
+                                <span>연결된 계획과 루틴</span>
+                                <small>계획 <?= e((string) count($linkedPlans)) ?> · 루틴 <?= e((string) count($linkedRoutines)) ?></small>
+                            </summary>
+                            <div class="goal-linked-wrap">
+                                <div class="goal-linked-list">
+                                    <strong>연결된 계획</strong>
+                                    <?php if (empty($linkedPlans)): ?>
+                                        <span class="goal-linked-empty">아직 연결된 계획이 없습니다.</span>
+                                    <?php else: ?>
+                                        <ul>
+                                            <?php foreach ($linkedPlans as $plan): ?>
+                                                <li>
+                                                    <a href="/plan/show?id=<?= e((string) $plan['planGroupId']) ?>">
+                                                        <?= e((string) $plan['planName']) ?>
+                                                    </a>
+                                                    <span><?= e((string) $plan['blockTitle']) ?> · <?= e((string) $plan['timeRange']) ?></span>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="goal-linked-list">
+                                    <strong>연결된 루틴</strong>
+                                    <?php if (empty($linkedRoutines)): ?>
+                                        <span class="goal-linked-empty">아직 연결된 루틴이 없습니다.</span>
+                                    <?php else: ?>
+                                        <ul>
+                                            <?php foreach ($linkedRoutines as $routine): ?>
+                                                <li>
+                                                    <span><?= e((string) $routine['name']) ?></span>
+                                                    <small><?= e((string) $routine['periodLabel']) ?></small>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    <?php endif; ?>
+                                </div>
                             </div>
-                            <div class="goal-linked-list">
-                                <strong>연결된 루틴</strong>
-                                <?php if (empty($linkedRoutines)): ?>
-                                    <span class="goal-linked-empty">아직 연결된 루틴이 없습니다.</span>
-                                <?php else: ?>
-                                    <ul>
-                                        <?php foreach ($linkedRoutines as $routine): ?>
-                                            <li>
-                                                <span><?= e((string) $routine['name']) ?></span>
-                                                <small><?= e((string) $routine['periodLabel']) ?></small>
-                                            </li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                <?php endif; ?>
-                            </div>
-                        </div>
+                        </details>
 
                         <div class="goal-card-actions">
                             <button type="button" class="btn btn-secondary" data-goal-open="edit-<?= e((string) $goalId) ?>">수정</button>
@@ -149,10 +248,25 @@ $renderGoalTypeRadios = static function (
             </ul>
         <?php endif; ?>
     </section>
+    <?php endif; ?>
+
+    <button type="button" class="btn btn-primary goal-floating-add" data-goal-open="create">목표 추가</button>
 </main>
 
 <div class="goal-local-layer" data-goal-layer hidden>
     <button type="button" class="goal-local-overlay" data-goal-close aria-label="목표 창 닫기"></button>
+
+    <section class="goal-sheet" data-goal-sheet="guide" hidden aria-modal="true" role="dialog" aria-labelledby="goalGuideTitle">
+        <div class="goal-sheet-header">
+            <strong id="goalGuideTitle">목표 사용 안내</strong>
+            <button type="button" class="ui-close-button" data-goal-close aria-label="닫기">×</button>
+        </div>
+        <div class="goal-guide">
+            <p>목표는 꼭 위에서부터 채우지 않아도 괜찮아요.</p>
+            <p>지금 떠오른 월간 목표 하나만 적어도 충분하고, 나중에 연간 목표나 버킷리스트로 연결해도 됩니다.</p>
+            <p>생각이 꼬리를 물 때는 큰 목표를 먼저 완성하려 하기보다, 지금 할 수 있는 작은 실행을 목표로 남겨두세요.</p>
+        </div>
+    </section>
 
     <section class="goal-sheet" data-goal-sheet="create" hidden aria-modal="true" role="dialog" aria-labelledby="goalCreateTitle">
         <div class="goal-sheet-header">
@@ -170,7 +284,7 @@ $renderGoalTypeRadios = static function (
             <?php endif; ?>
 
             <div class="goal-field">
-                <span class="form-label">목표구분</span>
+                <span class="form-label">목표 구분</span>
                 <?php $renderGoalTypeRadios($goalTypes, $selectedGoalType, 'goalCreate'); ?>
             </div>
 
@@ -210,7 +324,7 @@ $renderGoalTypeRadios = static function (
                 <input class="input" id="goalTitle<?= e((string) $goalId) ?>" name="title" type="text" maxlength="80" value="<?= e((string) $goal['title']) ?>" required>
 
                 <div class="goal-field">
-                    <span class="form-label">목표구분</span>
+                    <span class="form-label">목표 구분</span>
                     <?php $renderGoalTypeRadios($goalTypes, (string) $goal['goalType'], 'goalEdit' . $goalId); ?>
                 </div>
 

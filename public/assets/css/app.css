@@ -20,6 +20,9 @@
   --color-info-text: #1a1b3a;
   --color-danger-bg: #fce9e3;
   --color-danger-text: #b54e45;
+  --border: var(--color-line);
+  --text: var(--color-text);
+  --muted: var(--color-text-muted);
 
   /* spacing tokens */
   --space-1: 4px;
@@ -64,6 +67,9 @@ body[data-theme='dark'] {
   --color-info-text: #f1eee7;
   --color-danger-bg: #3a2623;
   --color-danger-text: #ffb0a7;
+  --border: var(--color-line);
+  --text: var(--color-text);
+  --muted: var(--color-text-muted);
 }
 
 * { box-sizing: border-box; }
@@ -251,6 +257,21 @@ body[data-theme='dark'] .settings-theme-option {
   color: var(--color-primary);
 }
 
+body[data-theme='dark'] .aside-settings-link,
+body[data-theme='dark'] .aside-user {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(46, 48, 40, 0.82);
+}
+
+body[data-theme='dark'] .aside-settings-link {
+  color: var(--color-secondary);
+}
+
+body[data-theme='dark'] .aside-user-avatar {
+  background: var(--color-secondary);
+  color: #1d1d18;
+}
+
 .aside-close {
   width: 40px;
   height: 40px;
@@ -319,6 +340,10 @@ body[data-theme='dark'] .settings-theme-option {
 .aside-nav-group:last-child {
   padding-bottom: 0;
   border-bottom: 0;
+}
+
+body[data-theme='dark'] .aside-nav-group {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
 }
 
 .aside-nav a {
@@ -484,6 +509,22 @@ input.input {
   font-weight: 600;
 }
 
+body[data-theme='dark'] .input {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(49, 51, 43, 0.96), rgba(36, 37, 31, 0.92));
+  color: var(--color-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body[data-theme='dark'] .input::placeholder {
+  color: rgba(189, 181, 168, 0.72);
+}
+
+body[data-theme='dark'] select.input option {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
 .input:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 1px;
@@ -493,6 +534,11 @@ input.input {
 .input.is-error {
   border-color: #f97066;
   background: #fffafa;
+}
+
+body[data-theme='dark'] .input.is-error {
+  border-color: #ff8c82;
+  background: rgba(58, 38, 35, 0.72);
 }
 
 .checkbox-row {
@@ -542,6 +588,18 @@ input.input {
   background: rgba(255, 255, 255, 0.28);
   color: var(--color-text-muted);
   border-color: var(--color-line);
+}
+
+body[data-theme='dark'] .btn-secondary {
+  background: rgba(244, 210, 122, 0.1);
+  color: var(--color-secondary);
+  border-color: rgba(244, 210, 122, 0.24);
+}
+
+body[data-theme='dark'] .btn-ghost {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-muted);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .btn:disabled,

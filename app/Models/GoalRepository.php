@@ -18,7 +18,7 @@ final class GoalRepository
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function listActive(int $userId): array
+    public function listActive(int $userId, ?string $status = null): array
     {
         $sql = 'SELECT
                     g.id,
@@ -43,14 +43,21 @@ final class GoalRepository
                     AND parent.user_id = g.user_id
                     AND parent.deleted_at IS NULL
                 WHERE g.user_id = :user_id
-                    AND g.deleted_at IS NULL
-                ORDER BY ' . $this->goalTypeOrderExpression('g.goal_type') . ',
+                    AND g.deleted_at IS NULL';
+        $params = ['user_id' => $userId];
+
+        if ($status !== null) {
+            $sql .= ' AND g.status = :status';
+            $params['status'] = $status;
+        }
+
+        $sql .= ' ORDER BY ' . $this->goalTypeOrderExpression('g.goal_type') . ',
                     g.sort_order ASC,
                     g.updated_at DESC,
                     g.id DESC';
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['user_id' => $userId]);
+        $stmt->execute($params);
 
         return $stmt->fetchAll();
     }

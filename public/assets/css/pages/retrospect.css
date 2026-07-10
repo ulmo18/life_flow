@@ -285,6 +285,11 @@
   resize: vertical;
 }
 
+body[data-theme='dark'] .retrospect-textarea {
+  background: linear-gradient(180deg, rgba(49, 51, 43, 0.96), rgba(36, 37, 31, 0.92));
+  color: var(--color-text);
+}
+
 .retrospect-form-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -397,6 +402,13 @@ body[data-theme='dark'] .retrospect-empty,
 body[data-theme='dark'] .retrospect-sort-tabs {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(46, 48, 40, 0.78);
+}
+
+body[data-theme='dark'] .retrospect-score-card strong,
+body[data-theme='dark'] .retrospect-empty-state strong,
+body[data-theme='dark'] .retrospect-published-texts strong,
+body[data-theme='dark'] .retrospect-date-button {
+  color: var(--color-text);
 }
 
 @media (max-width: 639px) {

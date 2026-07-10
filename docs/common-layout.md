@@ -57,6 +57,8 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Supported values are `light` and `dark`.
 - Settings persists the user choice in `user_preferences.theme`.
 - Shared colors should be expressed through CSS variables so page-specific styles respond to the active theme.
+- Dark mode coverage must include shared inputs, buttons, toast, aside profile/settings surfaces, page cards, bottom sheets, and page-local selection controls.
+- Page-specific CSS should use `body[data-theme='dark']` for dark overrides because the shell writes the theme to the body `data-theme` attribute.
 
 ## Responsive Rules
 - Mobile is the primary layout target.

@@ -32,11 +32,12 @@ final class GoalService
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function getGoalList(int $userId): array
+    public function getGoalList(int $userId, ?string $status = 'active'): array
     {
+        $statusFilter = $this->normalizeStatusFilter($status);
         $goals = array_map(
             fn (array $goal): array => $this->formatGoal($goal),
-            $this->goalRepository->listActive($userId)
+            $this->goalRepository->listActive($userId, $statusFilter)
         );
         $goalIds = array_map(static fn (array $goal): int => (int) $goal['id'], $goals);
         $linkedPlans = $this->goalRepository->listLinkedPlansByGoalIds($userId, $goalIds);
@@ -67,6 +68,51 @@ final class GoalService
     public function statusOptions(): array
     {
         return self::STATUSES;
+    }
+
+    public function normalizeStatusFilter(mixed $status): string
+    {
+        $status = trim((string) $status);
+
+        return array_key_exists($status, self::STATUSES) ? $status : 'active';
+    }
+
+    public function normalizeViewMode(mixed $viewMode): string
+    {
+        return trim((string) $viewMode) === 'tree' ? 'tree' : 'cards';
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $goals
+     * @return array<int, array<string, mixed>>
+     */
+    public function buildGoalTree(array $goals): array
+    {
+        $goalIds = [];
+        foreach ($goals as $goal) {
+            $goalIds[(int) $goal['id']] = true;
+        }
+
+        $childrenByParentId = [];
+        foreach ($goals as $goal) {
+            $parentGoalId = $goal['parentGoalId'] ?? null;
+            $parentKey = $parentGoalId !== null && isset($goalIds[(int) $parentGoalId])
+                ? (int) $parentGoalId
+                : 0;
+            $childrenByParentId[$parentKey][] = $goal;
+        }
+
+        $buildBranch = static function (int $parentGoalId) use (&$buildBranch, &$childrenByParentId): array {
+            $branch = [];
+            foreach ($childrenByParentId[$parentGoalId] ?? [] as $goal) {
+                $goal['children'] = $buildBranch((int) $goal['id']);
+                $branch[] = $goal;
+            }
+
+            return $branch;
+        };
+
+        return $buildBranch(0);
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -250,6 +296,7 @@ final class GoalService
         $status = (string) $goal['status'];
         $startDate = $goal['period_start_date'] === null ? null : (string) $goal['period_start_date'];
         $endDate = $goal['period_end_date'] === null ? null : (string) $goal['period_end_date'];
+        $periodProgress = $this->periodProgress($startDate, $endDate, $status);
 
         return [
             'id' => (int) $goal['id'],
@@ -268,6 +315,7 @@ final class GoalService
             'periodStartDate' => $startDate,
             'periodEndDate' => $endDate,
             'periodLabel' => $startDate === null || $endDate === null ? '기간 없음' : $startDate . ' ~ ' . $endDate,
+            'periodProgress' => $periodProgress,
             'status' => $status,
             'statusLabel' => self::STATUSES[$status] ?? '진행 중',
             'completedAt' => $goal['completed_at'] === null ? null : (string) $goal['completed_at'],
@@ -309,5 +357,66 @@ final class GoalService
         $minute = $minutes % 60;
 
         return sprintf('%02d:%02d', $hour, $minute);
+    }
+
+    /** @return array{visible: bool, percent: int, label: string, state: string} */
+    private function periodProgress(?string $startDate, ?string $endDate, string $status): array
+    {
+        $empty = [
+            'visible' => false,
+            'percent' => 0,
+            'label' => '',
+            'state' => 'none',
+        ];
+
+        if ($startDate === null || $endDate === null) {
+            return $empty;
+        }
+
+        $start = DateTimeImmutable::createFromFormat('!Y-m-d', $startDate);
+        $end = DateTimeImmutable::createFromFormat('!Y-m-d', $endDate);
+        if (!$start instanceof DateTimeImmutable || !$end instanceof DateTimeImmutable || $end < $start) {
+            return $empty;
+        }
+
+        if ($status === 'completed') {
+            return [
+                'visible' => true,
+                'percent' => 100,
+                'label' => '완료',
+                'state' => 'completed',
+            ];
+        }
+
+        $today = new DateTimeImmutable('today');
+        $totalDays = max(1, ((int) $start->diff($end)->days) + 1);
+
+        if ($today < $start) {
+            return [
+                'visible' => true,
+                'percent' => 0,
+                'label' => '시작 전',
+                'state' => 'upcoming',
+            ];
+        }
+
+        if ($today > $end) {
+            return [
+                'visible' => true,
+                'percent' => 100,
+                'label' => '마감 지남',
+                'state' => 'overdue',
+            ];
+        }
+
+        $elapsedDays = ((int) $start->diff($today)->days) + 1;
+        $percent = (int) min(100, max(0, round(($elapsedDays / $totalDays) * 100)));
+
+        return [
+            'visible' => true,
+            'percent' => $percent,
+            'label' => '기간 ' . $percent . '% 진행',
+            'state' => 'active',
+        ];
     }
 }

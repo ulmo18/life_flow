@@ -18,11 +18,22 @@ final class GoalController
 
     public function index(): void
     {
+        $selectedView = $this->goalService->normalizeViewMode($_GET['view'] ?? 'cards');
+        $selectedStatus = $selectedView === 'tree'
+            ? 'active'
+            : $this->goalService->normalizeStatusFilter($_GET['status'] ?? 'active');
+        $goals = $this->goalService->getGoalList($this->userId(), $selectedStatus);
+
         $this->render('pages/goal/index', [
             'title' => 'Goal',
-            'goals' => $this->goalService->getGoalList($this->userId()),
+            'goals' => $goals,
+            'activeGoalTree' => $selectedView === 'tree'
+                ? $this->goalService->buildGoalTree($goals)
+                : [],
             'goalTypes' => $this->goalService->goalTypeOptions(),
             'statusOptions' => $this->goalService->statusOptions(),
+            'selectedStatus' => $selectedStatus,
+            'selectedView' => $selectedView,
             'parentOptions' => $this->goalService->parentOptions($this->userId()),
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],

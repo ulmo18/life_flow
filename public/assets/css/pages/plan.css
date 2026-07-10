@@ -23,6 +23,15 @@
   box-shadow: 0 10px 24px rgba(26, 27, 58, 0.06);
 }
 
+body[data-theme='dark'] .plan-empty,
+body[data-theme='dark'] .plan-list-item,
+body[data-theme='dark'] .plan-name-field,
+body[data-theme='dark'] .plan-block-summary {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(36, 37, 31, 0.96);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+}
+
 .plan-empty {
   padding: var(--space-5);
 }
@@ -162,6 +171,11 @@
   padding-inline: 8px;
 }
 
+body[data-theme='dark'] .plan-editor-event {
+  background: rgba(72, 73, 64, 0.86);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
 .event-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -243,6 +257,11 @@
   padding: var(--space-3);
   border: 1px solid rgba(216, 200, 179, 0.72);
   border-radius: var(--radius-sm);
+}
+
+body[data-theme='dark'] .plan-block-list li {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(46, 48, 40, 0.72);
 }
 
 .plan-block-list span {

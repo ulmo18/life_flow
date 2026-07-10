@@ -14,10 +14,6 @@
   min-width: 0;
 }
 
-.routine-header .btn {
-  flex: 0 0 auto;
-}
-
 .routine-status-guide,
 .routine-empty,
 .routine-card {
@@ -25,6 +21,13 @@
   border-radius: var(--radius-md);
   background: rgba(255, 250, 242, 0.92);
   box-shadow: 0 10px 24px rgba(26, 27, 58, 0.06);
+}
+
+body[data-theme='dark'] .routine-empty,
+body[data-theme='dark'] .routine-card {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(36, 37, 31, 0.96);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
 }
 
 .routine-status-guide {
@@ -164,8 +167,13 @@
   font-weight: 900;
 }
 
+body[data-theme='dark'] .routine-check-button {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(46, 48, 40, 0.82);
+}
+
 .routine-check-button::before {
-  content: '미진행';
+  content: "\BBF8\C9C4\D589";
   display: inline-block;
   font-size: 11px;
   letter-spacing: -0.02em;
@@ -270,6 +278,12 @@
   overscroll-behavior: contain;
 }
 
+body[data-theme='dark'] .routine-sheet {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(36, 37, 31, 0.98);
+  box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.38);
+}
+
 .routine-sheet[hidden] {
   display: none;
 }
@@ -341,10 +355,25 @@
   padding: 8px 10px;
 }
 
+body[data-theme='dark'] .routine-log-row {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(46, 48, 40, 0.78);
+}
+
 .routine-log-row > span {
   color: var(--color-text);
   font-size: var(--font-size-sm);
   font-weight: 900;
+}
+
+.routine-floating-add {
+  position: fixed;
+  left: 50%;
+  bottom: max(96px, calc(env(safe-area-inset-bottom) + 96px));
+  z-index: 860;
+  width: min(calc(100% - 32px), 430px);
+  transform: translateX(-50%);
+  box-shadow: 0 14px 30px rgba(200, 95, 90, 0.26);
 }
 
 @media (max-width: 379px) {
