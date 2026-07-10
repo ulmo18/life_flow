@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./
-          server-dir: www/
+          server-dir: /www/
           log-level: verbose
           exclude: |
             **/.git*
@@ -29,3 +29,4 @@ jobs:
             .env
             uploads/**
             **/database.php
+            **/Database.php
