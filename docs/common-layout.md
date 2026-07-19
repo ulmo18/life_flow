@@ -49,7 +49,9 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Shared layout CSS lives in `public/assets/css/app.css`.
 - Shared layout JavaScript lives in `public/assets/js/components/app-layout.js`.
 - Page-specific CSS and JavaScript should continue using `$pageStyles` and `$pageScripts`.
-- Android notification bridge JavaScript is loaded as a shared component so Settings and feature pages can sync scheduling payloads consistently.
+- Android bridge JavaScript is loaded as a shared component so Settings and feature pages can sync notification payloads and temporarily control native pull-to-refresh during touch range selection.
+- Native bridge calls must degrade safely in normal browsers and try both `window.AndroidBridge` and `window.AndroidInterface` when the requested method exists.
+- See `docs/android-webview-integration.md` before changing Android WebView bridge methods or native pull-to-refresh coordination.
 - Shared modal and sheet close actions should use click handlers consistently; avoid registering pointerup and click on the same close control.
 - Shared UI modals must stack above page-local sheets so confirmation dialogs opened from a sheet are never hidden behind it.
 - Shared hover tooltips should only appear on hover-capable fine pointers, not on touch devices.

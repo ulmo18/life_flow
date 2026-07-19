@@ -101,4 +101,5 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Keep retrospect reports durable and searchable.
 - Keep goal linkage flexible so it can evolve as the feature set grows.
 - See `docs/database-migrations.md` before deploying schema changes to an existing database.
+- See `docs/android-webview-integration.md` before changing native bridge or pull-to-refresh behavior.
 - See `docs/notification-feature-implementation.md` before changing Android bridge notification payloads or Settings notification behavior.

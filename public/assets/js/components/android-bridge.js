@@ -1,13 +1,24 @@
 (function () {
+  const failedCallWarnings = new Set();
+  let lastPullToRefreshEnabled = null;
+
   function bridges() {
     return [window.AndroidBridge, window.AndroidInterface].filter(Boolean);
   }
 
   function call(methodName, args) {
-    const nativeBridge = bridges().find(candidate => typeof candidate[methodName] === 'function');
-    if (nativeBridge) {
-      nativeBridge[methodName](...(args || []));
-      return true;
+    const candidates = bridges().filter(candidate => typeof candidate[methodName] === 'function');
+
+    for (const nativeBridge of candidates) {
+      try {
+        nativeBridge[methodName](...(args || []));
+        return true;
+      } catch (error) {
+        if (!failedCallWarnings.has(methodName)) {
+          failedCallWarnings.add(methodName);
+          console.warn(`Android bridge call failed: ${methodName}`, error);
+        }
+      }
     }
 
     return false;
@@ -19,6 +30,20 @@
 
   function showNotification(title, message) {
     return call('showNotification', [title, message]);
+  }
+
+  function setPullToRefreshEnabled(enabled) {
+    const normalizedEnabled = Boolean(enabled);
+    if (lastPullToRefreshEnabled === normalizedEnabled) {
+      return true;
+    }
+
+    const updated = call('setPullToRefreshEnabled', [normalizedEnabled]);
+    if (updated) {
+      lastPullToRefreshEnabled = normalizedEnabled;
+    }
+
+    return updated;
   }
 
   function syncNotifications(payload) {
@@ -95,6 +120,7 @@
     isAvailable: () => bridges().length > 0,
     requestPermission,
     showNotification,
+    setPullToRefreshEnabled,
     syncNotifications,
   };
 

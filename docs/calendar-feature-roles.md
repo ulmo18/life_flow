@@ -18,6 +18,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Page-specific calendar JavaScript lives under `public/assets/js/pages/`.
 - Keep time-grid selection in the shared `public/assets/js/components/time-grid-selection.js` module. Calendar and Plan should configure that module instead of maintaining separate gesture implementations.
 - On touch devices, the day grid uses native vertical scrolling by default. A stationary long press activates range selection, provides visual/haptic feedback, and the following drag extends the range.
+- In Android WebView, a confirmed touch long press temporarily disables native pull-to-refresh. Pointer completion, cancellation, explicit selection cancellation, page exit, and background transition restore it.
 - A short tap on an empty cell does not create a schedule. Mouse and pen may start range selection immediately.
 - A native scroll gesture must not trigger the actual-event click or empty-cell selection that follows it.
 - Mouse and pen range selection may start immediately, but range selection must never start from an actual-event control or another interactive control.
@@ -29,6 +30,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Calendar uses one bottom-right `+` menu for quick memo, untimed schedule creation, routine checking, and baseline Plan settings. A divider separates baseline Plan settings from quick actions.
 - Shared confirmation modals opened from calendar sheets must appear above the calendar-local layer.
 - Calendar block title tooltips should remain hover-only and should not appear during mobile touch editing.
+- Keep the WebView bridge contract and native lifecycle safety rules in `docs/android-webview-integration.md` aligned with the shared time-grid controller.
 
 ## Controller
 - `CalendarController` handles request and response flow only.

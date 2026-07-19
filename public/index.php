@@ -17,6 +17,8 @@ use App\Middleware\AuthMiddleware;
 use App\Middleware\GuestMiddleware;
 use App\Services\RememberMeService;
 
+require_once dirname(__DIR__) . '/config/bootstrap.php';
+
 session_set_cookie_params([
     'lifetime' => 0,
     'path' => '/',

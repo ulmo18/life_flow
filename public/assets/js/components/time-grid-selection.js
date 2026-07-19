@@ -14,6 +14,7 @@
     let pointerSession = null;
     let selectedCells = [];
     let longPressTimer = null;
+    let nativePullToRefreshSuspended = false;
 
     function cellFromPoint(x, y) {
       return document.elementsFromPoint(x, y).find(element => (
@@ -51,6 +52,47 @@
       return event.target instanceof Element && Boolean(event.target.closest(ignoreSelector));
     }
 
+    function suspendNativePullToRefresh(pointerType) {
+      if (pointerType !== 'touch' || nativePullToRefreshSuspended) {
+        return;
+      }
+
+      const bridge = window.LifeFlowAndroidBridge;
+      if (bridge?.setPullToRefreshEnabled(false)) {
+        nativePullToRefreshSuspended = true;
+      }
+    }
+
+    function restoreNativePullToRefresh() {
+      if (!nativePullToRefreshSuspended) {
+        return;
+      }
+
+      const bridge = window.LifeFlowAndroidBridge;
+      if (bridge?.setPullToRefreshEnabled(true)) {
+        nativePullToRefreshSuspended = false;
+      }
+    }
+
+    function resetSelection() {
+      cancelLongPress();
+
+      if (pointerSession) {
+        try {
+          if (grid.hasPointerCapture(pointerSession.pointerId)) {
+            grid.releasePointerCapture(pointerSession.pointerId);
+          }
+        } catch (error) {
+          // Pointer capture may already have ended in the native layer.
+        }
+      }
+
+      pointerSession = null;
+      clearSelection();
+      grid.classList.remove('is-range-selecting');
+      restoreNativePullToRefresh();
+    }
+
     function beginSelection(event, cell) {
       const index = Number(cell.dataset.index);
       pointerSession = {
@@ -63,6 +105,7 @@
         moved: false,
         selecting: true,
       };
+      suspendNativePullToRefresh(event.pointerType);
       selectRange(index, index);
       grid.classList.add('is-range-selecting');
 
@@ -146,10 +189,7 @@
       if (!pointerSession || pointerSession.pointerId !== event.pointerId) return;
 
       const completed = pointerSession;
-      pointerSession = null;
-      cancelLongPress();
-      clearSelection();
-      grid.classList.remove('is-range-selecting');
+      resetSelection();
 
       if (!completed.selecting) {
         return;
@@ -160,11 +200,9 @@
       onSelect({ start, end, source: 'range' });
     });
 
-    grid.addEventListener('pointercancel', () => {
-      cancelLongPress();
-      pointerSession = null;
-      clearSelection();
-      grid.classList.remove('is-range-selecting');
+    grid.addEventListener('pointercancel', event => {
+      if (!pointerSession || pointerSession.pointerId !== event.pointerId) return;
+      resetSelection();
     });
 
     grid.addEventListener('touchmove', event => {
@@ -179,12 +217,16 @@
       }
     });
 
+    window.addEventListener('pagehide', resetSelection);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        resetSelection();
+      }
+    });
+
     return {
       cancel() {
-        cancelLongPress();
-        pointerSession = null;
-        clearSelection();
-        grid.classList.remove('is-range-selecting');
+        resetSelection();
       },
     };
   }

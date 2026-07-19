@@ -171,6 +171,7 @@ All POST routes require CSRF verification.
 - Calendar and Plan add/edit pages share `public/assets/js/components/time-grid-selection.js` for range selection.
 - On touch devices, the grid keeps native vertical scrolling as the default. A stationary long press activates selection and subsequent dragging extends the selected range.
 - Moving before the long-press delay remains a native scroll. A short tap has no schedule-creation behavior.
+- Once a touch long press is confirmed, the shared grid controller asks the Android bridge to disable native pull-to-refresh until the matching pointer ends or the selection is otherwise cancelled. Normal browsers continue without this native enhancement.
 - Mouse and pen input keep immediate drag-to-select behavior. Range selection can start on top of a background plan event because the script resolves the underlying grid cell.
 - Touching or clicking an actual event opens its edit bottom sheet; range selection does not start from an actual-event control.
 - The bottom sheet asks for an actual event title, an optional common tag, an optional plan template link, and routines that should be completed with the event.
@@ -205,6 +206,8 @@ Retrospect persistence is handled by the Retrospect feature. Calendar remains th
 - On touch, vertically swipe the time grid and confirm the page scrolls without creating a selection.
 - Short-tap an empty time cell and confirm no event sheet opens.
 - Long-press an empty time cell, drag across several cells, and confirm the timed event sheet opens with the selected range.
+- In Android WebView at the top of the page, long-press a time cell and drag downward. Confirm range selection continues without showing or triggering pull-to-refresh, then confirm pull-to-refresh works again after release.
+- Repeat the previous test while cancelling the pointer, leaving the page, and sending the app to the background; native pull-to-refresh must be restored each time.
 - Open `+ > 일정`, create a time-unscheduled event, then select a time range and convert that same event from the `시간 미정 일정 (n)` tab.
 - Create a timed event with a Routine selected and confirm the event and the same-date Routine completion are both saved once.
 - Open and close the Memo, Schedule, Routine, and baseline Plan panels from the `+` menu, including by their close buttons and dimmed overlays.
