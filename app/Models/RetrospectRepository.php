@@ -361,6 +361,7 @@ final class RetrospectRepository
                 AND ct.deleted_at IS NULL
              WHERE ce.user_id = :user_id
                 AND ce.calendar_day_id = :calendar_day_id
+                AND ce.schedule_type = \'timed\'
                 AND ce.deleted_at IS NULL
              ORDER BY ' . $orderBy
         );

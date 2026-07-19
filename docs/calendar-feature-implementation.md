@@ -6,9 +6,10 @@ Calendar is the actual execution screen. It stores actual schedule events by use
 
 The current implementation supports:
 
-- date navigation by previous/next day
+- date navigation by previous/next day and direct date lookup
 - one selected plan group per calendar day
 - many actual events per calendar day
+- timed and untimed actual events
 - optional one-to-one actual event to plan template connection
 - default calendar tags and user-created tags backed by a shared organic 15-color palette
 - soft deletion of actual events
@@ -48,6 +49,7 @@ Important columns:
 - `user_id`
 - `calendar_day_id`
 - `title`
+- `schedule_type`
 - `start_index`
 - `end_index`
 - `plan_template_id`
@@ -59,13 +61,14 @@ Important columns:
 
 Rules:
 
-- Actual events are stored with the same 10-minute index model as plan blocks.
+- Timed actual events are stored with the same 10-minute index model as plan blocks.
+- `schedule_type` is `timed` or `unscheduled`. Untimed entries store null `start_index`, `end_index`, and `plan_template_id` values.
 - `start_index` is inclusive and `end_index` is exclusive.
 - `plan_template_id` is nullable. If present, the actual event is linked to one planned block.
 - `calendar_tag_id` is nullable. If present, the actual event uses the common tag's color for its calendar block.
 - `memo` stores optional event notes and is editable from the event bottom sheet.
 - The UI only offers unused plan templates for the selected day, so a plan block cannot be selected twice on the same day.
-- Active actual events cannot overlap on the same calendar day.
+- Active timed events cannot overlap on the same calendar day. Untimed entries do not participate in overlap checks.
 - `deleted_at` is used for soft deletion.
 
 ### `calendar_tag_palettes`
@@ -146,15 +149,16 @@ Rules:
 - `POST /tags/update`: update a user tag.
 - `POST /tags/delete`: soft-delete a user tag and clear existing event links.
 - `POST /routine/toggle`: set a routine execution state and redirect back to the selected calendar date when submitted from Calendar.
+- `POST /memo`: save a standalone quick memo and return to the selected Calendar date.
 
 All POST routes require CSRF verification.
 
 ## Current UI Behavior
 
-- The header shows previous/next date buttons and the selected date.
+- The header shows previous/next date buttons and a date input for direct movement to a specific date.
 - The Retrospect button opens a local preview popup with the latest submitted report on or before the selected calendar date.
 - The Retrospect button is disabled when there is no submitted report yet.
-- The lower-left plan settings button opens a bottom sheet for selecting one plan group for the day.
+- The bottom-right `+` menu opens quick memo, untimed schedule creation, Routine checking, and baseline Plan settings. A divider separates the baseline Plan action.
 - Plan picker labels show user-facing plan names only. Internal plan version numbers are not shown.
 - When a plan group is selected, a collapsed "today's plan" reminder panel is shown directly below the date header by default.
 - When no plan group is selected, the "today's plan" reminder panel is hidden.
@@ -164,15 +168,23 @@ All POST routes require CSRF verification.
 - Planned block titles are highlighted by duration: 30 minutes or less gets a blue marker style, and 60 minutes or more gets a red marker style.
 - The selected plan group's blocks are shown as background plan events.
 - Background plan events show a small neutral `A/B/C/D` badge before the plan title. The badge intentionally avoids importance coloring inside the calendar grid so future tag colors can own block backgrounds.
-- Dragging the day grid opens a page-level bottom sheet for actual schedule entry. Dragging can start on top of a background plan event because the script resolves the underlying grid cell.
-- On top of an actual event, a short click opens the event edit bottom sheet, while dragging starts a new selection for actual schedule entry.
-- The bottom sheet asks for an actual event title, an optional common tag, and an optional plan template link.
+- Calendar and Plan add/edit pages share `public/assets/js/components/time-grid-selection.js` for range selection.
+- On touch devices, the grid keeps native vertical scrolling as the default. A stationary long press activates selection and subsequent dragging extends the selected range.
+- Moving before the long-press delay remains a native scroll. A short tap has no schedule-creation behavior.
+- Mouse and pen input keep immediate drag-to-select behavior. Range selection can start on top of a background plan event because the script resolves the underlying grid cell.
+- Touching or clicking an actual event opens its edit bottom sheet; range selection does not start from an actual-event control.
+- The bottom sheet asks for an actual event title, an optional common tag, an optional plan template link, and routines that should be completed with the event.
+- Saving a new event marks the selected active routines complete for the same calendar date, so Calendar and Routine do not require separate completion actions.
+- The quick menu creates entries without a time range. Untimed entries cannot connect to a plan block and are excluded from time-duration Retrospect metrics.
+- Opening the untimed schedule action also lists existing untimed entries so they can be edited or deleted without placing them on the grid.
+- After selecting a time range, the event sheet offers `새 일정 입력` and, when available, `시간 미정 일정 (n)` tabs. Selecting an untimed entry converts the same record to a timed event instead of copying it.
+- Calendar bottom sheets keep their header and close button reachable while long content scrolls internally. Opening an event sheet focuses its title input during the initiating user gesture, and visual viewport changes keep the focused input visible.
 - Actual event blocks use the selected tag's `color_hex` as the block background color.
 - The Calendar page does not show a global status legend. Actual event colors represent tag categories, not execution status, and the current time is indicated directly in the grid cell.
 - The event edit bottom sheet supports title, tag, plan link, memo, and delete actions.
 - Already linked plan templates are disabled in the bottom sheet.
 - Clicking an actual event asks for confirmation and then soft-deletes it.
-- The Routine floating button opens a popup containing routines active on the selected date.
+- The `+` menu's Routine action opens a popup containing routines active on the selected date.
 - Routine state changes submit to `POST /routine/toggle` and persist to `routine_logs`.
 - If a routine duration change moves the selected date outside the routine's active period, that routine is excluded from the Calendar routine popup for that date. Existing routine logs are preserved but ignored outside the active period.
 - If the selected date is today, the current 10-minute cell is highlighted using the app timezone (`Asia/Seoul`).
@@ -181,3 +193,19 @@ All POST routes require CSRF verification.
 ## Retrospect Integration
 
 Retrospect persistence is handled by the Retrospect feature. Calendar remains the source of actual events and selected plan data, while `/retrospect` owns report snapshots, draft text, publishing, and history. Calendar reads the latest submitted report preview on or before the selected date and does not edit retrospect data.
+
+## Existing Database Migration
+
+- MySQL: run `sql/migration.add_calendar_schedule_type.mysql.sql` once.
+- SQLite: `app/Core/Database.php` applies `sql/migration.add_calendar_schedule_type.sqlite.sql` when an existing `calendar_events` table does not yet have `schedule_type`.
+- See `docs/database-migrations.md` for the recommended deployment order when applying this together with other current migrations.
+
+## Manual Test Checklist
+
+- On touch, vertically swipe the time grid and confirm the page scrolls without creating a selection.
+- Short-tap an empty time cell and confirm no event sheet opens.
+- Long-press an empty time cell, drag across several cells, and confirm the timed event sheet opens with the selected range.
+- Open `+ > 일정`, create a time-unscheduled event, then select a time range and convert that same event from the `시간 미정 일정 (n)` tab.
+- Create a timed event with a Routine selected and confirm the event and the same-date Routine completion are both saved once.
+- Open and close the Memo, Schedule, Routine, and baseline Plan panels from the `+` menu, including by their close buttons and dimmed overlays.
+- Use the date picker to move to a specific date and confirm previous/next date navigation still works.

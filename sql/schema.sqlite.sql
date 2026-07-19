@@ -38,6 +38,17 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL UNIQUE,
   theme TEXT NOT NULL DEFAULT 'light',
+  notification_enabled INTEGER NOT NULL DEFAULT 1,
+  retrospect_morning_enabled INTEGER NOT NULL DEFAULT 1,
+  retrospect_morning_time TEXT NOT NULL DEFAULT '07:00',
+  retrospect_evening_enabled INTEGER NOT NULL DEFAULT 1,
+  retrospect_evening_time TEXT NOT NULL DEFAULT '20:00',
+  routine_reminder_enabled INTEGER NOT NULL DEFAULT 1,
+  routine_reminder_time TEXT NOT NULL DEFAULT '14:00',
+  calendar_plan_reminder_enabled INTEGER NOT NULL DEFAULT 1,
+  goal_deadline_reminder_enabled INTEGER NOT NULL DEFAULT 1,
+  goal_deadline_time TEXT NOT NULL DEFAULT '12:00',
+  goal_deadline_day_before_enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -276,8 +287,9 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   user_id INTEGER NOT NULL,
   calendar_day_id INTEGER NOT NULL,
   title TEXT NOT NULL,
-  start_index INTEGER NOT NULL,
-  end_index INTEGER NOT NULL,
+  schedule_type TEXT NOT NULL DEFAULT 'timed',
+  start_index INTEGER NULL,
+  end_index INTEGER NULL,
   plan_template_id INTEGER NULL,
   calendar_tag_id INTEGER NULL,
   memo TEXT NULL,
@@ -288,7 +300,10 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   FOREIGN KEY (calendar_day_id) REFERENCES calendar_days(id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (plan_template_id) REFERENCES plan_templates(id) ON DELETE SET NULL ON UPDATE CASCADE,
   FOREIGN KEY (calendar_tag_id) REFERENCES calendar_tags(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  CHECK (start_index >= 0 AND end_index <= 144 AND start_index < end_index)
+  CHECK (
+    (schedule_type = 'timed' AND start_index >= 0 AND end_index <= 144 AND start_index < end_index)
+    OR (schedule_type = 'unscheduled' AND start_index IS NULL AND end_index IS NULL)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_calendar_events_user_day ON calendar_events(user_id, calendar_day_id, deleted_at);
@@ -425,3 +440,16 @@ CREATE TABLE IF NOT EXISTS retrospect_report_routine_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_retrospect_routine_items_report ON retrospect_report_routine_items(report_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  deleted_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_user_active_updated ON notes(user_id, deleted_at, updated_at);
+CREATE INDEX IF NOT EXISTS idx_notes_user_deleted ON notes(user_id, deleted_at);

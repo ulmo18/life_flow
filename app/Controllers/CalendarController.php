@@ -6,26 +6,35 @@ namespace App\Controllers;
 
 use App\Core\Csrf;
 use App\Services\CalendarService;
+use App\Services\NotificationService;
 
 final class CalendarController
 {
     private CalendarService $calendarService;
+    private NotificationService $notificationService;
 
     public function __construct()
     {
         $this->calendarService = new CalendarService();
+        $this->notificationService = new NotificationService();
     }
 
     public function index(): void
     {
+        $calendar = $this->calendarService->getDayViewData($this->userId(), $_GET['date'] ?? null);
+
         $this->render('pages/calendar/index', [
             'title' => 'Calendar',
-            'calendar' => $this->calendarService->getDayViewData($this->userId(), $_GET['date'] ?? null),
+            'calendar' => $calendar,
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
+            'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($this->userId(), $calendar),
             'pageStyles' => ['/assets/css/pages/calendar.css'],
-            'pageScripts' => ['/assets/js/pages/calendar.js'],
+            'pageScripts' => [
+                '/assets/js/components/time-grid-selection.js',
+                '/assets/js/pages/calendar.js',
+            ],
         ]);
 
         unset($_SESSION['errors'], $_SESSION['flash_success']);

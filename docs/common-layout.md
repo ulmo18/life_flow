@@ -27,12 +27,14 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
   - Routine
   - Retrospect
   - Goal
+  - Memo
   - Schedule Tag Management
 - Group aside links with separators:
   - Dashboard
-  - Calendar, Plan, Routine, Retrospect, Goal
+  - Calendar, Plan, Routine, Retrospect, Goal, Memo
   - Schedule Tag Management
 - Logout lives inside the Settings page and must remain a POST form with a CSRF token.
+- Account identity is shown in the aside only; Settings does not repeat the same account-information card.
 
 ## Bottom Navigator
 - The bottom navigator is fixed to the bottom center of the viewport.
@@ -47,15 +49,18 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Shared layout CSS lives in `public/assets/css/app.css`.
 - Shared layout JavaScript lives in `public/assets/js/components/app-layout.js`.
 - Page-specific CSS and JavaScript should continue using `$pageStyles` and `$pageScripts`.
+- Android notification bridge JavaScript is loaded as a shared component so Settings and feature pages can sync scheduling payloads consistently.
 - Shared modal and sheet close actions should use click handlers consistently; avoid registering pointerup and click on the same close control.
 - Shared UI modals must stack above page-local sheets so confirmation dialogs opened from a sheet are never hidden behind it.
 - Shared hover tooltips should only appear on hover-capable fine pointers, not on touch devices.
 - Shared `.input` fields use the app typography, 15px text, soft card-like surfaces, and visible focus states so inputs and textareas match the current visual system.
+- Shared bottom sheets focus their primary input during the opening user action and keep the active input visible when the mobile visual viewport changes.
 
 ## Theme
 - The authenticated shell reads `$_SESSION['theme_preference']` and writes it to `body[data-theme]`.
 - Supported values are `light` and `dark`.
 - Settings persists the user choice in `user_preferences.theme`.
+- Choosing light or dark mode applies and persists immediately when JavaScript is available. The POST redirect remains as the non-JavaScript fallback.
 - Shared colors should be expressed through CSS variables so page-specific styles respond to the active theme.
 - Dark mode coverage must include shared inputs, buttons, toast, aside profile/settings surfaces, page cards, bottom sheets, and page-local selection controls.
 - Page-specific CSS should use `body[data-theme='dark']` for dark overrides because the shell writes the theme to the body `data-theme` attribute.

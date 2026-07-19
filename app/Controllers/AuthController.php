@@ -10,6 +10,7 @@ use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\UserPreferenceRepository;
 use App\Services\GoogleOAuthService;
+use App\Services\NotificationService;
 use App\Services\RememberMeService;
 use Throwable;
 
@@ -19,11 +20,13 @@ final class AuthController
 
     private RememberMeService $rememberMeService;
     private GoogleOAuthService $googleOAuthService;
+    private NotificationService $notificationService;
 
     public function __construct()
     {
         $this->rememberMeService = new RememberMeService();
         $this->googleOAuthService = new GoogleOAuthService();
+        $this->notificationService = new NotificationService();
     }
 
     public function showRegister(): void
@@ -349,12 +352,16 @@ final class AuthController
     public function settings(): void
     {
         $theme = $this->currentTheme();
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
 
         $this->render('pages/settings', [
             'csrfToken' => Csrf::token(),
             'theme' => $theme,
+            'notificationSettings' => $this->notificationService->settings($userId),
+            'notificationSyncPayload' => $this->notificationService->buildSettingsSyncPayload($userId),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
+            'pageScripts' => ['/assets/js/pages/settings.js'],
         ]);
 
         unset($_SESSION['flash_success'], $_SESSION['errors']);
@@ -363,6 +370,9 @@ final class AuthController
     public function updateTheme(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($this->expectsJson()) {
+                $this->jsonResponse(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], 419);
+            }
             $this->redirectWithErrors('/settings', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
@@ -371,12 +381,46 @@ final class AuthController
         $userId = (int) ($_SESSION['user_id'] ?? 0);
 
         if ($userId <= 0) {
+            if ($this->expectsJson()) {
+                $this->jsonResponse(['ok' => false, 'message' => '로그인이 필요합니다.'], 401);
+            }
             $this->redirectWithErrors('/settings', ['general' => '로그인이 필요합니다.']);
         }
 
         (new UserPreferenceRepository())->updateTheme($userId, $theme);
         $_SESSION['theme_preference'] = $theme;
+
+        if ($this->expectsJson()) {
+            $this->jsonResponse(['ok' => true, 'theme' => $theme]);
+        }
+
         $_SESSION['flash_success'] = '화면 모드를 저장했습니다.';
+
+        $this->redirect('/settings');
+    }
+
+    public function updateNotifications(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/settings', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+        if ($userId <= 0) {
+            $this->redirectWithErrors('/settings', ['general' => '로그인이 필요합니다.']);
+        }
+
+        $validation = $this->notificationService->validateSettings(
+            $_POST,
+            $this->notificationService->settings($userId)
+        );
+
+        if (!$validation['ok']) {
+            $this->redirectWithErrors('/settings', $validation['errors']);
+        }
+
+        $this->notificationService->updateSettings($userId, $validation['data']);
+        $_SESSION['flash_success'] = '알림 설정을 저장했습니다.';
 
         $this->redirect('/settings');
     }
@@ -575,6 +619,23 @@ final class AuthController
     {
         extract($data, EXTR_SKIP);
         require __DIR__ . '/../Views/' . $viewPath . '.php';
+    }
+
+    private function expectsJson(): bool
+    {
+        $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
+        $requestedWith = (string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '');
+
+        return stripos($accept, 'application/json') !== false || strtolower($requestedWith) === 'xmlhttprequest';
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function jsonResponse(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     private function redirectWithErrors(string $path, array $errors, array $old = []): void

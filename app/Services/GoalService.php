@@ -32,12 +32,13 @@ final class GoalService
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function getGoalList(int $userId, ?string $status = 'active'): array
+    public function getGoalList(int $userId, ?string $status = 'active', mixed $goalType = null): array
     {
         $statusFilter = $this->normalizeStatusFilter($status);
+        $goalTypeFilter = $this->normalizeGoalTypeFilter($goalType);
         $goals = array_map(
             fn (array $goal): array => $this->formatGoal($goal),
-            $this->goalRepository->listActive($userId, $statusFilter)
+            $this->goalRepository->listActive($userId, $statusFilter, $goalTypeFilter)
         );
         $goalIds = array_map(static fn (array $goal): int => (int) $goal['id'], $goals);
         $linkedPlans = $this->goalRepository->listLinkedPlansByGoalIds($userId, $goalIds);
@@ -80,6 +81,13 @@ final class GoalService
     public function normalizeViewMode(mixed $viewMode): string
     {
         return trim((string) $viewMode) === 'tree' ? 'tree' : 'cards';
+    }
+
+    public function normalizeGoalTypeFilter(mixed $goalType): ?string
+    {
+        $goalType = trim((string) $goalType);
+
+        return array_key_exists($goalType, self::GOAL_TYPES) ? $goalType : null;
     }
 
     /**

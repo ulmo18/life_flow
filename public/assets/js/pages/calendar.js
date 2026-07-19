@@ -5,100 +5,37 @@
   const eventSheet = document.querySelector('[data-event-sheet]');
   const eventEditSheet = document.querySelector('[data-event-edit-sheet]');
   const planSettingsSheet = document.querySelector('[data-plan-settings-sheet]');
+  const quickMemoSheet = document.querySelector('[data-quick-memo-sheet]');
   const routinePopup = document.querySelector('[data-routine-popup]');
   const retrospectPreview = document.querySelector('[data-retrospect-preview]');
   const eventForm = document.getElementById('calendarEventForm');
   const titleInput = document.getElementById('calendarEventTitle');
   const startInput = document.getElementById('calendarStartIndex');
   const endInput = document.getElementById('calendarEndIndex');
+  const scheduleTypeInput = document.getElementById('calendarScheduleType');
+  const sourceEventIdInput = document.getElementById('calendarSourceEventId');
+  const createMemoInput = document.getElementById('calendarEventMemo');
   const selectedTime = document.getElementById('calendarSelectedTime');
   const editEventId = document.getElementById('calendarEditEventId');
+  const editScheduleTypeInput = document.getElementById('calendarEditScheduleType');
   const deleteEventId = document.getElementById('calendarDeleteEventId');
   const editTitleInput = document.getElementById('calendarEditEventTitle');
   const editMemoInput = document.getElementById('calendarEditMemo');
   const planPicker = document.querySelector('.calendar-plan-picker');
+  const createPlanGroup = document.querySelector('[data-create-plan-group]');
+  const createRoutineGroup = document.querySelector('[data-create-routine-group]');
+  const editPlanGroup = document.querySelector('[data-edit-plan-group]');
+  const sourceTabs = document.querySelector('[data-event-source-tabs]');
+  const unscheduledManager = document.querySelector('[data-unscheduled-manager]');
+  const quickMemoInput = document.getElementById('calendarQuickMemo');
+  const fab = document.querySelector('[data-calendar-fab]');
+  const fabToggle = document.querySelector('[data-calendar-fab-toggle]');
+  const fabActions = document.querySelector('[data-calendar-fab-actions]');
+  const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
-  const SCROLL_LANE_WIDTH = 26;
 
-  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planSettingsSheet || !routinePopup || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !selectedTime || !editEventId || !deleteEventId || !editTitleInput || !editMemoInput) {
+  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planSettingsSheet || !quickMemoSheet || !routinePopup || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !selectedTime || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !timeGrid) {
     return;
-  }
-
-  let isDragging = false;
-  let startIndex = null;
-  let endIndex = null;
-  let selectedCells = [];
-  let pendingPointerId = null;
-
-  function clearSelection() {
-    selectedCells.forEach(cell => cell.classList.remove('selecting'));
-    selectedCells = [];
-  }
-
-  function isInScrollLane(clientX) {
-    const rect = (daygrid.closest('.daygrid-wrap') || daygrid).getBoundingClientRect();
-    return clientX >= rect.right - SCROLL_LANE_WIDTH;
-  }
-
-  function cancelPendingDrag() {
-    pendingPointerId = null;
-  }
-
-  function beginDragSelection(pointerId) {
-    if (pendingPointerId !== pointerId || startIndex === null) {
-      return;
-    }
-
-    cancelPendingDrag();
-    isDragging = true;
-    selectRange(startIndex, endIndex);
-
-    try {
-      daygrid.setPointerCapture(pointerId);
-    } catch (error) {
-      // Pointer capture can fail if WebView has already handed the gesture to scrolling.
-    }
-  }
-
-  function cellFromPoint(x, y) {
-    let el = document.elementFromPoint(x, y);
-    if (el && el.classList.contains('cell')) {
-      return el;
-    }
-
-    const hiddenElements = [];
-
-    while (el instanceof HTMLElement && hiddenElements.length < 8) {
-      const previousPointerEvents = el.style.pointerEvents;
-      hiddenElements.push([el, previousPointerEvents]);
-      el.style.pointerEvents = 'none';
-
-      el = document.elementFromPoint(x, y);
-      if (el && el.classList.contains('cell')) {
-        break;
-      }
-    }
-
-    hiddenElements.forEach(([element, previousPointerEvents]) => {
-      element.style.pointerEvents = previousPointerEvents;
-    });
-
-    return el && el.classList.contains('cell') ? el : null;
-  }
-
-  function selectRange(start, end) {
-    clearSelection();
-
-    const min = Math.min(start, end);
-    const max = Math.max(start, end);
-
-    for (let i = min; i <= max; i++) {
-      const cell = daygrid.querySelector(`.cell[data-index="${i}"]`);
-      if (cell) {
-        cell.classList.add('selecting');
-        selectedCells.push(cell);
-      }
-    }
   }
 
   function indexToTime(index) {
@@ -113,9 +50,23 @@
     eventSheet.hidden = panel !== eventSheet;
     eventEditSheet.hidden = panel !== eventEditSheet;
     planSettingsSheet.hidden = panel !== planSettingsSheet;
+    quickMemoSheet.hidden = panel !== quickMemoSheet;
     routinePopup.hidden = panel !== routinePopup;
     retrospectPreview.hidden = panel !== retrospectPreview;
     document.body.classList.add('is-ui-open');
+    closeFab();
+  }
+
+  function focusSheetInput(input) {
+    try {
+      input.focus({ preventScroll: true });
+    } catch (error) {
+      input.focus();
+    }
+
+    window.requestAnimationFrame(() => {
+      input.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
   }
 
   function closePanels(event) {
@@ -124,20 +75,58 @@
       event.stopPropagation();
     }
 
+    if (document.activeElement instanceof HTMLElement && layer.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+
     layer.hidden = true;
     eventSheet.hidden = true;
     eventEditSheet.hidden = true;
     planSettingsSheet.hidden = true;
+    quickMemoSheet.hidden = true;
     routinePopup.hidden = true;
     retrospectPreview.hidden = true;
     document.body.classList.remove('is-ui-open');
   }
 
-  function openEventSheet(start, end) {
-    startInput.value = String(start);
-    endInput.value = String(end);
-    selectedTime.textContent = `${indexToTime(start)} ~ ${indexToTime(end)}`;
+  function setSourceTab(tabName) {
+    if (!sourceTabs) return;
+
+    sourceTabs.querySelectorAll('[data-event-source-tab]').forEach(button => {
+      button.setAttribute('aria-selected', button.dataset.eventSourceTab === tabName ? 'true' : 'false');
+    });
+    const listPanel = sourceTabs.querySelector('[data-event-source-panel="unscheduled"]');
+    if (listPanel) listPanel.hidden = tabName !== 'unscheduled';
+
+    sourceEventIdInput.value = '';
+    sourceTabs.querySelectorAll('[data-source-event]').forEach(input => { input.checked = false; });
     titleInput.value = '';
+    createMemoInput.value = '';
+    checkRadio(eventForm, 'calendar_tag_id', '');
+  }
+
+  function openEventSheet(start, end, scheduleType = 'timed') {
+    const isUnscheduled = scheduleType === 'unscheduled';
+    scheduleTypeInput.value = isUnscheduled ? 'unscheduled' : 'timed';
+    startInput.value = isUnscheduled ? '' : String(start);
+    endInput.value = isUnscheduled ? '' : String(end);
+    sourceEventIdInput.value = '';
+    selectedTime.textContent = isUnscheduled ? '시간 미정' : `${indexToTime(start)} ~ ${indexToTime(end)}`;
+    titleInput.value = '';
+    createMemoInput.value = '';
+    if (sourceTabs) {
+      sourceTabs.hidden = isUnscheduled;
+      setSourceTab('new');
+    }
+    if (unscheduledManager) {
+      unscheduledManager.hidden = !isUnscheduled;
+    }
+    if (createPlanGroup) {
+      createPlanGroup.hidden = isUnscheduled;
+    }
+    if (createRoutineGroup) {
+      createRoutineGroup.hidden = isUnscheduled;
+    }
 
     const noneOption = eventForm.querySelector('input[name="plan_template_id"][value=""]');
     if (noneOption) {
@@ -149,8 +138,12 @@
       emptyTagOption.checked = true;
     }
 
+    eventForm.querySelectorAll('input[name="routine_ids[]"]:not(:disabled)').forEach(input => {
+      input.checked = false;
+    });
+
     openPanel(eventSheet);
-    setTimeout(() => titleInput.focus(), 0);
+    focusSheetInput(titleInput);
   }
 
   function checkRadio(form, name, value) {
@@ -172,10 +165,17 @@
     if (!form) return;
 
     const eventId = button.dataset.eventId || '';
+    const scheduleType = button.dataset.eventScheduleType === 'unscheduled' ? 'unscheduled' : 'timed';
     editEventId.value = eventId;
+    editScheduleTypeInput.value = scheduleType;
     deleteEventId.value = eventId;
     editTitleInput.value = button.dataset.eventTitle || '';
-    editMemoInput.value = button.dataset.eventMemo || '';
+    editMemoInput.value = button.dataset.eventMemoTarget
+      ? (document.getElementById(button.dataset.eventMemoTarget)?.value || '')
+      : (button.dataset.eventMemo || '');
+    if (editPlanGroup) {
+      editPlanGroup.hidden = scheduleType === 'unscheduled';
+    }
 
     checkRadio(form, 'calendar_tag_id', button.dataset.eventTagId || '');
     checkRadio(form, 'plan_template_id', button.dataset.eventPlanTemplateId || '');
@@ -196,62 +196,15 @@
     });
 
     openPanel(eventEditSheet);
-    setTimeout(() => editTitleInput.focus(), 0);
+    focusSheetInput(editTitleInput);
   }
 
-  daygrid.addEventListener('pointerdown', event => {
-    if (isInScrollLane(event.clientX)) {
-      return;
-    }
-
-    const cell = cellFromPoint(event.clientX, event.clientY);
-    if (!cell) return;
-
-    const startedOnActualEvent = Boolean(event.target.closest('[data-event-open]'));
-    if (startedOnActualEvent) {
-      return;
-    }
-
-    cancelPendingDrag();
-    isDragging = false;
-
-    startIndex = Number(cell.dataset.index);
-    endIndex = startIndex;
-    pendingPointerId = event.pointerId;
-
-    beginDragSelection(event.pointerId);
-  });
-
-  daygrid.addEventListener('pointermove', event => {
-    if (!isDragging) return;
-
-    const cell = cellFromPoint(event.clientX, event.clientY);
-    if (!cell) return;
-
-    endIndex = Number(cell.dataset.index);
-    selectRange(startIndex, endIndex);
-  });
-
-  daygrid.addEventListener('pointerup', () => {
-    if (!isDragging) {
-      cancelPendingDrag();
-      clearSelection();
-      return;
-    }
-
-    isDragging = false;
-    cancelPendingDrag();
-
-    const start = Math.min(startIndex, endIndex);
-    const end = Math.max(startIndex, endIndex) + 1;
-    clearSelection();
-    openEventSheet(start, end);
-  });
-
-  daygrid.addEventListener('pointercancel', () => {
-    cancelPendingDrag();
-    isDragging = false;
-    clearSelection();
+  timeGrid.create({
+    grid: daygrid,
+    ignoreSelector: '[data-event-open], button, input, select, textarea, a',
+    onSelect({ start, end }) {
+      openEventSheet(start, end);
+    },
   });
 
   document.querySelectorAll('[data-calendar-close]').forEach(button => {
@@ -274,9 +227,81 @@
     button.addEventListener('click', () => openPanel(planSettingsSheet));
   });
 
+  document.querySelectorAll('[data-unscheduled-open]').forEach(button => {
+    button.addEventListener('click', () => openEventSheet(null, null, 'unscheduled'));
+  });
+
+  document.querySelectorAll('[data-quick-memo-open]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (quickMemoInput) quickMemoInput.value = '';
+      openPanel(quickMemoSheet);
+      if (quickMemoInput) focusSheetInput(quickMemoInput);
+    });
+  });
+
+  sourceTabs?.querySelectorAll('[data-event-source-tab]').forEach(button => {
+    button.addEventListener('click', () => setSourceTab(button.dataset.eventSourceTab || 'new'));
+  });
+
+  sourceTabs?.querySelectorAll('[data-source-event]').forEach(input => {
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      sourceEventIdInput.value = input.value;
+      titleInput.value = input.dataset.eventTitle || '';
+      createMemoInput.value = input.closest('.calendar-source-option')?.querySelector('[data-source-event-memo]')?.value || '';
+      checkRadio(eventForm, 'calendar_tag_id', input.dataset.eventTagId || '');
+      focusSheetInput(titleInput);
+    });
+  });
+
+  eventForm.addEventListener('submit', event => {
+    const sourceTab = sourceTabs?.querySelector('[data-event-source-tab][aria-selected="true"]')?.dataset.eventSourceTab;
+    if (scheduleTypeInput.value === 'timed' && sourceTab === 'unscheduled' && !sourceEventIdInput.value) {
+      event.preventDefault();
+      window.LifeFlowToast?.show?.('시간을 배치할 일정을 선택해주세요.');
+    }
+  });
+
+  function closeFab() {
+    if (!fab || !fabToggle || !fabActions) return;
+    fab.classList.remove('is-open');
+    fabToggle.textContent = '+';
+    fabToggle.setAttribute('aria-expanded', 'false');
+    fabToggle.setAttribute('aria-label', '빠른 메뉴 열기');
+    fabActions.hidden = true;
+  }
+
+  fabToggle?.addEventListener('click', event => {
+    event.stopPropagation();
+    const willOpen = !fab?.classList.contains('is-open');
+    if (!willOpen) {
+      closeFab();
+      return;
+    }
+    fab?.classList.add('is-open');
+    fabActions.hidden = false;
+    fabToggle.textContent = '×';
+    fabToggle.setAttribute('aria-expanded', 'true');
+    fabToggle.setAttribute('aria-label', '빠른 메뉴 닫기');
+  });
+
+  document.addEventListener('click', event => {
+    if (fab?.classList.contains('is-open') && !fab.contains(event.target)) {
+      closeFab();
+    }
+  });
+
   document.querySelectorAll('[data-event-open]').forEach(button => {
     button.addEventListener('click', () => {
       openEditSheet(button);
+    });
+  });
+
+  document.querySelectorAll('[data-calendar-date-picker]').forEach(input => {
+    input.addEventListener('change', () => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(input.value)) {
+        window.location.href = `/calendar?date=${encodeURIComponent(input.value)}`;
+      }
     });
   });
 
@@ -358,4 +383,24 @@
       closePanels();
     }
   });
+
+  if (window.visualViewport) {
+    let viewportResizeTimer = null;
+
+    window.visualViewport.addEventListener('resize', () => {
+      window.clearTimeout(viewportResizeTimer);
+      viewportResizeTimer = window.setTimeout(() => {
+        const activeElement = document.activeElement;
+        if (!(activeElement instanceof HTMLElement) || !layer.contains(activeElement)) {
+          return;
+        }
+
+        const viewportBottom = window.visualViewport.offsetTop + window.visualViewport.height;
+        const inputBottom = activeElement.getBoundingClientRect().bottom;
+        if (inputBottom > viewportBottom - 16) {
+          activeElement.scrollIntoView({ block: 'center', inline: 'nearest' });
+        }
+      }, 80);
+    });
+  }
 })();

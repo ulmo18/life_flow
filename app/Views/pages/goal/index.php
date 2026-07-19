@@ -5,6 +5,7 @@ $selectedGoalType = (string) ($old['goal_type'] ?? 'monthly');
 $selectedParentId = (int) ($old['parent_goal_id'] ?? 0);
 $selectedStatus = (string) ($selectedStatus ?? 'active');
 $selectedView = (string) ($selectedView ?? 'cards');
+$selectedGoalTypeFilter = $selectedGoalTypeFilter ?? null;
 $today = date('Y-m-d');
 
 $statusClass = static function (string $status): string {
@@ -101,7 +102,7 @@ $renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGo
     <?php endif; ?>
 
     <nav class="goal-view-switch" aria-label="목표 보기 방식">
-        <a href="/goal?status=<?= e($selectedStatus) ?>&view=cards" <?= $selectedView === 'cards' ? 'aria-current="page"' : '' ?>>카드 보기</a>
+        <a href="/goal?status=<?= e($selectedStatus) ?>&type=<?= e((string) ($selectedGoalTypeFilter ?? '')) ?>&view=cards" <?= $selectedView === 'cards' ? 'aria-current="page"' : '' ?>>카드 보기</a>
         <a href="/goal?view=tree" <?= $selectedView === 'tree' ? 'aria-current="page"' : '' ?>>트리 보기</a>
     </nav>
 
@@ -113,11 +114,25 @@ $renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGo
             } ?>
             <a
                 class="goal-status-filter-link"
-                href="/goal?status=<?= e($statusValue) ?>&view=cards"
+                href="/goal?status=<?= e($statusValue) ?>&type=<?= e((string) ($selectedGoalTypeFilter ?? '')) ?>&view=cards"
                 <?= $selectedStatus === $statusValue ? 'aria-current="page"' : '' ?>
             >
                 <?= e((string) $statusOptions[$statusValue]) ?>
             </a>
+        <?php endforeach; ?>
+    </nav>
+    <nav class="goal-status-filter goal-type-filter" aria-label="목표 구분 필터">
+        <a
+            class="goal-status-filter-link"
+            href="/goal?status=<?= e($selectedStatus) ?>&view=cards"
+            <?= $selectedGoalTypeFilter === null ? 'aria-current="page"' : '' ?>
+        >전체</a>
+        <?php foreach ($goalTypes as $typeValue => $typeLabel): ?>
+            <a
+                class="goal-status-filter-link"
+                href="/goal?status=<?= e($selectedStatus) ?>&type=<?= e((string) $typeValue) ?>&view=cards"
+                <?= $selectedGoalTypeFilter === (string) $typeValue ? 'aria-current="page"' : '' ?>
+            ><?= e((string) $typeLabel) ?></a>
         <?php endforeach; ?>
     </nav>
     <?php endif; ?>
@@ -193,23 +208,21 @@ $renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGo
                             </div>
                         <?php endif; ?>
 
-                        <?php if ((string) ($goal['behaviorNote'] ?? '') !== ''): ?>
-                            <p class="goal-action-note"><?= e((string) $goal['behaviorNote']) ?></p>
-                        <?php else: ?>
-                            <p class="goal-action-hint">생각을 행동으로 옮기기 위한 리마인드를 적어두면 좋아요.</p>
-                        <?php endif; ?>
-
+                        <?php if ((string) ($goal['behaviorNote'] ?? '') !== '' || !empty($linkedPlans) || !empty($linkedRoutines)): ?>
                         <details class="goal-linked-details">
                             <summary>
-                                <span>연결된 계획과 루틴</span>
-                                <small>계획 <?= e((string) count($linkedPlans)) ?> · 루틴 <?= e((string) count($linkedRoutines)) ?></small>
+                                <span>상세 정보</span>
+                                <?php if (!empty($linkedPlans) || !empty($linkedRoutines)): ?>
+                                    <small>계획 <?= e((string) count($linkedPlans)) ?> · 루틴 <?= e((string) count($linkedRoutines)) ?></small>
+                                <?php endif; ?>
                             </summary>
                             <div class="goal-linked-wrap">
+                                <?php if ((string) ($goal['behaviorNote'] ?? '') !== ''): ?>
+                                    <p class="goal-action-note"><?= e((string) $goal['behaviorNote']) ?></p>
+                                <?php endif; ?>
+                                <?php if (!empty($linkedPlans)): ?>
                                 <div class="goal-linked-list">
                                     <strong>연결된 계획</strong>
-                                    <?php if (empty($linkedPlans)): ?>
-                                        <span class="goal-linked-empty">아직 연결된 계획이 없습니다.</span>
-                                    <?php else: ?>
                                         <ul>
                                             <?php foreach ($linkedPlans as $plan): ?>
                                                 <li>
@@ -220,13 +233,11 @@ $renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGo
                                                 </li>
                                             <?php endforeach; ?>
                                         </ul>
-                                    <?php endif; ?>
                                 </div>
+                                <?php endif; ?>
+                                <?php if (!empty($linkedRoutines)): ?>
                                 <div class="goal-linked-list">
                                     <strong>연결된 루틴</strong>
-                                    <?php if (empty($linkedRoutines)): ?>
-                                        <span class="goal-linked-empty">아직 연결된 루틴이 없습니다.</span>
-                                    <?php else: ?>
                                         <ul>
                                             <?php foreach ($linkedRoutines as $routine): ?>
                                                 <li>
@@ -235,10 +246,11 @@ $renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGo
                                                 </li>
                                             <?php endforeach; ?>
                                         </ul>
-                                    <?php endif; ?>
                                 </div>
+                                <?php endif; ?>
                             </div>
                         </details>
+                        <?php endif; ?>
 
                         <div class="goal-card-actions">
                             <button type="button" class="btn btn-secondary" data-goal-open="edit-<?= e((string) $goalId) ?>">수정</button>
@@ -384,5 +396,11 @@ $renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGo
         </section>
     <?php endforeach; ?>
 </div>
+
+<?php if (!empty($notificationSyncPayload)): ?>
+    <script type="application/json" data-notification-sync>
+        <?= json_encode($notificationSyncPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}' ?>
+    </script>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../../layouts/footer.php'; ?>

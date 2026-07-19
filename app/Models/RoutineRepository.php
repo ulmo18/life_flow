@@ -188,6 +188,22 @@ final class RoutineRepository
         return $routine !== false ? $routine : null;
     }
 
+    /** @return array<int, array<string, mixed>> */
+    public function listNotificationEnabled(int $userId): array
+    {
+        $sql = 'SELECT id, name, start_date, duration_days, reminder_enabled, reminder_time
+                FROM routines
+                WHERE user_id = :user_id
+                    AND reminder_enabled = 1
+                    AND deleted_at IS NULL
+                ORDER BY updated_at DESC, id DESC';
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['user_id' => $userId]);
+
+        return $stmt->fetchAll();
+    }
+
     public function create(int $userId, ?int $goalId, string $name, string $startDate, int $durationDays, bool $reminderEnabled, ?string $reminderTime): ?int
     {
         $sql = 'INSERT INTO routines (
@@ -286,6 +302,16 @@ final class RoutineRepository
 
         $this->deleteLogState($userId, $routineId, $date);
         return '';
+    }
+
+    public function markDoneForDate(int $userId, int $routineId, string $date): bool
+    {
+        if (!$this->isRoutineActiveOnDate($userId, $routineId, $date)) {
+            return false;
+        }
+
+        $this->upsertLogState($userId, $routineId, $date, true);
+        return true;
     }
 
     /** @return array<string, int> */

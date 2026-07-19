@@ -18,7 +18,7 @@ final class GoalRepository
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function listActive(int $userId, ?string $status = null): array
+    public function listActive(int $userId, ?string $status = null, ?string $goalType = null): array
     {
         $sql = 'SELECT
                     g.id,
@@ -49,6 +49,11 @@ final class GoalRepository
         if ($status !== null) {
             $sql .= ' AND g.status = :status';
             $params['status'] = $status;
+        }
+
+        if ($goalType !== null) {
+            $sql .= ' AND g.goal_type = :goal_type';
+            $params['goal_type'] = $goalType;
         }
 
         $sql .= ' ORDER BY ' . $this->goalTypeOrderExpression('g.goal_type') . ',
@@ -121,6 +126,28 @@ final class GoalRepository
         ]);
 
         return $stmt->fetchColumn() !== false;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listDeadlineReminderTargets(int $userId, string $today): array
+    {
+        $sql = 'SELECT id, title, goal_type, period_end_date
+                FROM goals
+                WHERE user_id = :user_id
+                    AND status = :status
+                    AND period_end_date IS NOT NULL
+                    AND period_end_date >= :today
+                    AND deleted_at IS NULL
+                ORDER BY period_end_date ASC, id ASC';
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            'user_id' => $userId,
+            'status' => 'active',
+            'today' => $today,
+        ]);
+
+        return $stmt->fetchAll();
     }
 
     /** @param array<int, int> $goalIds @return array<int, array<int, array<string, mixed>>> */

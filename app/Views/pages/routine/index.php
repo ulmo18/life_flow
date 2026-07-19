@@ -251,4 +251,10 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
     <?php endforeach; ?>
 </div>
 
+<?php if (!empty($notificationSyncPayload)): ?>
+    <script type="application/json" data-notification-sync>
+        <?= json_encode($notificationSyncPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}' ?>
+    </script>
+<?php endif; ?>
+
 <?php require __DIR__ . '/../../layouts/footer.php'; ?>

@@ -76,6 +76,7 @@
 </div>
 <script src="/assets/js/components/toast.js"></script>
 <script src="/assets/js/components/ui.js"></script>
+<script src="/assets/js/components/android-bridge.js"></script>
 <?php if ($showAppChrome ?? false): ?>
     <script src="/assets/js/components/app-layout.js"></script>
 <?php endif; ?>

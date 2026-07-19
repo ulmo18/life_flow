@@ -188,9 +188,11 @@ All POST routes require CSRF verification.
 - Plan achievement rate: `plan_linked_count / plan_total_count * 100`.
 - Routine achievement rate: `routine_done_count / routine_total_count * 100`.
 - Actual time: sum of linked actual-event durations in minutes.
+- Untimed Calendar entries are excluded from duration-based actual-event snapshots and actual-time metrics because they have no time range.
 
 ## Future Work
 
+- Retrospect morning/evening reminders are configured in Settings and scheduled through the Android bridge notification payloads.
 - Replace opportunistic automatic publishing with a scheduled notification/job worker when server scheduling is available.
 - Connect Goal data after Plan and Routine screens expose `goal_id` selection. The Goal table exists, but Retrospect metrics should wait until lower-level actions are actively linked to goals.
 - Add report search if direct date lookup becomes insufficient.

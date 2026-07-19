@@ -51,6 +51,10 @@
             <div class="msg msg-error"><?= e((string) $errors['blocks']) ?></div>
         <?php endif; ?>
 
+        <div class="time-grid-toolbar">
+            <span>빈 시간 칸을 길게 누른 뒤 드래그하면 계획 범위를 선택할 수 있습니다.</span>
+        </div>
+
         <section class="daygrid-wrap" aria-label="계획 일정 그리드">
             <div class="daygrid" id="planDaygrid">
                 <?php for ($hour = 0; $hour < 24; $hour++): ?>

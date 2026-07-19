@@ -105,6 +105,19 @@
     });
   }
 
+  function focusSheetInput() {
+    try {
+      sheetInput.focus({ preventScroll: true });
+    } catch (error) {
+      sheetInput.focus();
+    }
+    sheetInput.setSelectionRange(sheetInput.value.length, sheetInput.value.length);
+
+    requestAnimationFrame(() => {
+      sheetInput.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
+
   function closeLayer(result) {
     if (activeResolve) {
       activeResolve(result);
@@ -113,6 +126,11 @@
     activeResolve = null;
     activeMode = null;
     sheetOptions = null;
+
+    if (document.activeElement instanceof HTMLElement && layer.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+
     layer.classList.remove('ui-modal-open', 'ui-sheet-open');
     layer.hidden = true;
     modal.hidden = true;
@@ -166,11 +184,7 @@
       sheetError.textContent = '';
       activeResolve = resolve;
       openLayer('sheet');
-
-      setTimeout(() => {
-        sheetInput.focus();
-        sheetInput.setSelectionRange(sheetInput.value.length, sheetInput.value.length);
-      }, 0);
+      focusSheetInput();
     });
   }
 
@@ -264,6 +278,22 @@
   document.addEventListener('touchstart', hideTooltip, { passive: true });
 
   window.addEventListener('scroll', hideTooltip, true);
+
+  if (window.visualViewport) {
+    let viewportResizeTimer = null;
+    window.visualViewport.addEventListener('resize', () => {
+      window.clearTimeout(viewportResizeTimer);
+      viewportResizeTimer = window.setTimeout(() => {
+        const activeElement = document.activeElement;
+        if (!(activeElement instanceof HTMLElement) || !sheet.contains(activeElement)) return;
+
+        const viewportBottom = window.visualViewport.offsetTop + window.visualViewport.height;
+        if (activeElement.getBoundingClientRect().bottom > viewportBottom - 16) {
+          activeElement.scrollIntoView({ block: 'center', inline: 'nearest' });
+        }
+      }, 80);
+    });
+  }
 
   window.LifeFlowUI = {
     confirm,

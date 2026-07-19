@@ -21,12 +21,13 @@ Implemented in this phase:
 - Goal type selection as radio chips
 - Status and period editing from the update sheet
 - Status filter chips on the list page for active, completed, archived, and paused goals
+- Goal-type filter chips for bucket, yearly, half-year, quarterly, and monthly goals
 - Card and tree view switch on the list page
 - Active-goal tree view that shows the current goal hierarchy at a glance
 - Automatic period defaults for non-bucket goals
 - Period progress indicators for goals with start and end dates
 - Behavior reminder memo
-- Collapsible linked Plan and Routine lists on goal cards
+- Compact goal cards with one collapsible details area for behavior notes and linked data
 - Bottom floating Goal add button
 - Goal usage guide opened from an exclamation icon beside the page title
 - Goal selection inside Plan and Routine forms
@@ -122,13 +123,15 @@ For existing SQLite databases, `app/Core/Database.php` ensures the nullable `rou
 - The title-side exclamation icon opens a guide bottom sheet explaining that users can start at any goal depth.
 - Goal creation intentionally keeps the form light: title, type, parent goal, and behavior reminder.
 - Goal editing exposes status and period controls.
-- The default card view keeps status filters and fuller goal reminders for day-to-day review.
+- The default card view keeps status and goal-type filters. Filter links preserve both selections.
 - The tree view always focuses on active goals only so users can scan the current hierarchy without completed, archived, or paused goals competing for attention.
-- Goal cards show type, optional parent goal in an arrow path, status, period, period progress, and behavior reminder.
-- Linked plans and routines are collapsed by default so the goal itself stays scannable.
+- Goal cards show type, optional parent goal in an arrow path, status, period, and period progress in a compact mobile layout.
+- Behavior reminders and linked plans/routines are collapsed into one details area. Empty linked Plan or Routine sections are not rendered.
+- The usage-guide icon is visually smaller than the page title while retaining an expanded touch target.
 - The Goal add action is fixed near the bottom of the viewport to match the Plan list add interaction.
 - Bucket-list goals hide effective period data by storing null period dates.
 
 ## Future Work
 - Add Retrospect goal feedback based on linked plan blocks, actual calendar events, and routine completion.
 - Consider goal-level progress views after plan/routine link data exists.
+- Goal deadline notification payloads are built by `NotificationService`; Settings owns the on/off and reminder time.

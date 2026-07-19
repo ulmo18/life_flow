@@ -6,17 +6,20 @@ namespace App\Controllers;
 
 use App\Core\Csrf;
 use App\Services\GoalService;
+use App\Services\NotificationService;
 use App\Services\RoutineService;
 
 final class RoutineController
 {
     private RoutineService $routineService;
     private GoalService $goalService;
+    private NotificationService $notificationService;
 
     public function __construct()
     {
         $this->routineService = new RoutineService();
         $this->goalService = new GoalService();
+        $this->notificationService = new NotificationService();
     }
 
     public function index(): void
@@ -32,6 +35,7 @@ final class RoutineController
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
+            'notificationSyncPayload' => $this->notificationService->buildRoutineSyncPayload($this->userId()),
             'pageStyles' => ['/assets/css/pages/routine.css'],
             'pageScripts' => ['/assets/js/pages/routine.js'],
         ]);

@@ -226,7 +226,10 @@ final class PlanController
                 '/assets/css/pages/calendar.css',
                 '/assets/css/pages/plan.css',
             ],
-            'pageScripts' => ['/assets/js/pages/plan.js'],
+            'pageScripts' => [
+                '/assets/js/components/time-grid-selection.js',
+                '/assets/js/pages/plan.js',
+            ],
         ], $extraData));
 
         unset($_SESSION['errors'], $_SESSION['old']);

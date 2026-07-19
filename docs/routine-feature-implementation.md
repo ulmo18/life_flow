@@ -100,6 +100,7 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - Dates can be changed from the detail bottom sheet using the same blank, `O`, `X`, blank cycle.
 - The Calendar routine popup shows only routines active on the selected date.
 - Calendar routine toggles update in place when JavaScript is available and redirect back to the selected calendar date as a fallback.
+- A new Calendar event can include active routines for that date. One event save writes the event and marks those routines complete in the same request flow, avoiding a second completion action in the Routine menu.
 
 ## Reminder Direction
 
@@ -109,7 +110,7 @@ The initial routine reminder model is separate from Retrospect reminders.
 - Middle Routine: one optional routine action reminder.
 - Evening Retrospect: writing reminder.
 
-The routine reminder is currently stored as `reminder_enabled` and `reminder_time`; actual push scheduling should be implemented later through the notification service.
+The routine reminder is selected per routine through `reminder_enabled`. Settings owns the daily send time, defaulting to `14:00`, and `NotificationService` builds Android bridge payloads for selected routines.
 
 ## Retrospect Integration Notes
 

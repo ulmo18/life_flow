@@ -70,6 +70,7 @@ final class CalendarRepository
                     ce.calendar_day_id,
                     ce.user_id,
                     ce.title,
+                    ce.schedule_type,
                     ce.start_index,
                     ce.end_index,
                     ce.plan_template_id,
@@ -86,7 +87,9 @@ final class CalendarRepository
                 WHERE ce.user_id = :user_id
                     AND ce.calendar_day_id = :calendar_day_id
                     AND ce.deleted_at IS NULL
-                ORDER BY ce.start_index ASC, ce.id ASC';
+                ORDER BY CASE WHEN ce.schedule_type = \'unscheduled\' THEN 0 ELSE 1 END ASC,
+                    ce.start_index ASC,
+                    ce.id ASC';
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
@@ -243,8 +246,9 @@ final class CalendarRepository
         int $userId,
         string $date,
         string $title,
-        int $startIndex,
-        int $endIndex,
+        string $scheduleType,
+        ?int $startIndex,
+        ?int $endIndex,
         ?int $planTemplateId,
         ?int $calendarTagId,
         string $memo
@@ -253,12 +257,19 @@ final class CalendarRepository
             $this->db->beginTransaction();
             $day = $this->getOrCreateDay($userId, $date);
 
+            if ($scheduleType === 'unscheduled') {
+                $startIndex = null;
+                $endIndex = null;
+                $planTemplateId = null;
+            }
+
             if ($planTemplateId !== null && !$this->canUsePlanTemplate($userId, (int) $day['id'], $planTemplateId)) {
                 $this->db->rollBack();
                 return null;
             }
 
-            if ($this->hasOverlappingEvent($userId, (int) $day['id'], $startIndex, $endIndex)) {
+            if ($scheduleType === 'timed' && $startIndex !== null && $endIndex !== null
+                && $this->hasOverlappingEvent($userId, (int) $day['id'], $startIndex, $endIndex)) {
                 $this->db->rollBack();
                 return null;
             }
@@ -269,10 +280,10 @@ final class CalendarRepository
             }
 
             $sql = 'INSERT INTO calendar_events (
-                        user_id, calendar_day_id, title, start_index, end_index,
+                        user_id, calendar_day_id, title, schedule_type, start_index, end_index,
                         plan_template_id, calendar_tag_id, memo, deleted_at, created_at, updated_at
                     ) VALUES (
-                        :user_id, :calendar_day_id, :title, :start_index, :end_index,
+                        :user_id, :calendar_day_id, :title, :schedule_type, :start_index, :end_index,
                         :plan_template_id, :calendar_tag_id, :memo, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                     )';
 
@@ -281,6 +292,7 @@ final class CalendarRepository
                 'user_id' => $userId,
                 'calendar_day_id' => (int) $day['id'],
                 'title' => $title,
+                'schedule_type' => $scheduleType,
                 'start_index' => $startIndex,
                 'end_index' => $endIndex,
                 'plan_template_id' => $planTemplateId,
@@ -327,7 +339,7 @@ final class CalendarRepository
 
             $sql = 'UPDATE calendar_events
                     SET title = :title,
-                        plan_template_id = :plan_template_id,
+                        plan_template_id = CASE WHEN schedule_type = \'unscheduled\' THEN NULL ELSE :plan_template_id END,
                         calendar_tag_id = :calendar_tag_id,
                         memo = :memo,
                         updated_at = CURRENT_TIMESTAMP
@@ -356,6 +368,82 @@ final class CalendarRepository
 
             error_log('[calendar] update event failed: ' . $exception->getMessage());
             return false;
+        }
+    }
+
+    public function scheduleUnscheduledEvent(
+        int $userId,
+        int $eventId,
+        string $date,
+        string $title,
+        int $startIndex,
+        int $endIndex,
+        ?int $planTemplateId,
+        ?int $calendarTagId,
+        string $memo
+    ): ?int {
+        try {
+            $this->db->beginTransaction();
+            $day = $this->getOrCreateDay($userId, $date);
+            $dayId = (int) $day['id'];
+
+            if ($this->hasOverlappingEvent($userId, $dayId, $startIndex, $endIndex)) {
+                $this->db->rollBack();
+                return null;
+            }
+
+            if ($planTemplateId !== null && !$this->canUsePlanTemplate($userId, $dayId, $planTemplateId, $eventId)) {
+                $this->db->rollBack();
+                return null;
+            }
+
+            if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId)) {
+                $this->db->rollBack();
+                return null;
+            }
+
+            $sql = 'UPDATE calendar_events
+                    SET title = :title,
+                        schedule_type = \'timed\',
+                        start_index = :start_index,
+                        end_index = :end_index,
+                        plan_template_id = :plan_template_id,
+                        calendar_tag_id = :calendar_tag_id,
+                        memo = :memo,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                        AND user_id = :user_id
+                        AND calendar_day_id = :calendar_day_id
+                        AND schedule_type = \'unscheduled\'
+                        AND deleted_at IS NULL';
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                'title' => $title,
+                'start_index' => $startIndex,
+                'end_index' => $endIndex,
+                'plan_template_id' => $planTemplateId,
+                'calendar_tag_id' => $calendarTagId,
+                'memo' => $memo,
+                'id' => $eventId,
+                'user_id' => $userId,
+                'calendar_day_id' => $dayId,
+            ]);
+
+            if ($stmt->rowCount() !== 1) {
+                $this->db->rollBack();
+                return null;
+            }
+
+            $this->db->commit();
+            return $eventId;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+
+            error_log('[calendar] schedule untimed event failed: ' . $exception->getMessage());
+            return null;
         }
     }
 
@@ -400,6 +488,7 @@ final class CalendarRepository
                 WHERE user_id = :user_id
                     AND calendar_day_id = :calendar_day_id
                     AND deleted_at IS NULL
+                    AND schedule_type = \'timed\'
                     AND :start_index < end_index
                     AND :end_index > start_index
                 LIMIT 1';

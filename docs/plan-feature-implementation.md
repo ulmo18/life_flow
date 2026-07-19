@@ -132,7 +132,9 @@ All POST routes require CSRF verification.
 - The detail page shows the saved day grid and a block summary list with block title, time range, importance badge, and template id.
 - The detail page does not show an `Add plan` button.
 - The add/edit page uses the same 24-row, 6-column day-grid shape as Calendar.
-- Dragging cells opens a common bottom sheet and asks for the block title and importance.
+- Calendar and Plan add/edit pages use the shared `public/assets/js/components/time-grid-selection.js` controller.
+- Touch keeps native vertical grid scrolling by default. A stationary long press activates range selection, while moving before activation remains a native scroll. A short tap does not create a Plan block.
+- Mouse and pen can still drag-select immediately.
 - The block bottom sheet can also connect the block to one active goal.
 - Plan block titles in the detail and add/edit grids use `data-ui-tooltip` so long names can be shown near the mouse cursor on hover-capable devices. Detail grid blocks must allow pointer events so short blocks can reveal the same tooltip as editor blocks, but touch devices should not show these hover tooltips.
 - Saving and destructive actions use the shared modal popup.

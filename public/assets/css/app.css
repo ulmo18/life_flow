@@ -173,6 +173,51 @@ body[data-theme='dark'] .settings-theme-option {
   background: rgba(46, 48, 40, 0.72);
 }
 
+.settings-notification-form,
+.settings-notification-grid {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.settings-notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.settings-toggle-option,
+.settings-time-option {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 44px;
+  border: 1px solid rgba(216, 200, 179, 0.78);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 250, 242, 0.72);
+  padding: var(--space-3);
+  font-weight: 800;
+}
+
+.settings-toggle-option {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.settings-time-option {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.settings-time-option .input {
+  grid-column: 1 / -1;
+}
+
+body[data-theme='dark'] .settings-toggle-option,
+body[data-theme='dark'] .settings-time-option {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(46, 48, 40, 0.72);
+}
+
 .has-app-chrome .site-header-inner {
   display: flex;
   align-items: center;

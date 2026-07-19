@@ -27,6 +27,8 @@
   color: var(--color-text);
   max-height: min(calc(100dvh - 24px), 620px);
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 body[data-theme='dark'] .ui-panel {
@@ -54,11 +56,31 @@ body[data-theme='dark'] .ui-panel {
 }
 
 .ui-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) 0;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  background: rgba(255, 250, 242, 0.98);
+}
+
+body[data-theme='dark'] .ui-panel-header {
+  background: rgba(36, 37, 31, 0.98);
+}
+
+.ui-sheet,
+.ui-sheet-form {
+  touch-action: pan-y;
+}
+
+.ui-sheet input,
+.ui-sheet select,
+.ui-sheet button,
+.ui-modal button {
+  touch-action: manipulation;
 }
 
 .ui-panel-title {

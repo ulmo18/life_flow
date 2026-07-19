@@ -1,0 +1,11 @@
+ALTER TABLE user_preferences ADD COLUMN notification_enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN retrospect_morning_enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN retrospect_morning_time TEXT NOT NULL DEFAULT '07:00';
+ALTER TABLE user_preferences ADD COLUMN retrospect_evening_enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN retrospect_evening_time TEXT NOT NULL DEFAULT '20:00';
+ALTER TABLE user_preferences ADD COLUMN routine_reminder_enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN routine_reminder_time TEXT NOT NULL DEFAULT '14:00';
+ALTER TABLE user_preferences ADD COLUMN calendar_plan_reminder_enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN goal_deadline_reminder_enabled INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_preferences ADD COLUMN goal_deadline_time TEXT NOT NULL DEFAULT '12:00';
+ALTER TABLE user_preferences ADD COLUMN goal_deadline_day_before_enabled INTEGER NOT NULL DEFAULT 1;

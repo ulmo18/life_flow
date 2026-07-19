@@ -16,12 +16,17 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Calendar views live under `app/Views/pages/calendar/`.
 - Page-specific calendar CSS lives under `public/assets/css/pages/`.
 - Page-specific calendar JavaScript lives under `public/assets/js/pages/`.
-- Keep drag selection in page JavaScript. Actual event creation and deletion should go through Calendar POST routes.
-- On touch devices, the day grid is reserved for schedule tap/drag selection and the right-side scroll lane is reserved for vertical page scrolling.
+- Keep time-grid selection in the shared `public/assets/js/components/time-grid-selection.js` module. Calendar and Plan should configure that module instead of maintaining separate gesture implementations.
+- On touch devices, the day grid uses native vertical scrolling by default. A stationary long press activates range selection, provides visual/haptic feedback, and the following drag extends the range.
+- A short tap on an empty cell does not create a schedule. Mouse and pen may start range selection immediately.
+- A native scroll gesture must not trigger the actual-event click or empty-cell selection that follows it.
+- Mouse and pen range selection may start immediately, but range selection must never start from an actual-event control or another interactive control.
 - Calendar bottom sheets and popups should close from the close button and dimmed overlay through click handlers only; avoid mixing pointerup and click for the same close action.
 - Calendar bottom sheets should scroll internally when their content exceeds the mobile viewport.
+- Keep the bottom-sheet header and close button reachable while its content scrolls, and keep touch controls out of the page-level grid gesture handling.
+- Focus a sheet input while the opening click or pointer gesture still has user activation, then scroll the focused control into view when the visual viewport becomes shorter.
 - The expanded "today's plan" summary should stay compact on mobile, using an internal scroll area once it reaches about 40% of the viewport height.
-- Calendar floating action buttons should share the same size, padding, and alignment, while preserving their distinct colors.
+- Calendar uses one bottom-right `+` menu for quick memo, untimed schedule creation, routine checking, and baseline Plan settings. A divider separates baseline Plan settings from quick actions.
 - Shared confirmation modals opened from calendar sheets must appear above the calendar-local layer.
 - Calendar block title tooltips should remain hover-only and should not appear during mobile touch editing.
 
@@ -42,7 +47,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 
 ## Persistence
 - `calendar_days` stores one user/date row and the one selected `plan_group_id` for that day.
-- `calendar_events` stores actual schedule blocks and optional `plan_template_id` links.
+- `calendar_events` stores timed actual schedule blocks and untimed entries. Only timed entries can have a `plan_template_id` link.
 - `calendar_tag_palettes` stores the shared 15-color palette for actual-event tags.
 - `calendar_tags` stores four default system tags plus user-created personal tags.
 - `calendar_date_meta` stores holiday/substitute-holiday metadata for date coloring.
@@ -68,6 +73,11 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - JavaScript lives in `public/assets/js/components/toast.js`.
 - Use `window.LifeFlowToast.show(message, options)` from page scripts.
 - Calendar may render an initial toast when the selected date has no plan group so the user is nudged to set a baseline plan.
+
+## Notifications
+- Calendar contributes selected Plan block start-time reminder payloads for the currently viewed date.
+- Settings owns whether Calendar selected-plan reminders are enabled.
+- Calendar must not own global notification preferences; see `docs/notification-feature-implementation.md`.
 
 ## Future DB Extension Notes
 - Support both MySQL and SQLite.

@@ -81,6 +81,7 @@ final class Database
         if ($exists !== false && $exists->fetchColumn() !== false) {
             self::ensureSqliteUserConsentColumns($connection);
             self::ensureSqliteRoutineGoalColumn($connection);
+            self::ensureSqliteCalendarScheduleType($connection);
             self::ensureSqliteSchemaObjects($connection);
             return;
         }
@@ -130,6 +131,31 @@ final class Database
         if (!in_array('goal_id', $columnNames, true)) {
             $connection->exec('ALTER TABLE routines ADD COLUMN goal_id INTEGER NULL');
         }
+    }
+
+    private static function ensureSqliteCalendarScheduleType(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='calendar_events' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+
+        $columns = $connection->query('PRAGMA table_info(calendar_events)');
+        $columnNames = $columns !== false
+            ? array_column($columns->fetchAll(), 'name')
+            : [];
+
+        if (in_array('schedule_type', $columnNames, true)) {
+            return;
+        }
+
+        $migrationPath = __DIR__ . '/../../sql/migration.add_calendar_schedule_type.sqlite.sql';
+        $migrationSql = is_file($migrationPath) ? file_get_contents($migrationPath) : false;
+        if (!is_string($migrationSql) || trim($migrationSql) === '') {
+            throw new PDOException('SQLite calendar migration file not found.');
+        }
+
+        $connection->exec($migrationSql);
     }
 
     private static function ensureSqliteSchemaObjects(PDO $connection): void

@@ -48,6 +48,7 @@ final class CalendarService
             'planOptions' => $this->buildPlanOptions($planBlocks, $usedTemplateIds),
             'planSegments' => $this->buildSegmentsFromBlocks($planBlocks, 'plan'),
             'actualSegments' => $this->buildSegmentsFromEvents($actualEvents),
+            'unscheduledEvents' => $this->buildUnscheduledEvents($actualEvents),
             'hasLinkedActualEvents' => $this->hasLinkedActualEvents($actualEvents),
             'routines' => $this->routineService->getCalendarRoutines($userId, $date),
             'retrospectPreview' => $this->retrospectService->getLatestPublishedPreview($userId, $date),
@@ -59,11 +60,14 @@ final class CalendarService
     {
         $date = $this->normalizeDate((string) ($input['date'] ?? ''));
         $title = trim((string) ($input['title'] ?? ''));
+        $scheduleType = (string) ($input['schedule_type'] ?? 'timed') === 'unscheduled' ? 'unscheduled' : 'timed';
         $startIndex = filter_var($input['start_index'] ?? null, FILTER_VALIDATE_INT);
         $endIndex = filter_var($input['end_index'] ?? null, FILTER_VALIDATE_INT);
         $planTemplateId = filter_var($input['plan_template_id'] ?? null, FILTER_VALIDATE_INT);
         $calendarTagId = filter_var($input['calendar_tag_id'] ?? null, FILTER_VALIDATE_INT);
         $memo = trim((string) ($input['memo'] ?? ''));
+        $routineIds = $this->normalizeRoutineIds($input['routine_ids'] ?? []);
+        $sourceEventId = filter_var($input['source_event_id'] ?? null, FILTER_VALIDATE_INT);
         $errors = [];
 
         if ($title === '') {
@@ -72,9 +76,9 @@ final class CalendarService
             $errors['title'] = '일정명은 80자 이내로 입력해주세요.';
         }
 
-        if ($startIndex === false || $endIndex === false) {
+        if ($scheduleType === 'timed' && ($startIndex === false || $endIndex === false)) {
             $errors['time'] = '일정 시간을 다시 선택해주세요.';
-        } elseif ($startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) {
+        } elseif ($scheduleType === 'timed' && ($startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex)) {
             $errors['time'] = '일정 시간 범위가 올바르지 않습니다.';
         }
 
@@ -88,11 +92,16 @@ final class CalendarService
             'data' => [
                 'date' => $date,
                 'title' => $title,
-                'startIndex' => $startIndex === false ? 0 : $startIndex,
-                'endIndex' => $endIndex === false ? 0 : $endIndex,
-                'planTemplateId' => $planTemplateId === false || $planTemplateId <= 0 ? null : $planTemplateId,
+                'scheduleType' => $scheduleType,
+                'startIndex' => $scheduleType === 'timed' && $startIndex !== false ? $startIndex : null,
+                'endIndex' => $scheduleType === 'timed' && $endIndex !== false ? $endIndex : null,
+                'planTemplateId' => $scheduleType === 'timed' && $planTemplateId !== false && $planTemplateId > 0 ? $planTemplateId : null,
                 'calendarTagId' => $calendarTagId === false || $calendarTagId <= 0 ? null : $calendarTagId,
                 'memo' => $memo,
+                'routineIds' => $scheduleType === 'timed' ? $routineIds : [],
+                'sourceEventId' => $scheduleType === 'timed' && $sourceEventId !== false && $sourceEventId > 0
+                    ? (int) $sourceEventId
+                    : null,
             ],
         ];
     }
@@ -102,6 +111,7 @@ final class CalendarService
     {
         $date = $this->normalizeDate((string) ($input['date'] ?? ''));
         $eventId = filter_var($input['event_id'] ?? null, FILTER_VALIDATE_INT);
+        $scheduleType = (string) ($input['schedule_type'] ?? 'timed') === 'unscheduled' ? 'unscheduled' : 'timed';
         $title = trim((string) ($input['title'] ?? ''));
         $planTemplateId = filter_var($input['plan_template_id'] ?? null, FILTER_VALIDATE_INT);
         $calendarTagId = filter_var($input['calendar_tag_id'] ?? null, FILTER_VALIDATE_INT);
@@ -129,7 +139,8 @@ final class CalendarService
                 'date' => $date,
                 'eventId' => $eventId === false ? 0 : $eventId,
                 'title' => $title,
-                'planTemplateId' => $planTemplateId === false || $planTemplateId <= 0 ? null : $planTemplateId,
+                'scheduleType' => $scheduleType,
+                'planTemplateId' => $scheduleType === 'timed' && $planTemplateId !== false && $planTemplateId > 0 ? $planTemplateId : null,
                 'calendarTagId' => $calendarTagId === false || $calendarTagId <= 0 ? null : $calendarTagId,
                 'memo' => $memo,
             ],
@@ -139,16 +150,37 @@ final class CalendarService
     /** @param array<string, mixed> $data */
     public function createActualEvent(int $userId, array $data): ?int
     {
-        return $this->calendarRepository->createActualEvent(
-            $userId,
-            (string) $data['date'],
-            (string) $data['title'],
-            (int) $data['startIndex'],
-            (int) $data['endIndex'],
-            $data['planTemplateId'] === null ? null : (int) $data['planTemplateId'],
-            $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
-            (string) $data['memo']
-        );
+        $eventId = ($data['sourceEventId'] ?? null) !== null
+            ? $this->calendarRepository->scheduleUnscheduledEvent(
+                $userId,
+                (int) $data['sourceEventId'],
+                (string) $data['date'],
+                (string) $data['title'],
+                (int) $data['startIndex'],
+                (int) $data['endIndex'],
+                $data['planTemplateId'] === null ? null : (int) $data['planTemplateId'],
+                $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
+                (string) $data['memo']
+            )
+            : $this->calendarRepository->createActualEvent(
+                $userId,
+                (string) $data['date'],
+                (string) $data['title'],
+                (string) $data['scheduleType'],
+                $data['startIndex'] === null ? null : (int) $data['startIndex'],
+                $data['endIndex'] === null ? null : (int) $data['endIndex'],
+                $data['planTemplateId'] === null ? null : (int) $data['planTemplateId'],
+                $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
+                (string) $data['memo']
+            );
+
+        if ($eventId !== null) {
+            foreach (($data['routineIds'] ?? []) as $routineId) {
+                $this->routineService->markDoneForDate($userId, (int) $routineId, (string) $data['date']);
+            }
+        }
+
+        return $eventId;
     }
 
     /** @param array<string, mixed> $data */
@@ -328,6 +360,10 @@ final class CalendarService
         $segments = [];
 
         foreach ($events as $event) {
+            if ((string) ($event['schedule_type'] ?? 'timed') !== 'timed') {
+                continue;
+            }
+
             foreach ($this->splitRange((int) $event['start_index'], (int) $event['end_index']) as $segment) {
                 $segments[] = array_merge($segment, [
                     'id' => (int) $event['id'],
@@ -339,11 +375,53 @@ final class CalendarService
                     'tagName' => $event['tag_name'] ?? null,
                     'tagColor' => $this->normalizeHexColor((string) ($event['tag_color'] ?? '')),
                     'memo' => (string) ($event['memo'] ?? ''),
+                    'scheduleType' => 'timed',
                 ]);
             }
         }
 
         return $segments;
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function buildUnscheduledEvents(array $events): array
+    {
+        $items = [];
+
+        foreach ($events as $event) {
+            if ((string) ($event['schedule_type'] ?? 'timed') !== 'unscheduled') {
+                continue;
+            }
+
+            $items[] = [
+                'id' => (int) $event['id'],
+                'title' => (string) $event['title'],
+                'tagId' => $event['calendar_tag_id'] === null ? null : (int) $event['calendar_tag_id'],
+                'tagName' => $event['tag_name'] ?? null,
+                'tagColor' => $this->normalizeHexColor((string) ($event['tag_color'] ?? '')),
+                'memo' => (string) ($event['memo'] ?? ''),
+            ];
+        }
+
+        return $items;
+    }
+
+    /** @return array<int, int> */
+    private function normalizeRoutineIds(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($value as $candidate) {
+            $id = filter_var($candidate, FILTER_VALIDATE_INT);
+            if ($id !== false && $id > 0) {
+                $ids[(int) $id] = (int) $id;
+            }
+        }
+
+        return array_values($ids);
     }
 
     /** @return array<int, array{row: int, col: int, span: int}> */

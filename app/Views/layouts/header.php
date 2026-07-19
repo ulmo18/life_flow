@@ -21,6 +21,7 @@ $isPlanActive = $currentPath === '/plan' || strpos($currentPath, '/plan/') === 0
 $isRoutineActive = $currentPath === '/routine';
 $isRetrospectActive = $currentPath === '/retrospect';
 $isGoalActive = $currentPath === '/goal';
+$isMemoActive = $currentPath === '/memo';
 $themePreference = (string) ($_SESSION['theme_preference'] ?? 'light');
 $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
 ?>
@@ -79,6 +80,7 @@ $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
                     <a href="/routine" <?= $isRoutineActive ? 'aria-current="page"' : '' ?>>루틴</a>
                     <a href="/retrospect" <?= $isRetrospectActive ? 'aria-current="page"' : '' ?>>회고</a>
                     <a href="/goal" <?= $isGoalActive ? 'aria-current="page"' : '' ?>>목표</a>
+                    <a href="/memo" <?= $isMemoActive ? 'aria-current="page"' : '' ?>>메모</a>
                 </div>
                 <div class="aside-nav-group">
                     <a href="/tags" <?= $currentPath === '/tags' ? 'aria-current="page"' : '' ?>>일정 태그 관리</a>

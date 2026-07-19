@@ -15,6 +15,10 @@
                 <p class="calendar-subtitle"><?= e((string) $calendar['dateSubTitle']) ?></p>
             </div>
             <a class="calendar-icon-button" href="/calendar?date=<?= e((string) $calendar['nextDate']) ?>" aria-label="다음 날짜">&rsaquo;</a>
+            <label class="calendar-date-picker-button" aria-label="특정 날짜로 이동">
+                <span aria-hidden="true">▦</span>
+                <input type="date" value="<?= e((string) $calendar['date']) ?>" data-calendar-date-picker aria-label="특정 날짜로 이동">
+            </label>
         </div>
 
         <button
@@ -70,6 +74,10 @@
         </details>
     <?php endif; ?>
 
+    <div class="time-grid-toolbar">
+        <span>빈 시간 칸을 길게 누른 뒤 드래그하면 일정 범위를 선택할 수 있습니다.</span>
+    </div>
+
     <section class="daygrid-wrap" aria-label="일간 캘린더">
         <div class="daygrid" id="daygrid">
             <?php for ($hour = 0; $hour < 24; $hour++): ?>
@@ -118,6 +126,7 @@
                             data-event-plan-template-id="<?= $segment['planTemplateId'] === null ? '' : e((string) $segment['planTemplateId']) ?>"
                             data-event-tag-id="<?= $segment['tagId'] === null ? '' : e((string) $segment['tagId']) ?>"
                             data-event-memo="<?= e((string) $segment['memo']) ?>"
+                            data-event-schedule-type="timed"
                         >
                             <?php if (!empty($segment['tagName'])): ?>
                                 <span class="calendar-tag-dot" aria-hidden="true"></span>
@@ -130,11 +139,16 @@
         </div>
     </section>
 
-    <button type="button" class="calendar-plan-settings-fab" data-plan-settings-open aria-label="기준 계획 변경">
-        <span aria-hidden="true">+</span>
-        기준 계획
-    </button>
-    <button type="button" class="calendar-routine-fab" data-routine-open>루틴</button>
+    <div class="calendar-fab" data-calendar-fab>
+        <div class="calendar-fab-actions" data-calendar-fab-actions hidden>
+            <button type="button" data-quick-memo-open>메모 작성</button>
+            <button type="button" data-unscheduled-open>일정 추가</button>
+            <button type="button" data-routine-open>루틴 확인</button>
+            <span class="calendar-fab-divider" aria-hidden="true"></span>
+            <button type="button" data-plan-settings-open>기준 계획 설정</button>
+        </div>
+        <button type="button" class="calendar-fab-toggle" data-calendar-fab-toggle aria-label="빠른 메뉴 열기" aria-expanded="false">+</button>
+    </div>
 </main>
 
 <div class="calendar-local-layer" data-calendar-layer hidden>
@@ -144,13 +158,72 @@
         <form method="post" action="/calendar/event" id="calendarEventForm">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
+            <input type="hidden" name="schedule_type" id="calendarScheduleType" value="timed">
             <input type="hidden" name="start_index" id="calendarStartIndex">
             <input type="hidden" name="end_index" id="calendarEndIndex">
+            <input type="hidden" name="source_event_id" id="calendarSourceEventId">
             <div class="calendar-sheet-header">
                 <strong id="eventSheetTitle">실제 일정</strong>
                 <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
             </div>
             <p class="calendar-sheet-time" id="calendarSelectedTime"></p>
+
+            <?php if (!empty($calendar['unscheduledEvents'])): ?>
+                <div class="calendar-unscheduled-manager" data-unscheduled-manager hidden>
+                    <strong>시간 미정 일정</strong>
+                    <div class="calendar-unscheduled-list">
+                        <?php foreach ($calendar['unscheduledEvents'] as $event): ?>
+                            <?php $memoTargetId = 'calendarUnscheduledMemo' . (int) $event['id']; ?>
+                            <button
+                                type="button"
+                                class="calendar-unscheduled-item"
+                                style="--event-color: <?= e((string) $event['tagColor']) ?>;"
+                                data-event-open
+                                data-event-id="<?= e((string) $event['id']) ?>"
+                                data-event-title="<?= e((string) $event['title']) ?>"
+                                data-event-plan-template-id=""
+                                data-event-tag-id="<?= $event['tagId'] === null ? '' : e((string) $event['tagId']) ?>"
+                                data-event-memo-target="<?= e($memoTargetId) ?>"
+                                data-event-schedule-type="unscheduled"
+                            >
+                                <span><?= e((string) $event['title']) ?></span>
+                                <small><?= !empty($event['tagName']) ? e((string) $event['tagName']) : '태그 없음' ?></small>
+                            </button>
+                            <textarea hidden id="<?= e($memoTargetId) ?>"><?= e((string) $event['memo']) ?></textarea>
+                        <?php endforeach; ?>
+                    </div>
+                    <strong>새 시간 미정 일정</strong>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($calendar['unscheduledEvents'])): ?>
+                <div class="calendar-event-source" data-event-source-tabs>
+                    <div class="calendar-event-source-tabs" role="tablist" aria-label="일정 입력 방식">
+                        <button type="button" role="tab" aria-selected="true" data-event-source-tab="new">새 일정 입력</button>
+                        <button type="button" role="tab" aria-selected="false" data-event-source-tab="unscheduled">
+                            시간 미정 일정 (<?= e((string) count($calendar['unscheduledEvents'])) ?>)
+                        </button>
+                    </div>
+                    <div class="calendar-source-list" data-event-source-panel="unscheduled" hidden>
+                        <?php foreach ($calendar['unscheduledEvents'] as $event): ?>
+                            <label class="calendar-source-option" style="--event-color: <?= e((string) $event['tagColor']) ?>;">
+                                <input
+                                    type="radio"
+                                    name="source_event_choice"
+                                    value="<?= e((string) $event['id']) ?>"
+                                    data-source-event
+                                    data-event-title="<?= e((string) $event['title']) ?>"
+                                    data-event-tag-id="<?= $event['tagId'] === null ? '' : e((string) $event['tagId']) ?>"
+                                >
+                                <span><?= e((string) $event['title']) ?></span>
+                                <small><?= !empty($event['tagName']) ? e((string) $event['tagName']) : '태그 없음' ?></small>
+                                <textarea hidden data-source-event-memo><?= e((string) $event['memo']) ?></textarea>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <label class="form-label" for="calendarEventTitle">일정명</label>
             <input class="input" id="calendarEventTitle" name="title" type="text" maxlength="80" autocomplete="off" required>
 
@@ -169,7 +242,7 @@
                 <?php endforeach; ?>
             </fieldset>
 
-            <fieldset class="calendar-plan-links">
+            <fieldset class="calendar-plan-links" data-create-plan-group>
                 <legend>연결할 계획 일정</legend>
                 <label class="calendar-plan-link">
                     <input type="radio" name="plan_template_id" value="" checked>
@@ -189,6 +262,27 @@
                 <?php endforeach; ?>
             </fieldset>
 
+            <?php if (!empty($calendar['routines'])): ?>
+                <fieldset class="calendar-routine-links" data-create-routine-group>
+                    <legend>함께 완료할 루틴</legend>
+                    <?php foreach ($calendar['routines'] as $routine): ?>
+                        <label class="calendar-routine-link <?= $routine['state'] === 'O' ? 'is-done' : '' ?>">
+                            <input
+                                type="checkbox"
+                                name="routine_ids[]"
+                                value="<?= e((string) $routine['id']) ?>"
+                                <?= $routine['state'] === 'O' ? 'checked disabled' : '' ?>
+                            >
+                            <span><?= e((string) $routine['name']) ?></span>
+                            <small><?= $routine['state'] === 'O' ? '이미 완료' : '일정 저장과 함께 완료' ?></small>
+                        </label>
+                    <?php endforeach; ?>
+                </fieldset>
+            <?php endif; ?>
+
+            <label class="form-label" for="calendarEventMemo">메모</label>
+            <textarea class="input calendar-memo-input" id="calendarEventMemo" name="memo" maxlength="500" rows="3"></textarea>
+
             <button type="submit" class="btn btn-primary">일정 저장</button>
         </form>
     </section>
@@ -198,6 +292,7 @@
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="event_id" id="calendarEditEventId">
+            <input type="hidden" name="schedule_type" id="calendarEditScheduleType" value="timed">
             <div class="calendar-sheet-header">
                 <strong id="eventEditSheetTitle">일정 수정</strong>
                 <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
@@ -282,9 +377,24 @@
         </form>
     </section>
 
+    <section class="calendar-sheet" data-quick-memo-sheet hidden aria-modal="true" role="dialog" aria-labelledby="quickMemoTitle">
+        <form method="post" action="/memo">
+            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="return_to" value="calendar">
+            <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
+            <div class="calendar-sheet-header">
+                <strong id="quickMemoTitle">빠른 메모</strong>
+                <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
+            </div>
+            <label class="form-label" for="calendarQuickMemo">바로 기록해보세요</label>
+            <textarea class="input calendar-quick-memo-input" id="calendarQuickMemo" name="content" maxlength="10000" rows="7" required></textarea>
+            <button type="submit" class="btn btn-primary">메모 저장</button>
+        </form>
+    </section>
+
     <section class="calendar-popup" data-routine-popup hidden aria-modal="true" role="dialog" aria-labelledby="routinePopupTitle">
         <div class="calendar-sheet-header">
-            <strong id="routinePopupTitle">루틴 체크</strong>
+            <strong id="routinePopupTitle">루틴 확인</strong>
             <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
         </div>
         <?php if (empty($calendar['routines'])): ?>
@@ -347,5 +457,11 @@
         <?php endif; ?>
     </section>
 </div>
+
+<?php if (!empty($notificationSyncPayload)): ?>
+    <script type="application/json" data-notification-sync>
+        <?= json_encode($notificationSyncPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}' ?>
+    </script>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../../layouts/footer.php'; ?>

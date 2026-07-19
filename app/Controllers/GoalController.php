@@ -6,14 +6,17 @@ namespace App\Controllers;
 
 use App\Core\Csrf;
 use App\Services\GoalService;
+use App\Services\NotificationService;
 
 final class GoalController
 {
     private GoalService $goalService;
+    private NotificationService $notificationService;
 
     public function __construct()
     {
         $this->goalService = new GoalService();
+        $this->notificationService = new NotificationService();
     }
 
     public function index(): void
@@ -22,7 +25,10 @@ final class GoalController
         $selectedStatus = $selectedView === 'tree'
             ? 'active'
             : $this->goalService->normalizeStatusFilter($_GET['status'] ?? 'active');
-        $goals = $this->goalService->getGoalList($this->userId(), $selectedStatus);
+        $selectedGoalTypeFilter = $selectedView === 'tree'
+            ? null
+            : $this->goalService->normalizeGoalTypeFilter($_GET['type'] ?? null);
+        $goals = $this->goalService->getGoalList($this->userId(), $selectedStatus, $selectedGoalTypeFilter);
 
         $this->render('pages/goal/index', [
             'title' => 'Goal',
@@ -33,12 +39,14 @@ final class GoalController
             'goalTypes' => $this->goalService->goalTypeOptions(),
             'statusOptions' => $this->goalService->statusOptions(),
             'selectedStatus' => $selectedStatus,
+            'selectedGoalTypeFilter' => $selectedGoalTypeFilter,
             'selectedView' => $selectedView,
             'parentOptions' => $this->goalService->parentOptions($this->userId()),
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
+            'notificationSyncPayload' => $this->notificationService->buildGoalSyncPayload($this->userId()),
             'pageStyles' => ['/assets/css/pages/goal.css'],
             'pageScripts' => ['/assets/js/pages/goal.js'],
         ]);

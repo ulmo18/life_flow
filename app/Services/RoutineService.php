@@ -45,6 +45,11 @@ final class RoutineService
         ], $this->routineRepository->listActiveForDate($userId, $date));
     }
 
+    public function markDoneForDate(int $userId, int $routineId, string $date): bool
+    {
+        return $this->routineRepository->markDoneForDate($userId, $routineId, $this->normalizeDate($date));
+    }
+
     /** @return array{ok: bool, errors: array<string, string>, data: array<string, mixed>} */
     public function validateInput(array $input, int $userId): array
     {

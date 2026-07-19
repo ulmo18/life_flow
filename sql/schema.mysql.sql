@@ -46,6 +46,17 @@ CREATE TABLE IF NOT EXISTS `user_preferences` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,
   `theme` VARCHAR(20) NOT NULL DEFAULT 'light',
+  `notification_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `retrospect_morning_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `retrospect_morning_time` TIME NOT NULL DEFAULT '07:00:00',
+  `retrospect_evening_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `retrospect_evening_time` TIME NOT NULL DEFAULT '20:00:00',
+  `routine_reminder_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `routine_reminder_time` TIME NOT NULL DEFAULT '14:00:00',
+  `calendar_plan_reminder_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `goal_deadline_reminder_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `goal_deadline_time` TIME NOT NULL DEFAULT '12:00:00',
+  `goal_deadline_day_before_enabled` TINYINT(1) NOT NULL DEFAULT 1,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -363,8 +374,9 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
   `user_id` BIGINT UNSIGNED NOT NULL,
   `calendar_day_id` BIGINT UNSIGNED NOT NULL,
   `title` VARCHAR(80) NOT NULL,
-  `start_index` SMALLINT UNSIGNED NOT NULL,
-  `end_index` SMALLINT UNSIGNED NOT NULL,
+  `schedule_type` VARCHAR(20) NOT NULL DEFAULT 'timed',
+  `start_index` SMALLINT UNSIGNED NULL,
+  `end_index` SMALLINT UNSIGNED NULL,
   `plan_template_id` BIGINT UNSIGNED NULL,
   `calendar_tag_id` BIGINT UNSIGNED NULL,
   `memo` TEXT NULL,
@@ -393,7 +405,10 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
     ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT `chk_calendar_events_index_range`
-    CHECK (`start_index` >= 0 AND `end_index` <= 144 AND `start_index` < `end_index`)
+    CHECK (
+      (`schedule_type` = 'timed' AND `start_index` >= 0 AND `end_index` <= 144 AND `start_index` < `end_index`)
+      OR (`schedule_type` = 'unscheduled' AND `start_index` IS NULL AND `end_index` IS NULL)
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `routines` (
@@ -555,4 +570,20 @@ CREATE TABLE IF NOT EXISTS `retrospect_report_routine_items` (
     ON UPDATE CASCADE,
   CONSTRAINT `chk_retrospect_routine_items_state`
     CHECK (`state_snapshot` IN ('blank', 'O', 'X'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `notes` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `content` TEXT NOT NULL,
+  `deleted_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_notes_user_active_updated` (`user_id`, `deleted_at`, `updated_at`),
+  KEY `idx_notes_user_deleted` (`user_id`, `deleted_at`),
+  CONSTRAINT `fk_notes_user`
+    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

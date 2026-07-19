@@ -6,16 +6,13 @@
   const nameInput = document.getElementById('planName');
   const sourcePlanInput = document.querySelector('input[name="source_plan_group_id"]');
   const goalOptionsJson = document.getElementById('planGoalOptionsJson');
+  const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
 
-  if (!daygrid || !layer || !form || !blocksInput || !nameInput) {
+  if (!daygrid || !layer || !form || !blocksInput || !nameInput || !timeGrid) {
     return;
   }
 
-  let isDragging = false;
-  let startIndex = null;
-  let endIndex = null;
-  let selectedCells = [];
   let blocks = parseInitialBlocks();
   let allowSubmit = false;
   const goalOptions = parseGoalOptions();
@@ -87,31 +84,6 @@
 
   function importanceClass(value) {
     return `importance-${normalizeImportance(value).toLowerCase()}`;
-  }
-
-  function clearSelection() {
-    selectedCells.forEach(cell => cell.classList.remove('selecting'));
-    selectedCells = [];
-  }
-
-  function cellFromPoint(x, y) {
-    const el = document.elementFromPoint(x, y);
-    return el && el.classList.contains('cell') ? el : null;
-  }
-
-  function selectRange(start, end) {
-    clearSelection();
-
-    const min = Math.min(start, end);
-    const max = Math.max(start, end);
-
-    for (let i = min; i <= max; i++) {
-      const cell = daygrid.querySelector(`.cell[data-index="${i}"]`);
-      if (cell) {
-        cell.classList.add('selecting');
-        selectedCells.push(cell);
-      }
-    }
   }
 
   function indexToTime(index) {
@@ -229,66 +201,36 @@
     syncInput();
   }
 
-  daygrid.addEventListener('pointerdown', e => {
-    const cell = cellFromPoint(e.clientX, e.clientY);
-    if (!cell) return;
+  timeGrid.create({
+    grid: daygrid,
+    ignoreSelector: '[data-block-index], button, input, select, textarea, a',
+    async onSelect({ start, end }) {
+      const block = {
+        start_index: start,
+        end_index: end,
+      };
 
-    isDragging = true;
-    daygrid.setPointerCapture(e.pointerId);
+      if (overlaps(block)) {
+        ui?.show?.('겹치는 계획 블록은 추가할 수 없습니다.');
+        return;
+      }
 
-    startIndex = Number(cell.dataset.index);
-    endIndex = startIndex;
+      const details = await promptBlockDetails(block);
+      if (!details) {
+        return;
+      }
 
-    selectRange(startIndex, endIndex);
-  });
+      const title = String(details.title || '').trim().slice(0, 80);
+      if (!title) {
+        return;
+      }
 
-  daygrid.addEventListener('pointermove', e => {
-    if (!isDragging) return;
-
-    const cell = cellFromPoint(e.clientX, e.clientY);
-    if (!cell) return;
-
-    endIndex = Number(cell.dataset.index);
-    selectRange(startIndex, endIndex);
-  });
-
-  daygrid.addEventListener('pointerup', async () => {
-    if (!isDragging) return;
-
-    isDragging = false;
-
-    const block = {
-      start_index: Math.min(startIndex, endIndex),
-      end_index: Math.max(startIndex, endIndex) + 1,
-    };
-
-    clearSelection();
-
-    if (overlaps(block)) {
-      ui?.show?.('겹치는 계획 블록은 추가할 수 없습니다.');
-      return;
-    }
-
-    const details = await promptBlockDetails(block);
-    if (!details) {
-      return;
-    }
-
-    const title = String(details.title || '').trim().slice(0, 80);
-    if (!title) {
-      return;
-    }
-
-    block.title = title;
-    block.importance = normalizeImportance(details.importance);
-    block.goal_id = normalizeGoalId(details.goalId);
-    blocks.push(block);
-    renderBlocks();
-  });
-
-  daygrid.addEventListener('pointercancel', () => {
-    isDragging = false;
-    clearSelection();
+      block.title = title;
+      block.importance = normalizeImportance(details.importance);
+      block.goal_id = normalizeGoalId(details.goalId);
+      blocks.push(block);
+      renderBlocks();
+    },
   });
 
   form.addEventListener('submit', async event => {
