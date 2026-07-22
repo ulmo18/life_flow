@@ -27,6 +27,8 @@ final class RoutineRepository
                     r.name,
                     r.start_date,
                     r.duration_days,
+                    r.status,
+                    r.ended_at,
                     r.reminder_enabled,
                     r.reminder_time,
                     r.created_at,
@@ -48,6 +50,7 @@ final class RoutineRepository
                     AND today_log.log_date = :today
                 WHERE r.user_id = :user_id
                     AND r.deleted_at IS NULL
+                    AND r.status = :status
                     AND :target_date_start >= r.start_date
                     AND :target_date_end <= ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . '
                 GROUP BY
@@ -57,6 +60,8 @@ final class RoutineRepository
                     r.name,
                     r.start_date,
                     r.duration_days,
+                    r.status,
+                    r.ended_at,
                     r.reminder_enabled,
                     r.reminder_time,
                     r.created_at,
@@ -72,6 +77,7 @@ final class RoutineRepository
             'target_date_start' => $today,
             'target_date_end' => $today,
             'user_id' => $userId,
+            'status' => 'active',
         ]);
 
         return $stmt->fetchAll();
@@ -87,6 +93,8 @@ final class RoutineRepository
                     r.name,
                     r.start_date,
                     r.duration_days,
+                    r.status,
+                    r.ended_at,
                     r.reminder_enabled,
                     r.reminder_time,
                     r.created_at,
@@ -116,6 +124,8 @@ final class RoutineRepository
                     r.name,
                     r.start_date,
                     r.duration_days,
+                    r.status,
+                    r.ended_at,
                     r.reminder_enabled,
                     r.reminder_time,
                     r.created_at,
@@ -152,6 +162,7 @@ final class RoutineRepository
                     AND rl.log_date = :log_date
                 WHERE r.user_id = :user_id
                     AND r.deleted_at IS NULL
+                    AND r.status = :status
                     AND :target_date_start >= r.start_date
                     AND :target_date_end <= ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . '
                 ORDER BY r.created_at ASC, r.id ASC';
@@ -162,6 +173,7 @@ final class RoutineRepository
             'target_date_start' => $date,
             'target_date_end' => $date,
             'user_id' => $userId,
+            'status' => 'active',
         ]);
 
         return $stmt->fetchAll();
@@ -170,7 +182,7 @@ final class RoutineRepository
     /** @return array<string, mixed>|null */
     public function findActive(int $userId, int $routineId): ?array
     {
-        $sql = 'SELECT id, user_id, goal_id, name, start_date, duration_days, reminder_enabled, reminder_time, created_at, updated_at
+        $sql = 'SELECT id, user_id, goal_id, name, start_date, duration_days, status, ended_at, reminder_enabled, reminder_time, created_at, updated_at
                 FROM routines
                 WHERE id = :id
                     AND user_id = :user_id
@@ -195,11 +207,13 @@ final class RoutineRepository
                 FROM routines
                 WHERE user_id = :user_id
                     AND reminder_enabled = 1
+                    AND status = :status
                     AND deleted_at IS NULL
+                    AND :today <= ' . $this->dateAddExpression('start_date', 'duration_days - 1') . '
                 ORDER BY updated_at DESC, id DESC';
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['user_id' => $userId]);
+        $stmt->execute(['user_id' => $userId, 'status' => 'active', 'today' => date('Y-m-d')]);
 
         return $stmt->fetchAll();
     }
@@ -207,9 +221,9 @@ final class RoutineRepository
     public function create(int $userId, ?int $goalId, string $name, string $startDate, int $durationDays, bool $reminderEnabled, ?string $reminderTime): ?int
     {
         $sql = 'INSERT INTO routines (
-                    user_id, goal_id, name, start_date, duration_days, reminder_enabled, reminder_time, deleted_at, created_at, updated_at
+                    user_id, goal_id, name, start_date, duration_days, status, ended_at, reminder_enabled, reminder_time, deleted_at, created_at, updated_at
                 ) VALUES (
-                    :user_id, :goal_id, :name, :start_date, :duration_days, :reminder_enabled, :reminder_time,
+                    :user_id, :goal_id, :name, :start_date, :duration_days, :status, NULL, :reminder_enabled, :reminder_time,
                     NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )';
 
@@ -221,6 +235,7 @@ final class RoutineRepository
                 'name' => $name,
                 'start_date' => $startDate,
                 'duration_days' => $durationDays,
+                'status' => 'active',
                 'reminder_enabled' => $reminderEnabled ? 1 : 0,
                 'reminder_time' => $reminderTime,
             ]);
@@ -263,6 +278,41 @@ final class RoutineRepository
         ]);
 
         return true;
+    }
+
+    public function extend(int $userId, int $routineId, int $durationDays): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE routines
+             SET duration_days = :duration_days, updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id AND user_id = :user_id AND status = :status AND deleted_at IS NULL'
+        );
+        $stmt->execute([
+            'duration_days' => $durationDays,
+            'id' => $routineId,
+            'user_id' => $userId,
+            'status' => 'active',
+        ]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    public function finish(int $userId, int $routineId, string $status, string $endedAt): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE routines
+             SET status = :status, ended_at = :ended_at, reminder_enabled = 0, updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id AND user_id = :user_id AND status = :active_status AND deleted_at IS NULL'
+        );
+        $stmt->execute([
+            'status' => $status,
+            'ended_at' => $endedAt,
+            'id' => $routineId,
+            'user_id' => $userId,
+            'active_status' => 'active',
+        ]);
+
+        return $stmt->rowCount() > 0;
     }
 
     public function softDelete(int $userId, int $routineId): bool
@@ -373,6 +423,7 @@ final class RoutineRepository
                 WHERE id = :id
                     AND user_id = :user_id
                     AND deleted_at IS NULL
+                    AND (status = :status OR (ended_at IS NOT NULL AND :target_date_status <= ended_at))
                     AND :target_date_start >= start_date
                     AND :target_date_end <= ' . $this->dateAddExpression('start_date', 'duration_days - 1') . '
                 LIMIT 1';
@@ -383,6 +434,8 @@ final class RoutineRepository
             'user_id' => $userId,
             'target_date_start' => $date,
             'target_date_end' => $date,
+            'target_date_status' => $date,
+            'status' => 'active',
         ]);
 
         return $stmt->fetchColumn() !== false;

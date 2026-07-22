@@ -31,7 +31,11 @@ final class Database
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
 
-            if ($driver === 'sqlite') {
+            if ($driver === 'mysql') {
+                // Keep DATETIME/CURRENT_TIMESTAMP values consistent across hosts.
+                // User-facing day boundaries are converted from Asia/Seoul in PHP.
+                self::$connection->exec("SET time_zone = '+00:00'");
+            } elseif ($driver === 'sqlite') {
                 self::ensureSqliteSchemaReady(self::$connection);
             }
         } catch (PDOException $exception) {
@@ -81,7 +85,9 @@ final class Database
         if ($exists !== false && $exists->fetchColumn() !== false) {
             self::ensureSqliteUserConsentColumns($connection);
             self::ensureSqliteRoutineGoalColumn($connection);
+            self::ensureSqliteRoutineLifecycle($connection);
             self::ensureSqliteCalendarScheduleType($connection);
+            self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteSchemaObjects($connection);
             return;
         }
@@ -156,6 +162,45 @@ final class Database
         }
 
         $connection->exec($migrationSql);
+    }
+
+    private static function ensureSqliteRoutineLifecycle(PDO $connection): void
+    {
+        $stmt = $connection->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='routines' LIMIT 1");
+        $tableSql = $stmt !== false ? (string) ($stmt->fetchColumn() ?: '') : '';
+        if ($tableSql === '') {
+            return;
+        }
+
+        $columns = $connection->query('PRAGMA table_info(routines)');
+        $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        $hasLifecycleColumns = in_array('status', $columnNames, true) && in_array('ended_at', $columnNames, true);
+        $supportsShortRoutines = stripos($tableSql, 'duration_days >= 1') !== false;
+        if ($hasLifecycleColumns && $supportsShortRoutines) {
+            return;
+        }
+
+        $migrationPath = __DIR__ . '/../../sql/migration.routine_lifecycle.sqlite.sql';
+        $migrationSql = is_file($migrationPath) ? file_get_contents($migrationPath) : false;
+        if (!is_string($migrationSql) || trim($migrationSql) === '') {
+            throw new PDOException('SQLite routine lifecycle migration file not found.');
+        }
+
+        $connection->exec($migrationSql);
+    }
+
+    private static function ensureSqliteRetrospectEventMemo(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='retrospect_report_actual_items' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+
+        $columns = $connection->query('PRAGMA table_info(retrospect_report_actual_items)');
+        $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        if (!in_array('memo_snapshot', $columnNames, true)) {
+            $connection->exec('ALTER TABLE retrospect_report_actual_items ADD COLUMN memo_snapshot TEXT NULL');
+        }
     }
 
     private static function ensureSqliteSchemaObjects(PDO $connection): void

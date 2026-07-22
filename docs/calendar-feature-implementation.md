@@ -86,6 +86,8 @@ Important columns:
 Rules:
 
 - Palette colors are common system data.
+- The same 15 HEX values are preserved in light and dark mode so an assigned tag never changes identity with the display theme.
+- Actual-event components calculate a dark or light text color from the tag background; white text is not assumed for every palette color.
 - Active visible tags cannot reuse a palette color for the same user-facing tag set.
 - The first four colors are currently used by default tags.
 
@@ -148,6 +150,7 @@ Rules:
 - `POST /tags`: create a user tag.
 - `POST /tags/update`: update a user tag.
 - `POST /tags/delete`: soft-delete a user tag and clear existing event links.
+- `POST /tags/system-toggle`: enable or disable a fixed system tag for the signed-in user.
 - `POST /routine/toggle`: set a routine execution state and redirect back to the selected calendar date when submitted from Calendar.
 - `POST /memo`: save a standalone quick memo and return to the selected Calendar date.
 
@@ -155,7 +158,9 @@ All POST routes require CSRF verification.
 
 ## Current UI Behavior
 
-- The header shows previous/next date buttons and a date input for direct movement to a specific date.
+- The header keeps previous date, selected date, next date, date picker, and Retrospect on one vertically centered row. Navigation controls use 44px touch targets, and the whole date-picker button opens the native picker.
+- Fixed tag management shows the tag identity and per-user enabled switch without exposing its fixed color. Disabled fixed tags are hidden from new event registration, while existing event tags and colors remain intact.
+- Per-user fixed-tag visibility is stored in `calendar_tag_preferences`; existing deployments must apply `sql/migration.calendar_tag_preferences.mysql.sql` or its SQLite counterpart first.
 - The Retrospect button opens a local preview popup with the latest submitted report on or before the selected calendar date.
 - The Retrospect button is disabled when there is no submitted report yet.
 - The bottom-right `+` menu opens quick memo, untimed schedule creation, Routine checking, and baseline Plan settings. A divider separates the baseline Plan action.
@@ -167,6 +172,7 @@ All POST routes require CSRF verification.
 - Planned blocks already linked to actual events are rendered with muted gray treatment and sorted below unlinked blocks. Strikethrough is intentionally not used.
 - Planned block titles are highlighted by duration: 30 minutes or less gets a blue marker style, and 60 minutes or more gets a red marker style.
 - The selected plan group's blocks are shown as background plan events.
+- Actual Calendar blocks and Retrospect event cards share the same tag-background and contrast-text rule in both themes.
 - Background plan events show a small neutral `A/B/C/D` badge before the plan title. The badge intentionally avoids importance coloring inside the calendar grid so future tag colors can own block backgrounds.
 - Calendar and Plan add/edit pages share `public/assets/js/components/time-grid-selection.js` for range selection.
 - On touch devices, the grid keeps native vertical scrolling as the default. A stationary long press activates selection and subsequent dragging extends the selected range.
@@ -188,8 +194,9 @@ All POST routes require CSRF verification.
 - The `+` menu's Routine action opens a popup containing routines active on the selected date.
 - Routine state changes submit to `POST /routine/toggle` and persist to `routine_logs`.
 - If a routine duration change moves the selected date outside the routine's active period, that routine is excluded from the Calendar routine popup for that date. Existing routine logs are preserved but ignored outside the active period.
-- If the selected date is today, the current 10-minute cell is highlighted using the app timezone (`Asia/Seoul`).
+- If the selected date is today, the current 10-minute cell is highlighted using the app timezone (`Asia/Seoul`) and moves in place at each 10-minute boundary without reloading the page. Returning to a backgrounded Calendar page refreshes the highlight immediately.
 - Calendar success flash messages are rendered as hidden `data-toast-message` triggers and shown only through the shared toast UI.
+- Calendar notification synchronization includes only Plan reminders whose five-minute-prior fire time is still in the future. Entering Calendar replaces that date's local Android reservations and is not itself a notification trigger.
 
 ## Retrospect Integration
 
@@ -198,6 +205,7 @@ Retrospect persistence is handled by the Retrospect feature. Calendar remains th
 ## Existing Database Migration
 
 - MySQL: run `sql/migration.add_calendar_schedule_type.mysql.sql` once.
+- MySQL: also run `sql/migration.calendar_tag_preferences.mysql.sql` once before enabling per-user fixed-tag visibility.
 - SQLite: `app/Core/Database.php` applies `sql/migration.add_calendar_schedule_type.sqlite.sql` when an existing `calendar_events` table does not yet have `schedule_type`.
 - See `docs/database-migrations.md` for the recommended deployment order when applying this together with other current migrations.
 
@@ -212,3 +220,8 @@ Retrospect persistence is handled by the Retrospect feature. Calendar remains th
 - Create a timed event with a Routine selected and confirm the event and the same-date Routine completion are both saved once.
 - Open and close the Memo, Schedule, Routine, and baseline Plan panels from the `+` menu, including by their close buttons and dimmed overlays.
 - Use the date picker to move to a specific date and confirm previous/next date navigation still works.
+- Tap the full date-picker control, not only the glyph, and confirm all header controls remain vertically centered on one row.
+- Disable a fixed tag and confirm it has no color swatch in tag management and disappears from new event choices.
+- Edit an existing event that used the disabled fixed tag and confirm its stored tag can remain selected and saved.
+- Keep today's Calendar page open across a 10-minute boundary and confirm the current-time highlight moves to the next cell without a page reload. Confirm it refreshes immediately after returning from the background.
+- Enter Calendar after several Plan blocks have already passed and confirm no notification is displayed immediately. Verify only the remaining blocks are reserved for five minutes before their start times.

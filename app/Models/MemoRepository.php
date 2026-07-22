@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Core\Database;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 
 final class MemoRepository
@@ -80,6 +82,31 @@ final class MemoRepository
         ];
     }
 
+    /** @return array<int, array<string, mixed>> */
+    public function listForDate(int $userId, string $date): array
+    {
+        $koreaTimezone = new DateTimeZone('Asia/Seoul');
+        $utcTimezone = new DateTimeZone('UTC');
+        $startAt = (new DateTimeImmutable($date . ' 00:00:00', $koreaTimezone))->setTimezone($utcTimezone);
+        $endAt = $startAt->modify('+1 day');
+        $stmt = $this->db->prepare(
+            'SELECT id, content, created_at
+             FROM notes
+             WHERE user_id = :user_id
+                AND deleted_at IS NULL
+                AND created_at >= :created_start_at
+                AND created_at < :created_end_at
+             ORDER BY created_at ASC, id ASC'
+        );
+        $stmt->execute([
+            'user_id' => $userId,
+            'created_start_at' => $startAt->format('Y-m-d H:i:s'),
+            'created_end_at' => $endAt->format('Y-m-d H:i:s'),
+        ]);
+
+        return $stmt->fetchAll();
+    }
+
     public function create(int $userId, string $content): ?int
     {
         $sql = 'INSERT INTO notes (user_id, content, deleted_at, created_at, updated_at)
@@ -123,6 +150,31 @@ final class MemoRepository
         $stmt->execute(['id' => $memoId, 'user_id' => $userId]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    public function purgeExpiredTrash(int $userId, string $cutoffUtc): int
+    {
+        $sql = 'DELETE FROM notes
+                WHERE user_id = :user_id
+                    AND deleted_at IS NOT NULL
+                    AND deleted_at <= :cutoff_utc';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            'user_id' => $userId,
+            'cutoff_utc' => $cutoffUtc,
+        ]);
+
+        return $stmt->rowCount();
+    }
+
+    public function emptyTrash(int $userId): int
+    {
+        $stmt = $this->db->prepare(
+            'DELETE FROM notes WHERE user_id = :user_id AND deleted_at IS NOT NULL'
+        );
+        $stmt->execute(['user_id' => $userId]);
+
+        return $stmt->rowCount();
     }
 
     private function lengthExpression(): string

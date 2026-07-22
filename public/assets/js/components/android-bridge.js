@@ -59,8 +59,20 @@
       );
     }
 
-    const json = JSON.stringify(payload);
+    const safePayload = {
+      ...payload,
+      specific: (Array.isArray(payload.specific) ? payload.specific : []).filter(item => {
+        if (!item || !item.fireAt) {
+          return false;
+        }
+
+        const fireAt = Date.parse(item.fireAt);
+        return Number.isFinite(fireAt) && fireAt > Date.now();
+      }),
+    };
+    const json = JSON.stringify(safePayload);
     if (
+      (safePayload.operation === 'replace' && call('replaceNotificationSchedules', [json])) ||
       call('syncNotificationSchedules', [json]) ||
       call('syncNotifications', [json]) ||
       call('scheduleNotifications', [json])
@@ -77,7 +89,7 @@
       synced = true;
     }
 
-    const specific = Array.isArray(payload.specific) ? payload.specific : [];
+    const specific = safePayload.specific;
     specific.forEach(item => {
       if (!item || !item.fireAt) {
         return;

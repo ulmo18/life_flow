@@ -103,14 +103,21 @@ final class CalendarRepository
     /** @return array<int, array<string, mixed>> */
     public function listCalendarTags(int $userId): array
     {
-        $sql = 'SELECT id, user_id, palette_id, slug, name, color_hex, sort_order, is_system
-                FROM calendar_tags
-                WHERE deleted_at IS NULL
-                    AND (is_system = 1 OR user_id = :user_id)
-                ORDER BY sort_order ASC, id ASC';
+        $sql = 'SELECT ct.id, ct.user_id, ct.palette_id, ct.slug, ct.name, ct.color_hex,
+                       ct.sort_order, ct.is_system,
+                       CASE WHEN ct.is_system = 1 THEN COALESCE(ctp.is_enabled, 1) ELSE 1 END AS is_enabled
+                FROM calendar_tags ct
+                LEFT JOIN calendar_tag_preferences ctp
+                    ON ctp.tag_id = ct.id AND ctp.user_id = :preference_user_id
+                WHERE ct.deleted_at IS NULL
+                    AND (ct.is_system = 1 OR ct.user_id = :tag_user_id)
+                ORDER BY ct.sort_order ASC, ct.id ASC';
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['user_id' => $userId]);
+        $stmt->execute([
+            'preference_user_id' => $userId,
+            'tag_user_id' => $userId,
+        ]);
 
         return $stmt->fetchAll();
     }
@@ -332,7 +339,7 @@ final class CalendarRepository
                 return false;
             }
 
-            if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId)) {
+            if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId, $eventId)) {
                 $this->db->rollBack();
                 return false;
             }
@@ -397,7 +404,7 @@ final class CalendarRepository
                 return null;
             }
 
-            if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId)) {
+            if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId, $eventId)) {
                 $this->db->rollBack();
                 return null;
             }
@@ -562,20 +569,42 @@ final class CalendarRepository
         return $stmt->fetchColumn() !== false;
     }
 
-    private function calendarTagExists(int $userId, int $calendarTagId): bool
+    private function calendarTagExists(int $userId, int $calendarTagId, ?int $currentEventId = null): bool
     {
-        $sql = 'SELECT id
-                FROM calendar_tags
-                WHERE id = :id
-                    AND deleted_at IS NULL
-                    AND (is_system = 1 OR user_id = :user_id)
+        $sql = 'SELECT ct.id
+                FROM calendar_tags ct
+                LEFT JOIN calendar_tag_preferences ctp
+                    ON ctp.tag_id = ct.id AND ctp.user_id = :preference_user_id
+                WHERE ct.id = :id
+                    AND ct.deleted_at IS NULL
+                    AND (ct.is_system = 1 OR ct.user_id = :tag_user_id)
+                    AND (
+                        ct.is_system = 0
+                        OR COALESCE(ctp.is_enabled, 1) = 1';
+
+        $params = [
+            'preference_user_id' => $userId,
+            'id' => $calendarTagId,
+            'tag_user_id' => $userId,
+        ];
+
+        if ($currentEventId !== null) {
+            $sql .= ' OR EXISTS (
+                            SELECT 1 FROM calendar_events ce
+                            WHERE ce.id = :current_event_id
+                                AND ce.user_id = :event_user_id
+                                AND ce.calendar_tag_id = ct.id
+                                AND ce.deleted_at IS NULL
+                        )';
+            $params['current_event_id'] = $currentEventId;
+            $params['event_user_id'] = $userId;
+        }
+
+        $sql .= ')
                 LIMIT 1';
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            'id' => $calendarTagId,
-            'user_id' => $userId,
-        ]);
+        $stmt->execute($params);
 
         return $stmt->fetchColumn() !== false;
     }

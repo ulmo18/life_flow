@@ -33,6 +33,16 @@
   const fabActions = document.querySelector('[data-calendar-fab-actions]');
   const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
+  const routineState = window.LifeFlowRoutineState;
+  const seoulTimeFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
 
   if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planSettingsSheet || !quickMemoSheet || !routinePopup || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !selectedTime || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !timeGrid) {
     return;
@@ -43,6 +53,60 @@
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  function getSeoulCurrentTime() {
+    const values = {};
+    seoulTimeFormatter.formatToParts(new Date()).forEach(part => {
+      if (part.type !== 'literal') {
+        values[part.type] = part.value;
+      }
+    });
+
+    return {
+      date: `${values.year}-${values.month}-${values.day}`,
+      index: (Number(values.hour) * 6) + Math.floor(Number(values.minute) / 10),
+    };
+  }
+
+  function updateCurrentTimeCell() {
+    const currentTime = getSeoulCurrentTime();
+    const currentCell = daygrid.querySelector('.cell.current-cell');
+    if (currentCell) {
+      currentCell.classList.remove('current-cell');
+    }
+
+    if (page.dataset.calendarDate !== currentTime.date) {
+      page.dataset.currentIndex = '';
+      return;
+    }
+
+    const nextCurrentCell = daygrid.querySelector(`.cell[data-index="${currentTime.index}"]`);
+    if (nextCurrentCell) {
+      nextCurrentCell.classList.add('current-cell');
+      page.dataset.currentIndex = String(currentTime.index);
+    }
+  }
+
+  let currentTimeCellTimer = null;
+  let currentTimeCellInterval = null;
+
+  function stopCurrentTimeCellUpdates() {
+    window.clearTimeout(currentTimeCellTimer);
+    window.clearInterval(currentTimeCellInterval);
+    currentTimeCellTimer = null;
+    currentTimeCellInterval = null;
+  }
+
+  function startCurrentTimeCellUpdates() {
+    stopCurrentTimeCellUpdates();
+    updateCurrentTimeCell();
+
+    const delayUntilNextTenMinutes = 600000 - (Date.now() % 600000) + 30;
+    currentTimeCellTimer = window.setTimeout(() => {
+      updateCurrentTimeCell();
+      currentTimeCellInterval = window.setInterval(updateCurrentTimeCell, 600000);
+    }, delayUntilNextTenMinutes);
   }
 
   function openPanel(panel) {
@@ -180,6 +244,15 @@
     checkRadio(form, 'calendar_tag_id', button.dataset.eventTagId || '');
     checkRadio(form, 'plan_template_id', button.dataset.eventPlanTemplateId || '');
 
+    const currentTagId = button.dataset.eventTagId || '';
+    form.querySelectorAll('[data-tag-option]').forEach(label => {
+      const input = label.querySelector('input[name="calendar_tag_id"]');
+      if (!input) return;
+      const shouldDisable = label.dataset.tagDisabled === '1' && input.value !== currentTagId;
+      input.disabled = shouldDisable;
+      label.classList.toggle('is-disabled', shouldDisable);
+    });
+
     const currentPlanId = button.dataset.eventPlanTemplateId || '';
     form.querySelectorAll('[data-plan-option]').forEach(label => {
       const input = label.querySelector('input[name="plan_template_id"]');
@@ -206,6 +279,16 @@
       openEventSheet(start, end);
     },
   });
+
+  startCurrentTimeCellUpdates();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      startCurrentTimeCellUpdates();
+    }
+  });
+
+  window.addEventListener('pagehide', stopCurrentTimeCellUpdates);
 
   document.querySelectorAll('[data-calendar-close]').forEach(button => {
     button.addEventListener('click', closePanels);
@@ -305,6 +388,24 @@
     });
   });
 
+  document.querySelectorAll('[data-calendar-date-picker-open]').forEach(button => {
+    button.addEventListener('click', () => {
+      const input = button.closest('.calendar-date-picker-control')?.querySelector('[data-calendar-date-picker]');
+      if (!input) return;
+      try {
+        if (typeof input.showPicker === 'function') {
+          input.showPicker();
+          return;
+        }
+      } catch (error) {
+        // Fall through to the click-based picker.
+      }
+      if (typeof input.click === 'function') {
+        input.click();
+      }
+    });
+  });
+
   if (planPicker) {
     const select = planPicker.querySelector('select[name="plan_group_id"]');
     let allowSubmit = false;
@@ -336,10 +437,9 @@
   }
 
   function applyRoutineState(button, state) {
-    button.textContent = state === '' ? ' ' : state;
-    button.classList.toggle('is-done', state === 'O');
-    button.classList.toggle('is-failed', state === 'X');
-    button.title = state === '' ? '미기록' : (state === 'O' ? '완료' : '미완료');
+    if (routineState) {
+      routineState.apply(button, state);
+    }
   }
 
   async function submitRoutineToggle(form) {

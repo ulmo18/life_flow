@@ -9,7 +9,7 @@ The current implementation supports:
 - date navigation with previous and next day links
 - direct date lookup through a bottom-sheet date picker
 - a Today button when the selected Retrospect date is not today
-- today's editable KPT retrospect memo before publishing
+- today's editable KPT retrospect memo before and after publishing
 - manual memo saving for today's KPT retrospect text fields
 - manual publishing of a retrospect report
 - a floating publish or republish button aligned with the Plan menu's main action pattern
@@ -23,6 +23,14 @@ The current implementation supports:
 - today routine list with state labels
 - actual-event list sorted by time or tag
 - snapshot persistence for published plan, actual-event, and routine items
+- one compact daily score card containing Plan rate, Routine rate, and linked actual time in a single mobile row
+- one `오늘의 기록` card that groups Routine, Plan, actual Calendar events, and standalone Memo context into expandable rows
+- direct Routine state correction inside today's daily Retrospect flow
+- standalone Memo records grouped by their creation date in the daily view
+- Calendar event memos displayed inside their actual schedule rows and preserved in published snapshots
+- a Goal review view with goal-linked Plan, actual-event, and Routine execution feedback
+- completed, stopped, and naturally expired Routine history
+- correctable completed Routine history grouped by month in the same sequential seven-column period record used by Routine detail
 
 The three retrospect text fields are displayed as KPT prompts:
 
@@ -118,6 +126,7 @@ Important columns:
 - `calendar_day_id`
 - `calendar_event_id`
 - `title_snapshot`
+- `memo_snapshot`
 - `start_index`
 - `end_index`
 - `tag_name_snapshot`
@@ -164,22 +173,34 @@ All POST routes require CSRF verification.
 
 ## UI Behavior
 
+- The page heading remains available to screen readers, while the large visible Retrospect menu-name and description block is omitted so feedback content starts higher in the viewport.
 - The page opens on today's date by default.
 - Previous and next controls move through dates like Calendar.
 - The date lookup button opens a bottom sheet with a date input.
 - The Today, date lookup, and automatic publish buttons share the same right-aligned toolbar.
 - When the selected date is not today, a button-styled Today action returns to today's Retrospect page.
 - Today shows a live editable memo when the report has not been submitted.
-- The memo save button stores today's three KPT text fields without finalizing metrics.
+- The `임시 저장` button stores today's three KPT text fields without finalizing metrics.
 - The floating publish button finalizes the report and creates metric/item snapshots.
 - Published reports show persisted snapshots instead of recalculating live data.
 - Published reports expose a floating republish action so later Calendar or Routine edits can be reflected without deleting the report. Republish keeps the three KPT retrospect text fields and replaces metric/item snapshots with the latest source data.
-- Actual-event rows use the event tag color as their background, matching Calendar actual-event cards.
+- A report published for today reopens the KPT fields for editing. Republishing updates both the KPT text and the current snapshot; published reports from earlier dates keep their KPT fields read-only.
+- Actual-event rows use the event tag color as their background, matching Calendar actual-event cards, and choose a readable light or dark foreground from that color.
 - Actual-event rows show time as `X시간 X분(시작시간 ~ 마감시간)`.
 - Past or future dates without a submitted report show only date navigation, date lookup, and an empty-state message.
 - The former "previous retrospect" list is intentionally removed because date navigation and direct lookup already cover that flow.
 - The automatic publish button opens a bottom sheet and shows either the configured time or the disabled state.
 - The routine edit entry uses a button-styled GET form to move to Calendar for the selected date and includes an external-link icon.
+- Today's Routine state buttons use `POST /routine/toggle` directly from Retrospect. Past published snapshots remain read-only in Retrospect and can be corrected through Routine or Calendar before republishing.
+- Publish today's report, edit each KPT field, and republish; confirm the new text and refreshed snapshot are stored. Navigate to an earlier published date and confirm its KPT stays read-only.
+- Daily achievement metrics are rendered as three columns inside one compact score card.
+- Routine, Plan, actual schedule, and standalone Memo context share one `오늘의 기록` card. Routine is expanded initially for direct status changes; the remaining groups open only when the user needs their details.
+- Each expanded record group shows up to four items first and offers `전체 보기`/`접기` when more records exist; without JavaScript the full list remains visible.
+- Editable KPT textareas start compact and grow with their content up to a mobile-safe maximum height.
+- Standalone Memo records are read-only context in Retrospect and remain managed through the Memo menu.
+- Goal review does not infer goal completion. It reports execution evidence and offers lightweight next-action feedback.
+- Completed Routine history dates are grouped under `YYYY년 M월` headings and placed sequentially in seven columns without weekday headers or calendar-leading blanks. Past-state corrections use the shared Routine endpoint and update the selected cell in place.
+- Daily Retrospect uses the shared Routine state control and updates the affected state, Routine score, and achievement rate in place after a successful JSON response.
 - Calendar's Retrospect button opens the latest submitted-report preview on or before the selected calendar date.
 - Calendar disables the Retrospect button only when no submitted report exists yet.
 
@@ -188,12 +209,14 @@ All POST routes require CSRF verification.
 - Plan achievement rate: `plan_linked_count / plan_total_count * 100`.
 - Routine achievement rate: `routine_done_count / routine_total_count * 100`.
 - Actual time: sum of linked actual-event durations in minutes.
+- Goal review Plan execution rate: selected Calendar Plan occurrences linked to the goal that have a matching actual event, divided by all selected occurrences through today within the goal period.
+- Goal review Routine evidence: cumulative completed Routine days for routines linked to the goal. This is execution evidence and not an automatic goal-completion score.
 - Untimed Calendar entries are excluded from duration-based actual-event snapshots and actual-time metrics because they have no time range.
 
 ## Future Work
 
 - Retrospect morning/evening reminders are configured in Settings and scheduled through the Android bridge notification payloads.
 - Replace opportunistic automatic publishing with a scheduled notification/job worker when server scheduling is available.
-- Connect Goal data after Plan and Routine screens expose `goal_id` selection. The Goal table exists, but Retrospect metrics should wait until lower-level actions are actively linked to goals.
+- Expand Goal review trend feedback only after enough historical execution data exists; keep user-owned goal completion separate from execution metrics.
 - Add report search if direct date lookup becomes insufficient.
 - Add richer feedback copy once there is enough historical data for trend analysis.

@@ -48,10 +48,24 @@
         <?php foreach (($tagData['tags'] ?? []) as $tag): ?>
             <article class="tag-card">
                 <?php if (!empty($tag['is_system'])): ?>
-                    <div class="tag-card-title">
-                        <span class="tag-swatch" style="--tag-color: <?= e((string) $tag['color_hex']) ?>;" aria-hidden="true"></span>
-                        <strong><?= e((string) $tag['name']) ?></strong>
-                        <small>기본</small>
+                    <?php $systemTagEnabled = (int) ($tag['is_enabled'] ?? 1) === 1; ?>
+                    <div class="tag-card-title tag-system-title">
+                        <span>
+                            <strong><?= e((string) $tag['name']) ?></strong>
+                            <small>기본</small>
+                        </span>
+                        <form method="post" action="/tags/system-toggle">
+                            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                            <input type="hidden" name="tag_id" value="<?= e((string) $tag['id']) ?>">
+                            <input type="hidden" name="enabled" value="<?= $systemTagEnabled ? '0' : '1' ?>">
+                            <button
+                                type="submit"
+                                class="tag-visibility-toggle <?= $systemTagEnabled ? 'is-enabled' : '' ?>"
+                                role="switch"
+                                aria-checked="<?= $systemTagEnabled ? 'true' : 'false' ?>"
+                                aria-label="<?= e((string) $tag['name']) ?> 태그 <?= $systemTagEnabled ? '비활성화' : '활성화' ?>"
+                            ><span aria-hidden="true"></span><b><?= $systemTagEnabled ? '사용 중' : '숨김' ?></b></button>
+                        </form>
                     </div>
                 <?php else: ?>
                     <details class="tag-edit-panel">

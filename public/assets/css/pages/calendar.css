@@ -7,23 +7,24 @@
 }
 
 .calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 14px;
 }
 
 .calendar-date-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
 }
 
 .calendar-date {
   margin: 0;
-  font-size: 30px;
+  font-size: clamp(22px, 7vw, 30px);
   font-weight: 800;
   line-height: 1.1;
 }
@@ -44,8 +45,8 @@
 
 .calendar-icon-button,
 .calendar-retrospect-button {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border: 1px solid rgba(216, 200, 179, 0.9);
   background: rgba(255, 250, 242, 0.88);
   border-radius: 999px;
@@ -61,7 +62,7 @@
 
 .calendar-retrospect-button {
   width: auto;
-  min-width: 58px;
+  min-width: 54px;
   padding: 0 12px;
   font-size: 13px;
 }
@@ -76,10 +77,15 @@
   background: rgba(255, 250, 242, 0.88);
 }
 
-.calendar-date-picker-button {
+.calendar-date-picker-control {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
+}
+
+.calendar-date-picker-button {
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
@@ -89,15 +95,17 @@
   background: rgba(255, 250, 242, 0.88);
   color: var(--color-secondary);
   font-weight: 900;
+  cursor: pointer;
 }
 
-.calendar-date-picker-button input {
+.calendar-date-picker-control input {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 1px;
+  height: 1px;
+  left: 50%;
+  bottom: 0;
   opacity: 0;
-  cursor: pointer;
+  pointer-events: none;
 }
 
 .calendar-unscheduled-item small {
@@ -463,7 +471,7 @@
   border-radius: 9px;
   padding: 4px 6px;
   background: var(--event-color, var(--color-primary));
-  color: #fff;
+  color: var(--event-text-color, #fff);
   box-shadow: 0 3px 10px rgba(255, 94, 91, 0.24);
   cursor: pointer;
   font: inherit;
@@ -799,12 +807,6 @@ body[data-theme='dark'] .calendar-retrospect-preview-text {
 
 body[data-theme='dark'] .calendar-plan-summary summary::after,
 body[data-theme='dark'] .calendar-importance-badge.is-neutral,
-body[data-theme='dark'] .routine-preview-list button {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(36, 37, 31, 0.92);
-  color: var(--color-text-muted);
-}
-
 body[data-theme='dark'] .routine-preview-list li {
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(46, 48, 40, 0.78);
@@ -858,6 +860,11 @@ body[data-theme='dark'] .routine-preview-list li {
 
 .calendar-tag-link.is-empty {
   grid-template-columns: auto minmax(0, 1fr);
+}
+
+.calendar-tag-link.is-disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .calendar-tag-swatch,
@@ -959,27 +966,6 @@ body[data-theme='dark'] .calendar-routine-link {
   background: rgba(247, 239, 228, 0.62);
 }
 
-.routine-preview-list button {
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(216, 200, 179, 0.9);
-  border-radius: 999px;
-  background: rgba(255, 250, 242, 0.96);
-  color: var(--color-text-muted);
-  font-weight: 900;
-  cursor: pointer;
-}
-
 .routine-preview-list form {
   margin: 0;
-}
-
-.routine-preview-list button.is-done {
-  background: #edf4e9;
-  color: #50694e;
-}
-
-.routine-preview-list button.is-failed {
-  background: #fce9e3;
-  color: #b54e45;
 }

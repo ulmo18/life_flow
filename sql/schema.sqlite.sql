@@ -282,6 +282,19 @@ SELECT NULL, id, 'work', '업무', color_hex, 3, 1 FROM calendar_tag_palettes WH
 INSERT OR IGNORE INTO calendar_tags (user_id, palette_id, slug, name, color_hex, sort_order, is_system)
 SELECT NULL, id, 'rest', '휴식', color_hex, 4, 1 FROM calendar_tag_palettes WHERE slug = 'linen';
 
+CREATE TABLE IF NOT EXISTS calendar_tag_preferences (
+  user_id INTEGER NOT NULL,
+  tag_id INTEGER NOT NULL,
+  is_enabled INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, tag_id),
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (tag_id) REFERENCES calendar_tags(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_tag_preferences_tag ON calendar_tag_preferences(tag_id);
+
 CREATE TABLE IF NOT EXISTS calendar_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -318,6 +331,8 @@ CREATE TABLE IF NOT EXISTS routines (
   name TEXT NOT NULL,
   start_date TEXT NOT NULL,
   duration_days INTEGER NOT NULL DEFAULT 60,
+  status TEXT NOT NULL DEFAULT 'active',
+  ended_at TEXT NULL,
   reminder_enabled INTEGER NOT NULL DEFAULT 0,
   reminder_time TEXT NULL,
   deleted_at TEXT NULL,
@@ -325,12 +340,14 @@ CREATE TABLE IF NOT EXISTS routines (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  CHECK (duration_days >= 7 AND duration_days <= 60)
+  CHECK (duration_days >= 1 AND duration_days <= 365),
+  CHECK (status IN ('active', 'completed', 'stopped'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_routines_user_deleted ON routines(user_id, deleted_at);
 CREATE INDEX IF NOT EXISTS idx_routines_user_date ON routines(user_id, start_date);
 CREATE INDEX IF NOT EXISTS idx_routines_goal_id ON routines(goal_id);
+CREATE INDEX IF NOT EXISTS idx_routines_user_status ON routines(user_id, status);
 
 CREATE TABLE IF NOT EXISTS routine_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -411,6 +428,7 @@ CREATE TABLE IF NOT EXISTS retrospect_report_actual_items (
   calendar_day_id INTEGER NULL,
   calendar_event_id INTEGER NULL,
   title_snapshot TEXT NOT NULL,
+  memo_snapshot TEXT NULL,
   start_index INTEGER NOT NULL,
   end_index INTEGER NOT NULL,
   tag_name_snapshot TEXT NULL,

@@ -1,12 +1,7 @@
 <?php require __DIR__ . '/../../layouts/header.php'; ?>
 
 <main class="page plan-page">
-    <section class="plan-header">
-        <div>
-            <p class="eyebrow">Plan</p>
-            <h1 class="page-title">계획 리스트</h1>
-        </div>
-    </section>
+    <h1 class="sr-only">계획</h1>
 
     <?php if (!empty($flashSuccess)): ?>
         <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>

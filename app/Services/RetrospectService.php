@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\MemoRepository;
 use App\Models\RetrospectRepository;
 use DateTimeImmutable;
 
 final class RetrospectService
 {
     private RetrospectRepository $retrospectRepository;
+    private MemoRepository $memoRepository;
 
     public function __construct()
     {
         $this->retrospectRepository = new RetrospectRepository();
+        $this->memoRepository = new MemoRepository();
     }
 
     /** @return array<string, mixed> */
@@ -60,9 +63,136 @@ final class RetrospectService
             'planItems' => $snapshot['planItems'],
             'actualItems' => $snapshot['actualItems'],
             'routineItems' => $snapshot['routineItems'],
+            'memoItems' => $this->memoRepository->listForDate($userId, $date),
             'settings' => $settings,
             'statusLabel' => $useSnapshots ? '발행됨' : ($isToday ? '작성중' : '회고 없음'),
         ];
+    }
+
+    /** @return array<string, mixed> */
+    public function getGoalReviewData(int $userId): array
+    {
+        $planMap = [];
+        foreach ($this->retrospectRepository->listGoalPlanProgress($userId) as $row) {
+            $planMap[(int) $row['goal_id']] = $row;
+        }
+
+        $routineMap = [];
+        foreach ($this->retrospectRepository->listGoalRoutineProgress($userId) as $row) {
+            $routineMap[(int) $row['goal_id']] = $row;
+        }
+
+        $goals = [];
+        foreach ($this->retrospectRepository->listGoalReviewGoals($userId) as $goal) {
+            $goalId = (int) $goal['id'];
+            $plan = $planMap[$goalId] ?? [];
+            $routine = $routineMap[$goalId] ?? [];
+            $planCount = (int) ($plan['plan_count'] ?? 0);
+            $linkedPlanCount = (int) ($goal['linked_plan_count'] ?? 0);
+            $executedPlanCount = (int) ($plan['executed_plan_count'] ?? 0);
+            $routineCount = (int) ($routine['routine_count'] ?? 0);
+            $doneDayCount = (int) ($routine['done_day_count'] ?? 0);
+
+            if ($linkedPlanCount === 0 && $routineCount === 0) {
+                $feedback = '목표를 실행할 계획이나 루틴을 연결해보세요.';
+            } elseif ($linkedPlanCount > 0 && $planCount === 0 && $routineCount === 0) {
+                $feedback = '연결된 계획을 캘린더 기준 계획으로 선택해 실행을 시작해보세요.';
+            } elseif ($executedPlanCount === 0 && $doneDayCount === 0) {
+                $feedback = '연결된 실행 항목은 있지만 아직 완료 기록이 없습니다.';
+            } elseif ($planCount > 0 && $executedPlanCount < $planCount) {
+                $feedback = '아직 실행 기록이 없는 계획을 다음 일정에 배치해보세요.';
+            } else {
+                $feedback = '실행 기록이 이어지고 있습니다. 다음 기간에도 유지할 행동을 확인해보세요.';
+            }
+
+            $goalType = (string) $goal['goal_type'];
+            $goalTypeLabels = [
+                'bucket' => '버킷',
+                'yearly' => '연간',
+                'half_year' => '반기',
+                'quarterly' => '분기',
+                'monthly' => '월간',
+            ];
+            $goalStatus = (string) $goal['status'];
+            $goalStatusLabels = [
+                'active' => '진행 중',
+                'completed' => '완료',
+                'paused' => '보류',
+                'archived' => '보관',
+            ];
+            $goals[] = [
+                'id' => $goalId,
+                'type' => $goalTypeLabels[$goalType] ?? $goalType,
+                'title' => (string) $goal['title'],
+                'status' => $goalStatus,
+                'statusLabel' => $goalStatusLabels[$goalStatus] ?? $goalStatus,
+                'periodStartDate' => $goal['period_start_date'] === null ? null : (string) $goal['period_start_date'],
+                'periodEndDate' => $goal['period_end_date'] === null ? null : (string) $goal['period_end_date'],
+                'planCount' => $planCount,
+                'linkedPlanCount' => $linkedPlanCount,
+                'executedPlanCount' => $executedPlanCount,
+                'planExecutionRate' => $this->percentage($executedPlanCount, $planCount),
+                'actualEventCount' => (int) ($plan['actual_event_count'] ?? 0),
+                'routineCount' => $routineCount,
+                'routineDoneDayCount' => $doneDayCount,
+                'feedback' => $feedback,
+            ];
+        }
+
+        $routineHistory = [];
+        foreach ($this->retrospectRepository->listCompletedRoutineHistory($userId, date('Y-m-d')) as $routine) {
+            $durationDays = max(1, (int) $routine['duration_days']);
+            $plannedEndDate = (new DateTimeImmutable((string) $routine['start_date']))
+                ->modify('+' . ($durationDays - 1) . ' days')
+                ->format('Y-m-d');
+            $status = (string) ($routine['status'] ?? 'active');
+            $effectiveEndDate = $routine['ended_at'] === null ? $plannedEndDate : (string) $routine['ended_at'];
+            $statusLabel = $status === 'stopped'
+                ? '중단'
+                : ($effectiveEndDate < $plannedEndDate ? '조기 완료' : '기간 완료');
+            $stateMap = $this->retrospectRepository->listRoutineLogStates(
+                $userId,
+                (int) $routine['id'],
+                (string) $routine['start_date'],
+                $effectiveEndDate
+            );
+            $periodGroups = [];
+            for (
+                $logDate = new DateTimeImmutable((string) $routine['start_date']);
+                $logDate <= new DateTimeImmutable($effectiveEndDate);
+                $logDate = $logDate->modify('+1 day')
+            ) {
+                $dateKey = $logDate->format('Y-m-d');
+                $state = $stateMap[$dateKey] ?? null;
+                $monthKey = $logDate->format('Y-m');
+                if (!isset($periodGroups[$monthKey])) {
+                    $periodGroups[$monthKey] = [
+                        'key' => $monthKey,
+                        'label' => $logDate->format('Y년 n월'),
+                        'cells' => [],
+                    ];
+                }
+                $periodGroups[$monthKey]['cells'][] = [
+                    'date' => $dateKey,
+                    'day' => $logDate->format('j'),
+                    'state' => $state === 1 ? 'O' : ($state === 0 ? 'X' : ''),
+                ];
+            }
+
+            $routineHistory[] = [
+                'id' => (int) $routine['id'],
+                'name' => (string) $routine['name'],
+                'startDate' => (string) $routine['start_date'],
+                'endDate' => $effectiveEndDate,
+                'durationDays' => $durationDays,
+                'doneCount' => (int) $routine['done_count'],
+                'achievementRate' => $this->percentage((int) $routine['done_count'], $durationDays),
+                'statusLabel' => $statusLabel,
+                'periodGroups' => array_values($periodGroups),
+            ];
+        }
+
+        return ['goals' => $goals, 'routineHistory' => $routineHistory];
     }
 
     /** @return array<string, mixed>|null */
@@ -147,6 +277,13 @@ final class RetrospectService
     {
         $date = $this->normalizeDate($date);
         if ($date > date('Y-m-d')) {
+            return false;
+        }
+
+        $existingReport = $this->retrospectRepository->findReport($userId, $date);
+        if ($existingReport !== null
+            && (string) ($existingReport['status'] ?? '') === 'submitted'
+            && $date !== date('Y-m-d')) {
             return false;
         }
 
@@ -357,12 +494,14 @@ final class RetrospectService
                 'id' => (int) $item['id'],
                 'calendar_day_id' => (int) $item['calendar_day_id'],
                 'title' => (string) $item['title'],
+                'memo' => (string) ($item['memo'] ?? ''),
                 'start_index' => $start,
                 'end_index' => $end,
                 'plan_template_id' => $item['plan_template_id'] === null ? null : (int) $item['plan_template_id'],
                 'plan_importance' => $item['plan_importance'] === null ? null : $this->normalizeImportance((string) $item['plan_importance']),
                 'tag_name' => (string) ($item['tag_name'] ?? '태그 없음'),
                 'tag_color' => $tagColor,
+                'tag_text_color' => $this->contrastTextColor($tagColor),
                 'is_linked' => $item['plan_template_id'] !== null,
                 'durationMinutes' => ($end - $start) * 10,
                 'durationLabel' => $this->formatMinutes(($end - $start) * 10),
@@ -414,13 +553,16 @@ final class RetrospectService
             $importance = $item['plan_importance_snapshot'] === null
                 ? null
                 : $this->normalizeImportance((string) $item['plan_importance_snapshot']);
+            $tagColor = $this->normalizeHexColor((string) ($item['tag_color_snapshot'] ?? ''));
 
             return [
                 'title' => (string) $item['title_snapshot'],
+                'memo' => (string) ($item['memo_snapshot'] ?? ''),
                 'start_index' => $start,
                 'end_index' => $end,
                 'tag_name' => (string) ($item['tag_name_snapshot'] ?? '태그 없음'),
-                'tag_color' => $this->normalizeHexColor((string) ($item['tag_color_snapshot'] ?? '')),
+                'tag_color' => $tagColor,
+                'tag_text_color' => $this->contrastTextColor($tagColor),
                 'plan_importance' => $importance,
                 'is_linked' => (int) $item['is_linked'] === 1,
                 'durationMinutes' => ($end - $start) * 10,
@@ -529,6 +671,19 @@ final class RetrospectService
     private function normalizeHexColor(string $color): string
     {
         return preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1 ? $color : '#8EA4A2';
+    }
+
+    private function contrastTextColor(string $color): string
+    {
+        $channels = array_map(static function (string $channel): float {
+            $value = hexdec($channel) / 255;
+            return $value <= 0.03928
+                ? $value / 12.92
+                : (($value + 0.055) / 1.055) ** 2.4;
+        }, [substr($color, 1, 2), substr($color, 3, 2), substr($color, 5, 2)]);
+        $luminance = (0.2126 * $channels[0]) + (0.7152 * $channels[1]) + (0.0722 * $channels[2]);
+
+        return $luminance >= 0.21 ? '#1D1D18' : '#FFFFFF';
     }
 
     private function routineStateLabel(string $state): string

@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS `retrospect_report_actual_items` (
   `calendar_day_id` BIGINT UNSIGNED NULL,
   `calendar_event_id` BIGINT UNSIGNED NULL,
   `title_snapshot` VARCHAR(80) NOT NULL,
+  `memo_snapshot` TEXT NULL,
   `start_index` SMALLINT UNSIGNED NOT NULL,
   `end_index` SMALLINT UNSIGNED NOT NULL,
   `tag_name_snapshot` VARCHAR(40) NULL,

@@ -125,6 +125,7 @@ All POST routes require CSRF verification.
 
 ## Current UI Behavior
 
+- The Plan list keeps its page heading available to screen readers but removes the large visible menu-name header so the first plan card or empty state begins near the top of the content area.
 - The list page shows each visible plan group with its name, time range, block count, detail button, edit button, copy button, and delete button.
 - Plan `version_no` is kept as internal data for versioned editing but is not shown in user-facing Plan or Calendar labels.
 - The list page uses a floating `계획 추가` submit button with the same visual treatment as the editor's floating `계획 저장` button.

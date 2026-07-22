@@ -1,4 +1,22 @@
 (function () {
+  document.querySelector('[data-memo-empty-trash-form]')?.addEventListener('submit', async event => {
+    const form = event.currentTarget;
+    if (form.dataset.confirmed === '1') return;
+    event.preventDefault();
+    const confirmed = window.LifeFlowUI?.confirm
+      ? await window.LifeFlowUI.confirm({
+          title: '휴지통 비우기',
+          message: '휴지통의 모든 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
+          confirmText: '영구 삭제',
+          cancelText: '취소',
+        })
+      : confirm('휴지통의 모든 메모를 영구 삭제할까요?');
+    if (confirmed) {
+      form.dataset.confirmed = '1';
+      form.requestSubmit();
+    }
+  });
+
   const layer = document.querySelector('[data-memo-layer]');
   if (!layer) return;
 

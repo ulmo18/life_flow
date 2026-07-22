@@ -20,15 +20,18 @@ final class RetrospectController
     {
         $date = is_string($_GET['date'] ?? null) ? (string) $_GET['date'] : null;
         $sort = is_string($_GET['sort'] ?? null) ? (string) $_GET['sort'] : null;
+        $view = (string) ($_GET['view'] ?? 'daily') === 'goals' ? 'goals' : 'daily';
 
         $this->render('pages/retrospect/index', [
             'title' => 'Retrospect',
             'retrospect' => $this->retrospectService->getPageData($this->userId(), $date, $sort),
+            'selectedView' => $view,
+            'goalReview' => $view === 'goals' ? $this->retrospectService->getGoalReviewData($this->userId()) : ['goals' => []],
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'pageStyles' => ['/assets/css/pages/retrospect.css'],
-            'pageScripts' => ['/assets/js/pages/retrospect.js'],
+            'pageStyles' => ['/assets/css/components/routine-state.css', '/assets/css/pages/retrospect.css'],
+            'pageScripts' => ['/assets/js/components/routine-state.js', '/assets/js/pages/retrospect.js'],
         ]);
 
         unset($_SESSION['errors'], $_SESSION['flash_success']);

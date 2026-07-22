@@ -10,10 +10,13 @@ use DateTimeImmutable;
 
 final class RoutineService
 {
-    private const MIN_DURATION_DAYS = 7;
-    private const MAX_DURATION_DAYS = 60;
+    private const MIN_DURATION_DAYS = 1;
+    private const MAX_INITIAL_DURATION_DAYS = 60;
+    private const MAX_DURATION_DAYS = 365;
     private const DEFAULT_DURATION_DAYS = 60;
     private const DEFAULT_REMINDER_TIME = '14:00';
+    private const CARD_TRACKER_DAYS = 14;
+    private const CARD_TRACKER_PAST_DAYS = 10;
 
     private RoutineRepository $routineRepository;
     private GoalRepository $goalRepository;
@@ -33,6 +36,20 @@ final class RoutineService
         );
     }
 
+    /** @return array{routines: array<int, array<string, mixed>>, summary: array<string, int>} */
+    public function getRoutinePageData(int $userId): array
+    {
+        $routines = $this->getRoutineList($userId);
+
+        return ['routines' => $routines, 'summary' => $this->summarizeRoutines($routines)];
+    }
+
+    /** @return array<string, int> */
+    public function getRoutinePageSummary(int $userId): array
+    {
+        return $this->summarizeRoutines($this->getRoutineList($userId));
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function getCalendarRoutines(int $userId, string $date): array
     {
@@ -47,11 +64,16 @@ final class RoutineService
 
     public function markDoneForDate(int $userId, int $routineId, string $date): bool
     {
-        return $this->routineRepository->markDoneForDate($userId, $routineId, $this->normalizeDate($date));
+        $date = $this->normalizeDate($date);
+        if ($date > date('Y-m-d')) {
+            return false;
+        }
+
+        return $this->routineRepository->markDoneForDate($userId, $routineId, $date);
     }
 
     /** @return array{ok: bool, errors: array<string, string>, data: array<string, mixed>} */
-    public function validateInput(array $input, int $userId): array
+    public function validateInput(array $input, int $userId, bool $allowExtendedDuration = false): array
     {
         $name = trim((string) ($input['name'] ?? ''));
         $startDate = $this->normalizeDate((string) ($input['start_date'] ?? ''));
@@ -67,8 +89,9 @@ final class RoutineService
             $errors['name'] = '루틴명은 60자 이내로 입력해주세요.';
         }
 
-        if ($durationDays === false || $durationDays < self::MIN_DURATION_DAYS || $durationDays > self::MAX_DURATION_DAYS) {
-            $errors['duration_days'] = '기간은 7일부터 60일까지 선택해주세요.';
+        $maxDuration = $allowExtendedDuration ? self::MAX_DURATION_DAYS : self::MAX_INITIAL_DURATION_DAYS;
+        if ($durationDays === false || $durationDays < self::MIN_DURATION_DAYS || $durationDays > $maxDuration) {
+            $errors['duration_days'] = '기간을 확인해주세요.';
             $durationDays = self::DEFAULT_DURATION_DAYS;
         }
 
@@ -116,13 +139,18 @@ final class RoutineService
     /** @param array<string, mixed> $data */
     public function updateRoutine(int $userId, int $routineId, array $data): bool
     {
+        $routine = $this->routineRepository->findActive($userId, $routineId);
+        if ($routine === null || (string) ($routine['status'] ?? 'active') !== 'active') {
+            return false;
+        }
+
         return $this->routineRepository->update(
             $userId,
             $routineId,
             $data['goalId'] === null ? null : (int) $data['goalId'],
             (string) $data['name'],
-            (string) $data['startDate'],
-            (int) $data['durationDays'],
+            (string) $routine['start_date'],
+            (int) $routine['duration_days'],
             (bool) $data['reminderEnabled'],
             $data['reminderTime'] === null ? null : (string) $data['reminderTime']
         );
@@ -135,21 +163,59 @@ final class RoutineService
 
     public function cycleRoutineState(int $userId, int $routineId, string $date): ?string
     {
-        return $this->routineRepository->cycleLogState($userId, $routineId, $this->normalizeDate($date));
+        $date = $this->normalizeDate($date);
+        if ($date > date('Y-m-d')) {
+            return null;
+        }
+
+        return $this->routineRepository->cycleLogState($userId, $routineId, $date);
+    }
+
+    public function extendRoutine(int $userId, int $routineId, int $extensionDays): bool
+    {
+        if ($extensionDays < 1) {
+            return false;
+        }
+
+        $routine = $this->routineRepository->findActive($userId, $routineId);
+        if ($routine === null || (string) ($routine['status'] ?? 'active') !== 'active') {
+            return false;
+        }
+
+        $duration = (int) $routine['duration_days'];
+        if ($duration + $extensionDays > self::MAX_DURATION_DAYS) {
+            return false;
+        }
+
+        return $this->routineRepository->extend($userId, $routineId, $duration + $extensionDays);
+    }
+
+    public function finishRoutine(int $userId, int $routineId, string $status): bool
+    {
+        if (!in_array($status, ['completed', 'stopped'], true)) {
+            return false;
+        }
+
+        return $this->routineRepository->finish($userId, $routineId, $status, date('Y-m-d'));
     }
 
     /** @return array<string, mixed>|null */
-    public function getRoutineSummary(int $userId, int $routineId): ?array
+    public function getRoutineSummary(int $userId, int $routineId, bool $includeDailyData = false): ?array
     {
         $routine = $this->routineRepository->findActiveWithDoneCount($userId, $routineId, date('Y-m-d'));
+        if ($routine === null) {
+            return null;
+        }
 
-        return $routine === null ? null : $this->formatRoutine($routine);
+        $formatted = $this->formatRoutine($routine);
+
+        return $includeDailyData ? $this->withDailyLogs($userId, $formatted) : $formatted;
     }
 
     /** @return array<int, int> */
     public function durationOptions(): array
     {
-        return range(self::MIN_DURATION_DAYS, self::MAX_DURATION_DAYS);
+        return range(self::MIN_DURATION_DAYS, self::MAX_INITIAL_DURATION_DAYS);
     }
 
     public function defaultDurationDays(): int
@@ -185,19 +251,9 @@ final class RoutineService
             'todayState' => $routine['today_state'] === null ? '' : ((int) $routine['today_state'] === 1 ? 'O' : 'X'),
             'reminderEnabled' => (int) ($routine['reminder_enabled'] ?? 0) === 1,
             'reminderTime' => (string) ($routine['reminder_time'] ?? self::DEFAULT_REMINDER_TIME),
-            'lawnCells' => $this->buildLawnCells($durationDays, $doneCount),
+            'status' => (string) ($routine['status'] ?? 'active'),
+            'endedAt' => $routine['ended_at'] === null ? null : (string) $routine['ended_at'],
         ];
-    }
-
-    /** @return array<int, bool> */
-    private function buildLawnCells(int $durationDays, int $doneCount): array
-    {
-        $cells = [];
-        for ($day = 1; $day <= $durationDays; $day++) {
-            $cells[] = $day <= $doneCount;
-        }
-
-        return $cells;
     }
 
     /** @return array<string, mixed> */
@@ -205,10 +261,17 @@ final class RoutineService
     {
         $startDate = new DateTimeImmutable((string) $routine['startDate']);
         $endDate = new DateTimeImmutable((string) $routine['endDate']);
-        $lastVisibleDate = $endDate;
+        $today = new DateTimeImmutable(date('Y-m-d'));
+        $lastVisibleDate = $endDate < $today ? $endDate : $today;
 
         if ($lastVisibleDate < $startDate) {
             $routine['dailyLogs'] = [];
+            $routine['trackerCells'] = [];
+            $routine['periodGroups'] = [];
+            $routine['streakCount'] = 0;
+            $routine['streakLabel'] = '';
+            $routine['weekDoneCount'] = 0;
+            $routine['weekTotalCount'] = 0;
             return $routine;
         }
 
@@ -227,12 +290,142 @@ final class RoutineService
                 'date' => $dateKey,
                 'label' => $date->format('m/d'),
                 'state' => $state === null ? '' : ($state === 1 ? 'O' : 'X'),
+                'canEdit' => $dateKey <= date('Y-m-d'),
             ];
         }
 
         $routine['dailyLogs'] = $logs;
+        $routine['trackerCells'] = $this->buildCardTracker($startDate, $endDate, $stateMap, $today);
+        $routine['periodGroups'] = $this->buildPeriodGroups($startDate, $endDate, $stateMap, $today);
+
+        $yesterdayStreak = 0;
+        for ($date = $today->modify('-1 day'); $date >= $startDate; $date = $date->modify('-1 day')) {
+            if (($stateMap[$date->format('Y-m-d')] ?? null) !== 1) {
+                break;
+            }
+            $yesterdayStreak++;
+        }
+        $todayDone = ($stateMap[$today->format('Y-m-d')] ?? null) === 1;
+        $routine['streakCount'] = $yesterdayStreak + ($todayDone ? 1 : 0);
+        $routine['streakLabel'] = $routine['streakCount'] > 0
+            ? ($routine['streakCount'] >= 3 ? '🔥 ' : '') . '연속 ' . $routine['streakCount'] . '일'
+            : '';
+
+        $weekStart = $today->modify('monday this week');
+        $weekDoneCount = 0;
+        $weekTotalCount = 0;
+        foreach ($logs as $log) {
+            if ((string) $log['date'] < $weekStart->format('Y-m-d')) {
+                continue;
+            }
+            $weekTotalCount++;
+            if ((string) $log['state'] === 'O') {
+                $weekDoneCount++;
+            }
+        }
+        $routine['weekDoneCount'] = $weekDoneCount;
+        $routine['weekTotalCount'] = $weekTotalCount;
 
         return $routine;
+    }
+
+    /** @param array<string, int> $stateMap @return array<int, array<string, mixed>> */
+    private function buildCardTracker(
+        DateTimeImmutable $startDate,
+        DateTimeImmutable $endDate,
+        array $stateMap,
+        DateTimeImmutable $today
+    ): array
+    {
+        $durationDays = (int) $startDate->diff($endDate)->format('%a') + 1;
+        if ($durationDays <= self::CARD_TRACKER_DAYS) {
+            $firstDate = $startDate;
+            $lastDate = $endDate;
+        } else {
+            $firstDate = $today->modify('-' . self::CARD_TRACKER_PAST_DAYS . ' days');
+            $lastDate = $firstDate->modify('+' . (self::CARD_TRACKER_DAYS - 1) . ' days');
+
+            if ($firstDate < $startDate) {
+                $firstDate = $startDate;
+                $lastDate = $firstDate->modify('+' . (self::CARD_TRACKER_DAYS - 1) . ' days');
+            }
+            if ($lastDate > $endDate) {
+                $lastDate = $endDate;
+                $firstDate = $lastDate->modify('-' . (self::CARD_TRACKER_DAYS - 1) . ' days');
+            }
+        }
+
+        $cells = [];
+        for ($date = $firstDate; $date <= $lastDate; $date = $date->modify('+1 day')) {
+            $dateKey = $date->format('Y-m-d');
+            $state = $stateMap[$dateKey] ?? null;
+            $cells[] = [
+                'date' => $dateKey,
+                'state' => $state === null ? '' : ($state === 1 ? 'O' : 'X'),
+                'isDone' => $state === 1,
+                'isToday' => $dateKey === $today->format('Y-m-d'),
+                'isFuture' => $date > $today,
+            ];
+        }
+
+        return $cells;
+    }
+
+    /** @param array<string, int> $stateMap @return array<int, array<string, mixed>> */
+    private function buildPeriodGroups(
+        DateTimeImmutable $startDate,
+        DateTimeImmutable $endDate,
+        array $stateMap,
+        DateTimeImmutable $today
+    ): array {
+        $groups = [];
+        $month = $startDate->modify('first day of this month');
+        $lastMonth = $endDate->modify('first day of this month');
+
+        for (; $month <= $lastMonth; $month = $month->modify('+1 month')) {
+            $cells = [];
+            $firstDate = $month < $startDate ? $startDate : $month;
+            $monthEnd = $month->modify('last day of this month');
+            $lastDate = $monthEnd > $endDate ? $endDate : $monthEnd;
+            for ($date = $firstDate; $date <= $lastDate; $date = $date->modify('+1 day')) {
+                $dateKey = $date->format('Y-m-d');
+                $state = $stateMap[$dateKey] ?? null;
+                $cells[] = [
+                    'date' => $dateKey,
+                    'day' => $date->format('j'),
+                    'canEdit' => $date <= $today,
+                    'isFuture' => $date > $today,
+                    'isToday' => $dateKey === $today->format('Y-m-d'),
+                    'state' => $state === null ? '' : ($state === 1 ? 'O' : 'X'),
+                ];
+            }
+
+            $groups[] = [
+                'key' => $month->format('Y-m'),
+                'label' => $month->format('Y년 n월'),
+                'cells' => $cells,
+            ];
+        }
+
+        return $groups;
+    }
+
+    /** @param array<int, array<string, mixed>> $routines @return array<string, int> */
+    private function summarizeRoutines(array $routines): array
+    {
+        $weekDoneCount = array_sum(array_map(static fn (array $routine): int => (int) ($routine['weekDoneCount'] ?? 0), $routines));
+        $weekTotalCount = array_sum(array_map(static fn (array $routine): int => (int) ($routine['weekTotalCount'] ?? 0), $routines));
+        $streakCount = $routines === []
+            ? 0
+            : max(array_map(static fn (array $routine): int => (int) ($routine['streakCount'] ?? 0), $routines));
+
+        return [
+            'activeCount' => count($routines),
+            'weekDoneCount' => $weekDoneCount,
+            'weekTotalCount' => $weekTotalCount,
+            'weekAchievementRate' => $weekTotalCount > 0 ? (int) floor(($weekDoneCount / $weekTotalCount) * 100) : 0,
+            'streakCount' => $streakCount,
+        ];
     }
 
     private function normalizeDate(?string $date): string

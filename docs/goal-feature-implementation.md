@@ -23,7 +23,7 @@ Implemented in this phase:
 - Status filter chips on the list page for active, completed, archived, and paused goals
 - Goal-type filter chips for bucket, yearly, half-year, quarterly, and monthly goals
 - Card and tree view switch on the list page
-- Active-goal tree view that shows the current goal hierarchy at a glance
+- Active-goal tree view that shows each goal type and title on one tappable line
 - Automatic period defaults for non-bucket goals
 - Period progress indicators for goals with start and end dates
 - Behavior reminder memo
@@ -125,6 +125,8 @@ For existing SQLite databases, `app/Core/Database.php` ensures the nullable `rou
 - Goal editing exposes status and period controls.
 - The default card view keeps status and goal-type filters. Filter links preserve both selections.
 - The tree view always focuses on active goals only so users can scan the current hierarchy without completed, archived, or paused goals competing for attention.
+- Tapping a one-line tree node opens the existing edit sheet; period, progress, linkage counts, and edit labels are intentionally omitted from the tree card.
+- Retrospect owns goal execution feedback by aggregating linked Plan templates, matching actual Calendar events, and linked Routine completion records. It does not automatically mark the goal complete.
 - Goal cards show type, optional parent goal in an arrow path, status, period, and period progress in a compact mobile layout.
 - Behavior reminders and linked plans/routines are collapsed into one details area. Empty linked Plan or Routine sections are not rendered.
 - The usage-guide icon is visually smaller than the page title while retaining an expanded touch target.

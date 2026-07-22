@@ -4,6 +4,17 @@
 
 This document defines the bridge contract between the LifeFlow web app and its Android WebView host. It currently covers notification methods and native pull-to-refresh coordination for Calendar and Plan time-grid selection.
 
+## Notification Scheduling
+
+Calendar sends a version 2, date-scoped replacement payload when the page is rendered. Receiving this payload must not display a notification.
+
+- Prefer `replaceNotificationSchedules(json)`; compatible hosts may implement `syncNotificationSchedules(json)` with the same behavior.
+- For `scope: calendar_plan`, cancel only reservations matching the supplied `scopeKey` date, then schedule the supplied future items by stable `key`.
+- Parse offset-bearing `fireAt` values as absolute instants. Ignore values that are invalid or not later than `System.currentTimeMillis()`.
+- Use AlarmManager, WorkManager, or an equivalent persisted local scheduler. Do not call the immediate test/display-notification path while synchronizing.
+- Re-entering Calendar with the same payload must be idempotent and must not duplicate or immediately deliver alarms.
+- Web filtering is defense in depth; the Android host remains responsible for rejecting past triggers.
+
 ## Web Bridge
 
 `public/assets/js/components/android-bridge.js` is loaded before page-specific scripts and exposes `window.LifeFlowAndroidBridge`.

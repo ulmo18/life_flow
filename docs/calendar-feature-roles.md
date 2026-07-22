@@ -22,6 +22,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - A short tap on an empty cell does not create a schedule. Mouse and pen may start range selection immediately.
 - A native scroll gesture must not trigger the actual-event click or empty-cell selection that follows it.
 - Mouse and pen range selection may start immediately, but range selection must never start from an actual-event control or another interactive control.
+- When the selected date is today, the current-time cell updates in place at every 10-minute boundary using the app timezone (`Asia/Seoul`); the page does not reload for this visual update.
 - Calendar bottom sheets and popups should close from the close button and dimmed overlay through click handlers only; avoid mixing pointerup and click for the same close action.
 - Calendar bottom sheets should scroll internally when their content exceeds the mobile viewport.
 - Keep the bottom-sheet header and close button reachable while its content scrolls, and keep touch controls out of the page-level grid gesture handling.
@@ -51,6 +52,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - `calendar_days` stores one user/date row and the one selected `plan_group_id` for that day.
 - `calendar_events` stores timed actual schedule blocks and untimed entries. Only timed entries can have a `plan_template_id` link.
 - `calendar_tag_palettes` stores the shared 15-color palette for actual-event tags.
+- Palette HEX values remain identical in light and dark mode; actual-event cards choose their foreground color from palette luminance so the label stays readable.
 - `calendar_tags` stores four default system tags plus user-created personal tags.
 - `calendar_date_meta` stores holiday/substitute-holiday metadata for date coloring.
 - See `docs/calendar-feature-implementation.md` for table, route, and UI details.
@@ -59,6 +61,8 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - The Calendar routine popup reads active routines for the selected date.
 - Routine execution toggles from Calendar and Routine page must write to the same `routine_logs` table.
 - Routine execution toggles should update in place with JSON when JavaScript is available, while keeping POST redirect fallback behavior.
+- Calendar uses the shared Routine state control: blank is an empty neutral square, `O` is a filled check, and `X` is a muted cross. A successful toggle changes the control in place without reloading the page.
+- Routine execution controls are available for today and past dates only. Future dates remain visible as calendar dates but cannot receive Routine logs.
 - Keep the popup light enough that it does not block actual schedule input.
 
 ## Retrospect Entry Point
@@ -77,7 +81,8 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Calendar may render an initial toast when the selected date has no plan group so the user is nudged to set a baseline plan.
 
 ## Notifications
-- Calendar contributes selected Plan block start-time reminder payloads for the currently viewed date.
+- Calendar contributes only future selected-Plan reminders for the currently viewed date. Each reminder is scheduled five minutes before its Plan block starts in `Asia/Seoul`.
+- Opening Calendar synchronizes a date-scoped replacement payload; it must never display notifications immediately.
 - Settings owns whether Calendar selected-plan reminders are enabled.
 - Calendar must not own global notification preferences; see `docs/notification-feature-implementation.md`.
 

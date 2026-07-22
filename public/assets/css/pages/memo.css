@@ -75,6 +75,27 @@
   margin-bottom: 14px;
 }
 
+.memo-trash-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -4px 0 14px;
+}
+
+.memo-trash-toolbar p,
+.memo-expiry-label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.memo-trash-toolbar .btn {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
 .memo-list {
   display: grid;
   gap: 10px;

@@ -52,25 +52,12 @@ $renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGo
             <?php
             $goalId = (int) $node['id'];
             $children = $node['children'] ?? [];
-            $linkedPlanCount = count($node['linkedPlans'] ?? []);
-            $linkedRoutineCount = count($node['linkedRoutines'] ?? []);
-            $progress = $node['periodProgress'] ?? ['visible' => false, 'percent' => 0, 'label' => '', 'state' => 'none'];
             ?>
             <li class="goal-tree-item" style="--goal-tree-depth: <?= e((string) $depth) ?>;">
-                <div class="goal-tree-node">
-                    <div class="goal-tree-main">
-                        <span class="goal-type-badge"><?= e((string) $node['goalTypeLabel']) ?></span>
-                        <strong><?= e((string) $node['title']) ?></strong>
-                        <small><?= e((string) $node['periodLabel']) ?></small>
-                    </div>
-                    <div class="goal-tree-side">
-                        <?php if (!empty($progress['visible'])): ?>
-                            <span class="goal-tree-progress"><?= e((string) $progress['percent']) ?>%</span>
-                        <?php endif; ?>
-                        <span class="goal-tree-linked">계획 <?= e((string) $linkedPlanCount) ?> · 루틴 <?= e((string) $linkedRoutineCount) ?></span>
-                        <button type="button" class="btn btn-secondary goal-tree-edit" data-goal-open="edit-<?= e((string) $goalId) ?>">수정</button>
-                    </div>
-                </div>
+                <button type="button" class="goal-tree-node" data-goal-open="edit-<?= e((string) $goalId) ?>" aria-label="<?= e((string) $node['title']) ?> 목표 수정">
+                    <span class="goal-type-badge"><?= e((string) $node['goalTypeLabel']) ?></span>
+                    <strong><?= e((string) $node['title']) ?></strong>
+                </button>
                 <?php if (!empty($children)): ?>
                     <?php $renderGoalTree($children, $depth + 1); ?>
                 <?php endif; ?>

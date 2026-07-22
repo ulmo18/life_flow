@@ -4,21 +4,12 @@
   padding-bottom: 124px;
 }
 
-.retrospect-hero,
 .retrospect-section-header,
 .retrospect-date-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.retrospect-hero .page-title {
-  margin-bottom: var(--space-1);
-}
-
-.retrospect-hero .btn {
-  white-space: nowrap;
 }
 
 .retrospect-toolbar {
@@ -43,6 +34,7 @@
 
 .retrospect-date-bar,
 .retrospect-score-card,
+.retrospect-records,
 .retrospect-section,
 .retrospect-empty-state {
   border: 1px solid rgba(216, 200, 179, 0.9);
@@ -93,24 +85,276 @@
   gap: var(--space-3);
 }
 
-.retrospect-score-card {
+.retrospect-view-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.retrospect-view-switch a {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.retrospect-view-switch a[aria-current='page'] {
+  background: rgba(200, 95, 90, 0.14);
+  color: var(--color-text);
+}
+
+.retrospect-memo-list,
+.retrospect-goal-review,
+.retrospect-routine-history,
+.retrospect-plan-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.retrospect-plan-list li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.retrospect-plan-list li.is-linked {
+  background: rgba(108, 154, 139, 0.12);
+}
+
+.retrospect-plan-list span,
+.retrospect-plan-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retrospect-plan-list b {
+  margin-right: 6px;
+}
+
+.retrospect-event-memo {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  color: inherit;
+  font-size: 0.8rem;
+  opacity: 0.86;
+}
+
+.retrospect-memo-list li,
+.retrospect-goal-card,
+.retrospect-routine-history li {
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  line-height: 1.55;
+}
+
+.retrospect-routine-history li,
+.retrospect-routine-history li > div {
   display: grid;
   gap: 4px;
-  min-height: 116px;
-  padding: var(--space-3);
 }
 
-.retrospect-score-card span,
-.retrospect-score-card small {
+.retrospect-routine-history li > span,
+.retrospect-routine-history li > small {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.retrospect-routine-history summary {
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.retrospect-routine-period-tracker {
+  max-height: min(60vh, 460px);
+  margin-top: 10px;
+  padding-right: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.retrospect-goal-card-title,
+.retrospect-goal-metrics {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.retrospect-goal-card-title span,
+.retrospect-goal-card-title small,
+.retrospect-goal-metrics {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.retrospect-goal-card p {
+  margin: 10px 0 0;
+  color: var(--color-text);
+  font-size: 0.88rem;
+}
+
+.retrospect-score-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.retrospect-score-title {
+  font-size: var(--font-size-lg);
+}
+
+.retrospect-score-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.retrospect-score-metrics article {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 0 var(--space-3);
+  border-right: 1px solid var(--color-line);
+  text-align: center;
+}
+
+.retrospect-score-metrics article:first-child {
+  padding-left: 0;
+}
+
+.retrospect-score-metrics article:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.retrospect-score-metrics span,
+.retrospect-score-metrics small {
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retrospect-score-metrics b {
+  color: var(--color-primary);
+  font-size: clamp(20px, 6vw, 28px);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.retrospect-records {
+  overflow: hidden;
+}
+
+.retrospect-records-header {
+  padding: var(--space-4);
+}
+
+.retrospect-records-header h2,
+.retrospect-records-header p {
+  margin: 0;
+}
+
+.retrospect-records-header h2 {
+  font-size: var(--font-size-lg);
+}
+
+.retrospect-records-header p {
+  margin-top: 2px;
   color: var(--color-text-muted);
   font-size: 12px;
-  font-weight: 800;
 }
 
-.retrospect-score-card strong {
-  color: var(--color-secondary);
-  font-size: 26px;
-  line-height: 1.1;
+.retrospect-record-group {
+  border-top: 1px solid var(--color-line);
+}
+
+.retrospect-record-group summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 900;
+  list-style: none;
+}
+
+.retrospect-record-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.retrospect-record-group summary::after {
+  content: '⌄';
+  color: var(--color-text-muted);
+  transform: rotate(0deg);
+  transition: transform 0.16s ease;
+}
+
+.retrospect-record-group[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.retrospect-record-group summary b {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.retrospect-record-content {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.retrospect-record-content .retrospect-sort-tabs {
+  justify-self: end;
+}
+
+.is-collapsed > .retrospect-collapsible-item {
+  display: none;
+}
+
+.retrospect-more-button {
+  display: none;
+  min-height: 40px;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.retrospect-more-button.is-ready {
+  display: block;
 }
 
 .retrospect-section {
@@ -239,7 +483,7 @@
   gap: var(--space-2);
   border-color: transparent;
   background: var(--event-color, #8ea4a2);
-  color: #fff;
+  color: var(--event-text-color, #fff);
   box-shadow: 0 6px 16px rgba(26, 27, 58, 0.12);
   padding: 10px;
 }
@@ -253,7 +497,8 @@
 }
 
 .retrospect-event-list small {
-  color: rgba(255, 255, 255, 0.9);
+  color: inherit;
+  opacity: 0.86;
   font-size: 11px;
   font-weight: 900;
   white-space: nowrap;
@@ -268,7 +513,7 @@
   margin-right: 5px;
   border-radius: 999px;
   background: var(--color-secondary);
-  color: #fff;
+  color: var(--color-secondary-contrast);
   font-size: 10px;
   line-height: 1;
   vertical-align: middle;
@@ -280,9 +525,11 @@
 }
 
 .retrospect-textarea {
-  min-height: 128px;
+  min-height: 92px;
+  max-height: 280px;
   padding-top: 10px;
   resize: vertical;
+  overflow-y: auto;
 }
 
 body[data-theme='dark'] .retrospect-textarea {
@@ -388,6 +635,7 @@ body[data-theme='dark'] .retrospect-textarea {
 
 body[data-theme='dark'] .retrospect-date-bar,
 body[data-theme='dark'] .retrospect-score-card,
+body[data-theme='dark'] .retrospect-records,
 body[data-theme='dark'] .retrospect-section,
 body[data-theme='dark'] .retrospect-empty-state,
 body[data-theme='dark'] .retrospect-date-button,
@@ -411,8 +659,12 @@ body[data-theme='dark'] .retrospect-date-button {
   color: var(--color-text);
 }
 
+body[data-theme='dark'] .retrospect-score-metrics article,
+body[data-theme='dark'] .retrospect-record-group {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
 @media (max-width: 639px) {
-  .retrospect-hero,
   .retrospect-section-header {
     align-items: stretch;
     flex-direction: column;

@@ -15,10 +15,12 @@
                 <p class="calendar-subtitle"><?= e((string) $calendar['dateSubTitle']) ?></p>
             </div>
             <a class="calendar-icon-button" href="/calendar?date=<?= e((string) $calendar['nextDate']) ?>" aria-label="다음 날짜">&rsaquo;</a>
-            <label class="calendar-date-picker-button" aria-label="특정 날짜로 이동">
-                <span aria-hidden="true">▦</span>
+            <span class="calendar-date-picker-control">
+                <button type="button" class="calendar-date-picker-button" data-calendar-date-picker-open aria-label="특정 날짜로 이동">
+                    <span aria-hidden="true">▦</span>
+                </button>
                 <input type="date" value="<?= e((string) $calendar['date']) ?>" data-calendar-date-picker aria-label="특정 날짜로 이동">
-            </label>
+            </span>
         </div>
 
         <button
@@ -118,7 +120,7 @@
                         <button
                             type="button"
                             class="actual-event <?= $segment['planTemplateId'] === null ? '' : 'is-linked' ?>"
-                            style="--event-color: <?= e((string) $segment['tagColor']) ?>;"
+                            style="--event-color: <?= e((string) $segment['tagColor']) ?>; --event-text-color: <?= e((string) $segment['tagTextColor']) ?>;"
                             data-ui-tooltip="<?= e((string) $segment['title']) ?>"
                             data-event-open
                             data-event-id="<?= e((string) $segment['id']) ?>"
@@ -234,6 +236,10 @@
                     <span>태그 없음</span>
                 </label>
                 <?php foreach (($calendar['calendarTags'] ?? []) as $tag): ?>
+                    <?php if ((int) ($tag['is_enabled'] ?? 1) !== 1): ?>
+                        <input type="radio" name="calendar_tag_id" value="<?= e((string) $tag['id']) ?>" hidden>
+                        <?php continue; ?>
+                    <?php endif; ?>
                     <label class="calendar-tag-link" style="--tag-color: <?= e((string) $tag['color_hex']) ?>;">
                         <input type="radio" name="calendar_tag_id" value="<?= e((string) $tag['id']) ?>">
                         <span class="calendar-tag-swatch" aria-hidden="true"></span>
@@ -262,7 +268,7 @@
                 <?php endforeach; ?>
             </fieldset>
 
-            <?php if (!empty($calendar['routines'])): ?>
+            <?php if (!empty($calendar['routines']) && !empty($calendar['canEditRoutines'])): ?>
                 <fieldset class="calendar-routine-links" data-create-routine-group>
                     <legend>함께 완료할 루틴</legend>
                     <?php foreach ($calendar['routines'] as $routine): ?>
@@ -307,7 +313,13 @@
                     <span>태그 없음</span>
                 </label>
                 <?php foreach (($calendar['calendarTags'] ?? []) as $tag): ?>
-                    <label class="calendar-tag-link" style="--tag-color: <?= e((string) $tag['color_hex']) ?>;">
+                    <?php $tagDisabled = (int) ($tag['is_enabled'] ?? 1) !== 1; ?>
+                    <label
+                        class="calendar-tag-link <?= $tagDisabled ? 'is-disabled' : '' ?>"
+                        style="--tag-color: <?= e((string) $tag['color_hex']) ?>;"
+                        data-tag-option
+                        data-tag-disabled="<?= $tagDisabled ? '1' : '0' ?>"
+                    >
                         <input type="radio" name="calendar_tag_id" value="<?= e((string) $tag['id']) ?>">
                         <span class="calendar-tag-swatch" aria-hidden="true"></span>
                         <span><?= e((string) $tag['name']) ?></span>
@@ -397,7 +409,7 @@
             <strong id="routinePopupTitle">루틴 확인</strong>
             <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
         </div>
-        <?php if (empty($calendar['routines'])): ?>
+        <?php if (empty($calendar['routines']) || empty($calendar['canEditRoutines'])): ?>
             <p class="calendar-retrospect-body">선택한 날짜에 체크할 루틴이 없습니다.</p>
         <?php else: ?>
             <ul class="routine-preview-list">
@@ -412,13 +424,16 @@
                             <input type="hidden" name="routine_id" value="<?= e((string) $routine['id']) ?>">
                             <button
                                 type="submit"
-                                class="<?= $routineState === 'O' ? 'is-done' : ($routineState === 'X' ? 'is-failed' : '') ?>"
+                                class="routine-state-control <?= $routineState === 'O' ? 'is-done' : ($routineState === 'X' ? 'is-failed' : '') ?>"
                                 data-calendar-routine-state-button
                                 data-routine-id="<?= e((string) $routine['id']) ?>"
                                 data-routine-date="<?= e((string) $calendar['date']) ?>"
+                                data-routine-control-label="<?= e((string) $routine['name']) ?> 상태 변경"
+                                data-state="<?= e($routineState) ?>"
                                 title="<?= $routineState === '' ? '미기록' : ($routineState === 'O' ? '완료' : '미완료') ?>"
+                                aria-label="<?= e((string) $routine['name']) ?> 상태 변경, <?= $routineState === 'O' ? '완료' : ($routineState === 'X' ? '미완료' : '미기록') ?>"
                             >
-                                <?= $routineState === '' ? ' ' : e($routineState) ?>
+                                <span data-routine-state-marker aria-hidden="true"><?= $routineState === 'O' ? '✓' : ($routineState === 'X' ? '×' : '') ?></span>
                             </button>
                         </form>
                     </li>

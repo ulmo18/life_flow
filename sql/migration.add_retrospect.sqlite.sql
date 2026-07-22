@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS retrospect_report_actual_items (
   calendar_day_id INTEGER NULL,
   calendar_event_id INTEGER NULL,
   title_snapshot TEXT NOT NULL,
+  memo_snapshot TEXT NULL,
   start_index INTEGER NOT NULL,
   end_index INTEGER NOT NULL,
   tag_name_snapshot TEXT NULL,

@@ -3,6 +3,7 @@
   const sheets = Array.from(document.querySelectorAll('[data-routine-sheet]'));
   const toast = window.LifeFlowToast;
   const ui = window.LifeFlowUI;
+  const routineState = window.LifeFlowRoutineState;
 
   if (!layer) {
     return;
@@ -30,10 +31,30 @@
   }
 
   function applyButtonState(button, state) {
-    button.textContent = state === '' ? ' ' : state;
+    if (button.matches('.routine-state-control') && routineState) {
+      routineState.apply(button, state);
+      return;
+    }
+
+    const display = button.dataset.routineStateDisplay || 'symbol';
+    if (display === 'label') {
+      button.textContent = state === 'O' ? '완료' : (state === 'X' ? '미완료' : '미기록');
+    } else if (display === 'period') {
+      const marker = button.querySelector('i');
+      if (marker) {
+        marker.textContent = state === 'O' ? '●' : (state === 'X' ? '×' : '');
+      }
+    } else if (display === 'tracker') {
+      const marker = button.querySelector('span');
+      if (marker) {
+        marker.textContent = state === 'O' ? '✓' : (state === 'X' ? '×' : '');
+      }
+    } else {
+      button.textContent = state === '' ? ' ' : state;
+    }
     button.classList.toggle('is-done', state === 'O');
     button.classList.toggle('is-failed', state === 'X');
-    button.title = state === '' ? '미진행' : (state === 'O' ? '완료' : '미완료');
+    button.title = state === '' ? '미기록' : (state === 'O' ? '완료' : '미완료');
   }
 
   function updateRoutineSummary(routine) {
@@ -49,15 +70,32 @@
       element.textContent = String(routine.progressPercent);
     });
 
-    document.querySelectorAll(`[data-routine-lawn="${routine.id}"]`).forEach(lawn => {
-      lawn.textContent = '';
-      (routine.lawnCells || []).forEach(filled => {
-        const cell = document.createElement('span');
-        if (filled) {
-          cell.classList.add('is-filled');
-        }
-        cell.setAttribute('aria-hidden', 'true');
-        lawn.appendChild(cell);
+    document.querySelectorAll(`[data-routine-progress-bar="${routine.id}"]`).forEach(element => {
+      element.style.width = `${routine.progressPercent}%`;
+    });
+
+    document.querySelectorAll(`[data-routine-streak="${routine.id}"]`).forEach(element => {
+      element.textContent = routine.streakLabel || '';
+      element.hidden = !routine.streakLabel;
+    });
+
+  }
+
+  function updatePageSummary(summary) {
+    if (!summary) {
+      return;
+    }
+
+    const values = [
+      ['[data-routine-page-active]', summary.activeCount],
+      ['[data-routine-page-rate]', summary.weekAchievementRate],
+      ['[data-routine-page-done]', summary.weekDoneCount],
+      ['[data-routine-page-total]', summary.weekTotalCount],
+      ['[data-routine-page-streak]', summary.streakCount],
+    ];
+    values.forEach(([selector, value]) => {
+      document.querySelectorAll(selector).forEach(element => {
+        element.textContent = String(value ?? 0);
       });
     });
   }
@@ -83,7 +121,18 @@
       applyButtonState(button, payload.state || '');
     });
 
+    document.querySelectorAll(
+      `[data-routine-state-cell][data-routine-id="${payload.routineId}"][data-routine-date="${payload.date}"]`
+    ).forEach(cell => {
+      cell.classList.toggle('is-done', payload.state === 'O');
+      cell.classList.toggle('is-failed', payload.state === 'X');
+      const stateLabel = payload.state === 'O' ? '완료' : (payload.state === 'X' ? '미완료' : '미기록');
+      cell.title = `${payload.date} ${stateLabel}`;
+      cell.setAttribute('aria-label', cell.matches('button') ? `오늘 루틴 상태 변경, ${payload.date} ${stateLabel}` : `${payload.date} ${stateLabel}`);
+    });
+
     updateRoutineSummary(payload.routine);
+    updatePageSummary(payload.pageSummary);
 
     if (toast && typeof toast.show === 'function') {
       toast.show(payload.message || '루틴 상태를 변경했습니다.');

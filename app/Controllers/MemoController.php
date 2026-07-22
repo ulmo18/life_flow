@@ -102,6 +102,19 @@ final class MemoController
         $this->redirect('/memo?trash=1');
     }
 
+    public function emptyTrash(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/memo?trash=1', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+        $deletedCount = $this->memoService->emptyTrash($this->userId());
+
+        $_SESSION['flash_success'] = $deletedCount > 0
+            ? $deletedCount . '개의 메모를 영구 삭제했습니다.'
+            : '휴지통이 이미 비어 있습니다.';
+        $this->redirect('/memo?trash=1');
+    }
+
     /** @return array<string, mixed> */
     private function validatePost(): array
     {

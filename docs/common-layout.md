@@ -56,6 +56,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Shared UI modals must stack above page-local sheets so confirmation dialogs opened from a sheet are never hidden behind it.
 - Shared hover tooltips should only appear on hover-capable fine pointers, not on touch devices.
 - Shared `.input` fields use the app typography, 15px text, soft card-like surfaces, and visible focus states so inputs and textareas match the current visual system.
+- Shared `.sr-only` keeps semantic page headings available to assistive technology when a content-first feature page omits its large visible menu introduction.
 - Shared bottom sheets focus their primary input during the opening user action and keep the active input visible when the mobile visual viewport changes.
 
 ## Theme
@@ -64,6 +65,8 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Settings persists the user choice in `user_preferences.theme`.
 - Choosing light or dark mode applies and persists immediately when JavaScript is available. The POST redirect remains as the non-JavaScript fallback.
 - Shared colors should be expressed through CSS variables so page-specific styles respond to the active theme.
+- Light mode keeps primary `#FF5E5B` and secondary `#1A1B3A`; dark mode uses primary `#FF756F` and secondary `#F4D27A` with matching contrast-text tokens.
+- The shared 15 Calendar tag colors do not change when the theme changes because they identify user-owned schedule categories. Components that fill a card with a tag color must calculate a readable dark or light foreground instead of assuming white text.
 - Dark mode coverage must include shared inputs, buttons, toast, aside profile/settings surfaces, page cards, bottom sheets, and page-local selection controls.
 - Page-specific CSS should use `body[data-theme='dark']` for dark overrides because the shell writes the theme to the body `data-theme` attribute.
 

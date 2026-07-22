@@ -46,12 +46,14 @@ final class GoalController
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'notificationSyncPayload' => $this->notificationService->buildGoalSyncPayload($this->userId()),
+            'notificationSyncPayload' => !empty($_SESSION['notification_sync_goal'])
+                ? $this->notificationService->buildGoalSyncPayload($this->userId())
+                : [],
             'pageStyles' => ['/assets/css/pages/goal.css'],
             'pageScripts' => ['/assets/js/pages/goal.js'],
         ]);
 
-        unset($_SESSION['errors'], $_SESSION['old'], $_SESSION['flash_success']);
+        unset($_SESSION['errors'], $_SESSION['old'], $_SESSION['flash_success'], $_SESSION['notification_sync_goal']);
     }
 
     public function store(): void
@@ -70,6 +72,7 @@ final class GoalController
         }
 
         $_SESSION['flash_success'] = '목표가 추가되었습니다.';
+        $_SESSION['notification_sync_goal'] = true;
         $this->redirect('/goal');
     }
 
@@ -90,6 +93,7 @@ final class GoalController
         }
 
         $_SESSION['flash_success'] = '목표가 수정되었습니다.';
+        $_SESSION['notification_sync_goal'] = true;
         $this->redirect('/goal');
     }
 
@@ -105,6 +109,7 @@ final class GoalController
         }
 
         $_SESSION['flash_success'] = '목표가 삭제되었습니다.';
+        $_SESSION['notification_sync_goal'] = true;
         $this->redirect('/goal');
     }
 

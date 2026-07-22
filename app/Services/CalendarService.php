@@ -33,6 +33,7 @@ final class CalendarService
 
         return [
             'date' => $date,
+            'canEditRoutines' => $date <= date('Y-m-d'),
             'dateTitle' => $this->formatDateTitle($date),
             'dateSubTitle' => $this->formatDateSubTitle($date, $dateMeta),
             'dateClass' => $this->dateClass($date, $dateMeta),
@@ -364,6 +365,7 @@ final class CalendarService
                 continue;
             }
 
+            $tagColor = $this->normalizeHexColor((string) ($event['tag_color'] ?? ''));
             foreach ($this->splitRange((int) $event['start_index'], (int) $event['end_index']) as $segment) {
                 $segments[] = array_merge($segment, [
                     'id' => (int) $event['id'],
@@ -373,7 +375,8 @@ final class CalendarService
                     'planTitle' => $event['plan_title'] ?? null,
                     'tagId' => $event['calendar_tag_id'] === null ? null : (int) $event['calendar_tag_id'],
                     'tagName' => $event['tag_name'] ?? null,
-                    'tagColor' => $this->normalizeHexColor((string) ($event['tag_color'] ?? '')),
+                    'tagColor' => $tagColor,
+                    'tagTextColor' => $this->contrastTextColor($tagColor),
                     'memo' => (string) ($event['memo'] ?? ''),
                     'scheduleType' => 'timed',
                 ]);
@@ -393,12 +396,14 @@ final class CalendarService
                 continue;
             }
 
+            $tagColor = $this->normalizeHexColor((string) ($event['tag_color'] ?? ''));
             $items[] = [
                 'id' => (int) $event['id'],
                 'title' => (string) $event['title'],
                 'tagId' => $event['calendar_tag_id'] === null ? null : (int) $event['calendar_tag_id'],
                 'tagName' => $event['tag_name'] ?? null,
-                'tagColor' => $this->normalizeHexColor((string) ($event['tag_color'] ?? '')),
+                'tagColor' => $tagColor,
+                'tagTextColor' => $this->contrastTextColor($tagColor),
                 'memo' => (string) ($event['memo'] ?? ''),
             ];
         }
@@ -477,6 +482,19 @@ final class CalendarService
     private function normalizeHexColor(string $color): string
     {
         return preg_match('/^#[0-9a-fA-F]{6}$/', $color) === 1 ? $color : '#FF5E5B';
+    }
+
+    private function contrastTextColor(string $color): string
+    {
+        $channels = array_map(static function (string $channel): float {
+            $value = hexdec($channel) / 255;
+            return $value <= 0.03928
+                ? $value / 12.92
+                : (($value + 0.055) / 1.055) ** 2.4;
+        }, [substr($color, 1, 2), substr($color, 3, 2), substr($color, 5, 2)]);
+        $luminance = (0.2126 * $channels[0]) + (0.7152 * $channels[1]) + (0.0722 * $channels[2]);
+
+        return $luminance >= 0.21 ? '#1D1D18' : '#FFFFFF';
     }
 
 }

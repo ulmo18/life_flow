@@ -358,13 +358,15 @@ final class AuthController
             'csrfToken' => Csrf::token(),
             'theme' => $theme,
             'notificationSettings' => $this->notificationService->settings($userId),
-            'notificationSyncPayload' => $this->notificationService->buildSettingsSyncPayload($userId),
+            'notificationSyncPayload' => !empty($_SESSION['notification_sync_settings'])
+                ? $this->notificationService->buildSettingsSyncPayload($userId)
+                : [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
             'pageScripts' => ['/assets/js/pages/settings.js'],
         ]);
 
-        unset($_SESSION['flash_success'], $_SESSION['errors']);
+        unset($_SESSION['flash_success'], $_SESSION['errors'], $_SESSION['notification_sync_settings']);
     }
 
     public function updateTheme(): void
@@ -420,6 +422,7 @@ final class AuthController
         }
 
         $this->notificationService->updateSettings($userId, $validation['data']);
+        $_SESSION['notification_sync_settings'] = true;
         $_SESSION['flash_success'] = '알림 설정을 저장했습니다.';
 
         $this->redirect('/settings');

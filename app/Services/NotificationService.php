@@ -8,6 +8,7 @@ use App\Models\GoalRepository;
 use App\Models\RoutineRepository;
 use App\Models\UserPreferenceRepository;
 use DateTimeImmutable;
+use DateTimeZone;
 
 final class NotificationService
 {
@@ -105,9 +106,13 @@ final class NotificationService
     public function buildCalendarSyncPayload(int $userId, array $calendar): array
     {
         $settings = $this->settings($userId);
+        $date = (string) ($calendar['date'] ?? date('Y-m-d'));
 
         return $this->basePayload($settings)
             + [
+                'operation' => 'replace',
+                'scope' => 'calendar_plan',
+                'scopeKey' => $date,
                 'daily' => [],
                 'routine' => [],
                 'specific' => $this->calendarPlanPayload($calendar, $settings),
@@ -130,9 +135,13 @@ final class NotificationService
     /** @param array<string, mixed> $settings */
     private function basePayload(array $settings): array
     {
+        $timezone = new DateTimeZone('Asia/Seoul');
+
         return [
-            'version' => 1,
+            'version' => 2,
             'enabled' => (int) $settings['notification_enabled'] === 1,
+            'timeZone' => $timezone->getName(),
+            'generatedAt' => (new DateTimeImmutable('now', $timezone))->format(DATE_ATOM),
         ];
     }
 
@@ -204,6 +213,8 @@ final class NotificationService
         }
 
         $date = (string) ($calendar['date'] ?? date('Y-m-d'));
+        $timezone = new DateTimeZone('Asia/Seoul');
+        $now = new DateTimeImmutable('now', $timezone);
         $items = [];
         foreach (($calendar['planReminderItems'] ?? []) as $item) {
             $title = (string) ($item['title'] ?? '');
@@ -212,13 +223,24 @@ final class NotificationService
             }
 
             $time = $this->indexToTime((int) $item['startIndex']);
+            $startsAt = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $date . ' ' . $time, $timezone);
+            if (!$startsAt instanceof DateTimeImmutable) {
+                continue;
+            }
+
+            $fireAt = $startsAt->modify('-5 minutes');
+            if ($fireAt <= $now) {
+                continue;
+            }
+
             $items[] = [
                 'key' => 'calendar_plan_' . $date . '_' . (string) ($item['templateId'] ?? md5($title . $time)),
                 'type' => 'calendar_plan',
                 'templateId' => (int) ($item['templateId'] ?? 0),
-                'fireAt' => $date . 'T' . $time . ':00',
+                'fireAt' => $fireAt->format(DATE_ATOM),
+                'startsAt' => $startsAt->format(DATE_ATOM),
                 'title' => '계획 알림',
-                'message' => $title . '을(를) 하실 시간입니다.',
+                'message' => $title . ' 시작 5분 전입니다.',
             ];
         }
 

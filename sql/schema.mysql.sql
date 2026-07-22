@@ -369,6 +369,22 @@ ON DUPLICATE KEY UPDATE
   `is_system` = 1,
   `deleted_at` = NULL;
 
+CREATE TABLE IF NOT EXISTS `calendar_tag_preferences` (
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `tag_id` BIGINT UNSIGNED NOT NULL,
+  `is_enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`, `tag_id`),
+  KEY `idx_calendar_tag_preferences_tag` (`tag_id`),
+  CONSTRAINT `fk_calendar_tag_preferences_user`
+    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_calendar_tag_preferences_tag`
+    FOREIGN KEY (`tag_id`) REFERENCES `calendar_tags` (`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `calendar_events` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,
@@ -418,6 +434,8 @@ CREATE TABLE IF NOT EXISTS `routines` (
   `name` VARCHAR(60) NOT NULL,
   `start_date` DATE NOT NULL,
   `duration_days` SMALLINT UNSIGNED NOT NULL DEFAULT 60,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'active',
+  `ended_at` DATE NULL,
   `reminder_enabled` TINYINT(1) NOT NULL DEFAULT 0,
   `reminder_time` TIME NULL,
   `deleted_at` DATETIME NULL,
@@ -427,6 +445,7 @@ CREATE TABLE IF NOT EXISTS `routines` (
   KEY `idx_routines_user_deleted` (`user_id`, `deleted_at`),
   KEY `idx_routines_user_date` (`user_id`, `start_date`),
   KEY `idx_routines_goal_id` (`goal_id`),
+  KEY `idx_routines_user_status` (`user_id`, `status`),
   CONSTRAINT `fk_routines_user`
     FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
     ON DELETE CASCADE
@@ -436,7 +455,9 @@ CREATE TABLE IF NOT EXISTS `routines` (
     ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT `chk_routines_duration`
-    CHECK (`duration_days` >= 7 AND `duration_days` <= 60)
+    CHECK (`duration_days` >= 1 AND `duration_days` <= 365),
+  CONSTRAINT `chk_routines_status`
+    CHECK (`status` IN ('active', 'completed', 'stopped'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `routine_logs` (
@@ -535,6 +556,7 @@ CREATE TABLE IF NOT EXISTS `retrospect_report_actual_items` (
   `calendar_day_id` BIGINT UNSIGNED NULL,
   `calendar_event_id` BIGINT UNSIGNED NULL,
   `title_snapshot` VARCHAR(80) NOT NULL,
+  `memo_snapshot` TEXT NULL,
   `start_index` SMALLINT UNSIGNED NOT NULL,
   `end_index` SMALLINT UNSIGNED NOT NULL,
   `tag_name_snapshot` VARCHAR(40) NULL,

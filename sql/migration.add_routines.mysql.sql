@@ -1,9 +1,13 @@
+-- CHECK constraints are intentionally omitted for hosted MySQL/MariaDB compatibility.
+-- Apply migration.routine_lifecycle_validation_triggers.mysql.sql for DB-level validation.
 CREATE TABLE IF NOT EXISTS `routines` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,
   `name` VARCHAR(60) NOT NULL,
   `start_date` DATE NOT NULL,
   `duration_days` SMALLINT UNSIGNED NOT NULL DEFAULT 60,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'active',
+  `ended_at` DATE NULL,
   `reminder_enabled` TINYINT(1) NOT NULL DEFAULT 0,
   `reminder_time` TIME NULL,
   `deleted_at` DATETIME NULL,
@@ -12,12 +16,11 @@ CREATE TABLE IF NOT EXISTS `routines` (
   PRIMARY KEY (`id`),
   KEY `idx_routines_user_deleted` (`user_id`, `deleted_at`),
   KEY `idx_routines_user_date` (`user_id`, `start_date`),
+  KEY `idx_routines_user_status` (`user_id`, `status`),
   CONSTRAINT `fk_routines_user`
     FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
     ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT `chk_routines_duration`
-    CHECK (`duration_days` >= 7 AND `duration_days` <= 60)
+    ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `routine_logs` (

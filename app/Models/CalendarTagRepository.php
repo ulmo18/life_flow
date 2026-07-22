@@ -30,14 +30,21 @@ final class CalendarTagRepository
     /** @return array<int, array<string, mixed>> */
     public function listVisibleTags(int $userId): array
     {
-        $sql = 'SELECT id, user_id, palette_id, slug, name, color_hex, sort_order, is_system
-                FROM calendar_tags
-                WHERE deleted_at IS NULL
-                    AND (is_system = 1 OR user_id = :user_id)
-                ORDER BY is_system DESC, sort_order ASC, id ASC';
+        $sql = 'SELECT ct.id, ct.user_id, ct.palette_id, ct.slug, ct.name, ct.color_hex,
+                       ct.sort_order, ct.is_system,
+                       CASE WHEN ct.is_system = 1 THEN COALESCE(ctp.is_enabled, 1) ELSE 1 END AS is_enabled
+                FROM calendar_tags ct
+                LEFT JOIN calendar_tag_preferences ctp
+                    ON ctp.tag_id = ct.id AND ctp.user_id = :preference_user_id
+                WHERE ct.deleted_at IS NULL
+                    AND (ct.is_system = 1 OR ct.user_id = :tag_user_id)
+                ORDER BY ct.is_system DESC, ct.sort_order ASC, ct.id ASC';
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(['user_id' => $userId]);
+        $stmt->execute([
+            'preference_user_id' => $userId,
+            'tag_user_id' => $userId,
+        ]);
 
         return $stmt->fetchAll();
     }
@@ -155,6 +162,46 @@ final class CalendarTagRepository
             error_log('[calendar-tag] delete failed: ' . $exception->getMessage());
             return false;
         }
+    }
+
+    public function setSystemTagEnabled(int $userId, int $tagId, bool $enabled): bool
+    {
+        $tagStmt = $this->db->prepare(
+            'SELECT id FROM calendar_tags
+             WHERE id = :id AND is_system = 1 AND deleted_at IS NULL
+             LIMIT 1'
+        );
+        $tagStmt->execute(['id' => $tagId]);
+        if ($tagStmt->fetchColumn() === false) {
+            return false;
+        }
+
+        $findStmt = $this->db->prepare(
+            'SELECT tag_id FROM calendar_tag_preferences
+             WHERE user_id = :user_id AND tag_id = :tag_id
+             LIMIT 1'
+        );
+        $findStmt->execute(['user_id' => $userId, 'tag_id' => $tagId]);
+
+        if ($findStmt->fetchColumn() !== false) {
+            $stmt = $this->db->prepare(
+                'UPDATE calendar_tag_preferences
+                 SET is_enabled = :is_enabled, updated_at = CURRENT_TIMESTAMP
+                 WHERE user_id = :user_id AND tag_id = :tag_id'
+            );
+        } else {
+            $stmt = $this->db->prepare(
+                'INSERT INTO calendar_tag_preferences
+                    (user_id, tag_id, is_enabled, created_at, updated_at)
+                 VALUES (:user_id, :tag_id, :is_enabled, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
+            );
+        }
+
+        return $stmt->execute([
+            'user_id' => $userId,
+            'tag_id' => $tagId,
+            'is_enabled' => $enabled ? 1 : 0,
+        ]);
     }
 
     public function paletteExists(int $paletteId): bool

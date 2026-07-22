@@ -100,4 +100,9 @@ final class CalendarTagService
     {
         return $this->tagRepository->softDeleteUserTag($userId, $tagId);
     }
+
+    public function setSystemTagEnabled(int $userId, int $tagId, bool $enabled): bool
+    {
+        return $this->tagRepository->setSystemTagEnabled($userId, $tagId, $enabled);
+    }
 }

@@ -347,6 +347,7 @@ final class RetrospectRepository
                 ce.id,
                 ce.calendar_day_id,
                 ce.title,
+                ce.memo,
                 ce.start_index,
                 ce.end_index,
                 ce.plan_template_id,
@@ -387,6 +388,7 @@ final class RetrospectRepository
                 AND rl.log_date = :log_date
              WHERE r.user_id = :user_id
                 AND r.deleted_at IS NULL
+                AND (r.status = :active_status OR (r.ended_at IS NOT NULL AND :target_date_status <= r.ended_at))
                 AND :target_date_start >= r.start_date
                 AND :target_date_end <= ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . '
              ORDER BY r.created_at ASC, r.id ASC'
@@ -395,10 +397,136 @@ final class RetrospectRepository
             'log_date' => $date,
             'target_date_start' => $date,
             'target_date_end' => $date,
+            'target_date_status' => $date,
             'user_id' => $userId,
+            'active_status' => 'active',
         ]);
 
         return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listGoalReviewGoals(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT g.id, g.goal_type, g.title, g.period_start_date, g.period_end_date, g.status,
+                (SELECT COUNT(*) FROM plan_templates pt
+                 WHERE pt.goal_id = g.id AND pt.user_id = g.user_id AND pt.deleted_at IS NULL) AS linked_plan_count
+             FROM goals g
+             WHERE g.user_id = :user_id AND g.deleted_at IS NULL
+             ORDER BY g.updated_at DESC, g.id DESC'
+        );
+        $stmt->execute(['user_id' => $userId]);
+
+        return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listGoalPlanProgress(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT
+                pt.goal_id,
+                COUNT(*) AS plan_count,
+                SUM(CASE WHEN EXISTS (
+                    SELECT 1 FROM calendar_events ce
+                    WHERE ce.calendar_day_id = cd.id
+                        AND ce.plan_template_id = pt.id
+                        AND ce.user_id = cd.user_id
+                        AND ce.deleted_at IS NULL
+                ) THEN 1 ELSE 0 END) AS executed_plan_count,
+                SUM((
+                    SELECT COUNT(*) FROM calendar_events ce_count
+                    WHERE ce_count.calendar_day_id = cd.id
+                        AND ce_count.plan_template_id = pt.id
+                        AND ce_count.user_id = cd.user_id
+                        AND ce_count.deleted_at IS NULL
+                )) AS actual_event_count
+             FROM calendar_days cd
+             INNER JOIN plan_groups pg ON pg.id = cd.plan_group_id AND pg.user_id = cd.user_id AND pg.deleted_at IS NULL
+             INNER JOIN plan_blocks pb ON pb.plan_group_id = pg.id
+             INNER JOIN plan_templates pt ON pt.id = pb.plan_template_id AND pt.user_id = cd.user_id AND pt.deleted_at IS NULL
+             INNER JOIN goals g ON g.id = pt.goal_id AND g.user_id = pt.user_id AND g.deleted_at IS NULL
+             WHERE cd.user_id = :user_id
+                AND cd.calendar_date <= :today
+                AND (g.period_start_date IS NULL OR cd.calendar_date >= g.period_start_date)
+                AND (g.period_end_date IS NULL OR cd.calendar_date <= g.period_end_date)
+                AND pt.goal_id IS NOT NULL
+             GROUP BY pt.goal_id'
+        );
+        $stmt->execute(['user_id' => $userId, 'today' => date('Y-m-d')]);
+
+        return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listGoalRoutineProgress(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT
+                r.goal_id,
+                COUNT(DISTINCT r.id) AS routine_count,
+                COALESCE(SUM(CASE WHEN rl.is_done = 1 THEN 1 ELSE 0 END), 0) AS done_day_count
+             FROM routines r
+             INNER JOIN goals g ON g.id = r.goal_id AND g.user_id = r.user_id AND g.deleted_at IS NULL
+             LEFT JOIN routine_logs rl ON rl.routine_id = r.id
+                AND rl.user_id = r.user_id
+                AND rl.log_date >= r.start_date
+                AND rl.log_date <= ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . '
+             WHERE r.user_id = :user_id AND r.deleted_at IS NULL AND r.goal_id IS NOT NULL
+             GROUP BY r.goal_id'
+        );
+        $stmt->execute(['user_id' => $userId]);
+
+        return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listCompletedRoutineHistory(int $userId, string $today): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT
+                r.id, r.name, r.start_date, r.duration_days, r.status, r.ended_at,
+                COALESCE(SUM(CASE WHEN rl.is_done = 1 THEN 1 ELSE 0 END), 0) AS done_count
+             FROM routines r
+             LEFT JOIN routine_logs rl ON rl.routine_id = r.id
+                AND rl.user_id = r.user_id
+                AND rl.log_date >= r.start_date
+                AND rl.log_date <= ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . '
+             WHERE r.user_id = :user_id
+                AND r.deleted_at IS NULL
+                AND (r.status <> :active_status OR ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . ' < :today)
+             GROUP BY r.id, r.name, r.start_date, r.duration_days, r.status, r.ended_at
+             ORDER BY COALESCE(r.ended_at, ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . ') DESC, r.id DESC'
+        );
+        $stmt->execute(['user_id' => $userId, 'active_status' => 'active', 'today' => $today]);
+
+        return $stmt->fetchAll();
+    }
+
+    /** @return array<string, int> */
+    public function listRoutineLogStates(int $userId, int $routineId, string $startDate, string $endDate): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT log_date, is_done
+             FROM routine_logs
+             WHERE user_id = :user_id AND routine_id = :routine_id
+                AND log_date >= :start_date AND log_date <= :end_date
+             ORDER BY log_date ASC'
+        );
+        $stmt->execute([
+            'user_id' => $userId,
+            'routine_id' => $routineId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        $states = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $states[(string) $row['log_date']] = (int) $row['is_done'];
+        }
+
+        return $states;
     }
 
     private function upsertReportForPublish(int $userId, string $date, array $summary, array $texts): int
@@ -540,12 +668,12 @@ final class RetrospectRepository
     {
         $sql = 'INSERT INTO retrospect_report_actual_items (
                     report_id, calendar_day_id, calendar_event_id, title_snapshot,
-                    start_index, end_index, tag_name_snapshot, tag_color_snapshot,
+                    memo_snapshot, start_index, end_index, tag_name_snapshot, tag_color_snapshot,
                     plan_template_id_snapshot, plan_importance_snapshot,
                     is_linked, sort_order, created_at
                 ) VALUES (
                     :report_id, :calendar_day_id, :calendar_event_id, :title_snapshot,
-                    :start_index, :end_index, :tag_name_snapshot, :tag_color_snapshot,
+                    :memo_snapshot, :start_index, :end_index, :tag_name_snapshot, :tag_color_snapshot,
                     :plan_template_id_snapshot, :plan_importance_snapshot,
                     :is_linked, :sort_order, CURRENT_TIMESTAMP
                 )';
@@ -557,6 +685,7 @@ final class RetrospectRepository
                 'calendar_day_id' => $item['calendar_day_id'],
                 'calendar_event_id' => $item['id'],
                 'title_snapshot' => $item['title'],
+                'memo_snapshot' => $item['memo'],
                 'start_index' => $item['start_index'],
                 'end_index' => $item['end_index'],
                 'tag_name_snapshot' => $item['tag_name'],

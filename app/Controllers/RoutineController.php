@@ -24,9 +24,11 @@ final class RoutineController
 
     public function index(): void
     {
+        $routineData = $this->routineService->getRoutinePageData($this->userId());
         $this->render('pages/routine/index', [
             'title' => 'Routine',
-            'routines' => $this->routineService->getRoutineList($this->userId()),
+            'routines' => $routineData['routines'],
+            'routineSummary' => $routineData['summary'],
             'durationOptions' => $this->routineService->durationOptions(),
             'defaultDurationDays' => $this->routineService->defaultDurationDays(),
             'defaultReminderTime' => $this->routineService->defaultReminderTime(),
@@ -35,12 +37,14 @@ final class RoutineController
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'notificationSyncPayload' => $this->notificationService->buildRoutineSyncPayload($this->userId()),
-            'pageStyles' => ['/assets/css/pages/routine.css'],
-            'pageScripts' => ['/assets/js/pages/routine.js'],
+            'notificationSyncPayload' => !empty($_SESSION['notification_sync_routine'])
+                ? $this->notificationService->buildRoutineSyncPayload($this->userId())
+                : [],
+            'pageStyles' => ['/assets/css/components/routine-state.css', '/assets/css/pages/routine.css'],
+            'pageScripts' => ['/assets/js/components/routine-state.js', '/assets/js/pages/routine.js'],
         ]);
 
-        unset($_SESSION['errors'], $_SESSION['old'], $_SESSION['flash_success']);
+        unset($_SESSION['errors'], $_SESSION['old'], $_SESSION['flash_success'], $_SESSION['notification_sync_routine']);
     }
 
     public function store(): void
@@ -59,6 +63,7 @@ final class RoutineController
         }
 
         $_SESSION['flash_success'] = '루틴을 추가했습니다.';
+        $_SESSION['notification_sync_routine'] = true;
         $this->redirect('/routine');
     }
 
@@ -69,7 +74,7 @@ final class RoutineController
         }
 
         $routineId = (int) ($_POST['routine_id'] ?? 0);
-        $validation = $this->routineService->validateInput($_POST, $this->userId());
+        $validation = $this->routineService->validateInput($_POST, $this->userId(), true);
         if ($routineId <= 0 || !$validation['ok']) {
             $this->redirectWithErrors('/routine', $validation['errors'] ?: ['general' => '수정할 루틴을 찾을 수 없습니다.'], $_POST);
         }
@@ -79,6 +84,7 @@ final class RoutineController
         }
 
         $_SESSION['flash_success'] = '루틴을 수정했습니다.';
+        $_SESSION['notification_sync_routine'] = true;
         $this->redirect('/routine');
     }
 
@@ -94,6 +100,43 @@ final class RoutineController
         }
 
         $_SESSION['flash_success'] = '루틴을 삭제했습니다.';
+        $_SESSION['notification_sync_routine'] = true;
+        $this->redirect('/routine');
+    }
+
+    public function extend(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/routine', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $routineId = (int) ($_POST['routine_id'] ?? 0);
+        $extensionDays = (int) ($_POST['extension_days'] ?? 0);
+        if ($routineId <= 0 || !$this->routineService->extendRoutine($this->userId(), $routineId, $extensionDays)) {
+            $this->redirectWithErrors('/routine', ['general' => '루틴 기간을 연장할 수 없습니다.']);
+        }
+
+        $_SESSION['flash_success'] = '루틴 기간을 연장했습니다.';
+        $_SESSION['notification_sync_routine'] = true;
+        $this->redirect('/routine');
+    }
+
+    public function finish(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/routine', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $routineId = (int) ($_POST['routine_id'] ?? 0);
+        $status = (string) ($_POST['status'] ?? '');
+        if ($routineId <= 0 || !$this->routineService->finishRoutine($this->userId(), $routineId, $status)) {
+            $this->redirectWithErrors('/routine', ['general' => '루틴을 마무리할 수 없습니다.']);
+        }
+
+        $_SESSION['flash_success'] = $status === 'completed'
+            ? '루틴을 완료로 마무리했습니다.'
+            : '루틴을 중단했습니다.';
+        $_SESSION['notification_sync_routine'] = true;
         $this->redirect('/routine');
     }
 
@@ -122,13 +165,17 @@ final class RoutineController
         }
 
         if ($this->isJsonRequest()) {
+            $isRoutinePageToggle = (string) ($_POST['return_to'] ?? '') === '';
             $this->respondJson([
                 'ok' => true,
                 'message' => $this->stateMessage($nextState),
                 'routineId' => $routineId,
                 'date' => $date,
                 'state' => $nextState,
-                'routine' => $this->routineService->getRoutineSummary($this->userId(), $routineId),
+                'routine' => $this->routineService->getRoutineSummary($this->userId(), $routineId, $isRoutinePageToggle),
+                'pageSummary' => $isRoutinePageToggle
+                    ? $this->routineService->getRoutinePageSummary($this->userId())
+                    : null,
             ]);
         }
 
@@ -155,6 +202,15 @@ final class RoutineController
         if ($returnTo === 'calendar') {
             $date = $this->normalizeDate($date ?? (string) ($_POST['date'] ?? date('Y-m-d')));
             return '/calendar?date=' . rawurlencode($date);
+        }
+
+        if ($returnTo === 'retrospect') {
+            $date = $this->normalizeDate($date ?? (string) ($_POST['date'] ?? date('Y-m-d')));
+            return '/retrospect?date=' . rawurlencode($date);
+        }
+
+        if ($returnTo === 'retrospect_goals') {
+            return '/retrospect?view=goals';
         }
 
         return '/routine';

@@ -30,9 +30,10 @@ final class CalendarController
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($this->userId(), $calendar),
-            'pageStyles' => ['/assets/css/pages/calendar.css'],
+            'pageStyles' => ['/assets/css/components/routine-state.css', '/assets/css/pages/calendar.css'],
             'pageScripts' => [
                 '/assets/js/components/time-grid-selection.js',
+                '/assets/js/components/routine-state.js',
                 '/assets/js/pages/calendar.js',
             ],
         ]);

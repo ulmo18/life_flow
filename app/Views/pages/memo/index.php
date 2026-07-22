@@ -45,6 +45,18 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
         <button type="submit" class="btn btn-secondary">검색</button>
     </form>
 
+    <?php if ($isTrash): ?>
+        <div class="memo-trash-toolbar">
+            <p>삭제한 메모는 30일 뒤 자동으로 영구 삭제됩니다.</p>
+            <?php if (!empty($memoData['items'])): ?>
+                <form method="post" action="/memo/trash/empty" data-memo-empty-trash-form>
+                    <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                    <button type="submit" class="btn btn-ghost">휴지통 비우기</button>
+                </form>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
     <?php if (empty($memoData['items'])): ?>
         <section class="empty-state">
             <h2>
@@ -76,6 +88,9 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
                         <time><?= e((string) ($isTrash ? $memo['deletedLabel'] : $memo['updatedLabel'])) ?></time>
                         <span><?= e((string) $memo['length']) ?>자</span>
                     </div>
+                    <?php if ($isTrash && !empty($memo['expiresLabel'])): ?>
+                        <small class="memo-expiry-label"><?= e((string) $memo['expiresLabel']) ?> 자동 삭제</small>
+                    <?php endif; ?>
                     <div class="memo-card-actions">
                         <?php if ($isTrash): ?>
                             <form method="post" action="/memo/restore">
