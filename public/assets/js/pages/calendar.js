@@ -4,9 +4,10 @@
   const layer = document.querySelector('[data-calendar-layer]');
   const eventSheet = document.querySelector('[data-event-sheet]');
   const eventEditSheet = document.querySelector('[data-event-edit-sheet]');
+  const planItemSheet = document.querySelector('[data-plan-item-sheet]');
+  const planItemEditSheet = document.querySelector('[data-plan-item-edit-sheet]');
   const planSettingsSheet = document.querySelector('[data-plan-settings-sheet]');
   const quickMemoSheet = document.querySelector('[data-quick-memo-sheet]');
-  const routinePopup = document.querySelector('[data-routine-popup]');
   const retrospectPreview = document.querySelector('[data-retrospect-preview]');
   const eventForm = document.getElementById('calendarEventForm');
   const titleInput = document.getElementById('calendarEventTitle');
@@ -21,6 +22,8 @@
   const deleteEventId = document.getElementById('calendarDeleteEventId');
   const editTitleInput = document.getElementById('calendarEditEventTitle');
   const editMemoInput = document.getElementById('calendarEditMemo');
+  const actualLinkAction = document.getElementById('calendarActualLinkAction');
+  const actualLinkChoice = document.querySelector('[data-actual-link-choice]');
   const planPicker = document.querySelector('.calendar-plan-picker');
   const createPlanGroup = document.querySelector('[data-create-plan-group]');
   const createRoutineGroup = document.querySelector('[data-create-routine-group]');
@@ -31,6 +34,23 @@
   const fab = document.querySelector('[data-calendar-fab]');
   const fabToggle = document.querySelector('[data-calendar-fab-toggle]');
   const fabActions = document.querySelector('[data-calendar-fab-actions]');
+  const planLayer = document.getElementById('planLayer');
+  const actualLayer = document.getElementById('actualLayer');
+  const planItemTitle = document.getElementById('calendarPlanItemTitle');
+  const planStartInput = document.getElementById('calendarPlanStartIndex');
+  const planEndInput = document.getElementById('calendarPlanEndIndex');
+  const planSelectedTime = document.getElementById('calendarPlanSelectedTime');
+  const planEditItemId = document.getElementById('calendarPlanEditItemId');
+  const planDeleteItemId = document.getElementById('calendarPlanDeleteItemId');
+  const planEditTitle = document.getElementById('calendarPlanEditTitle');
+  const planEditImportance = document.getElementById('calendarPlanEditImportance');
+  const planEditGoal = document.getElementById('calendarPlanEditGoal');
+  const planEditStart = document.getElementById('calendarPlanEditStartIndex');
+  const planEditEnd = document.getElementById('calendarPlanEditEndIndex');
+  const planEditTime = document.getElementById('calendarPlanEditSelectedTime');
+  const planLinkAction = document.getElementById('calendarPlanLinkAction');
+  const planLinkChoice = document.querySelector('[data-plan-link-choice]');
+  const untimedAction = document.querySelector('.calendar-untimed-action');
   const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
   const routineState = window.LifeFlowRoutineState;
@@ -44,7 +64,7 @@
     hourCycle: 'h23',
   });
 
-  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planSettingsSheet || !quickMemoSheet || !routinePopup || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !selectedTime || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !timeGrid) {
+  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !selectedTime || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !planLayer || !actualLayer || !timeGrid) {
     return;
   }
 
@@ -113,9 +133,10 @@
     layer.hidden = false;
     eventSheet.hidden = panel !== eventSheet;
     eventEditSheet.hidden = panel !== eventEditSheet;
+    planItemSheet.hidden = panel !== planItemSheet;
+    planItemEditSheet.hidden = panel !== planItemEditSheet;
     planSettingsSheet.hidden = panel !== planSettingsSheet;
     quickMemoSheet.hidden = panel !== quickMemoSheet;
-    routinePopup.hidden = panel !== routinePopup;
     retrospectPreview.hidden = panel !== retrospectPreview;
     document.body.classList.add('is-ui-open');
     closeFab();
@@ -146,9 +167,10 @@
     layer.hidden = true;
     eventSheet.hidden = true;
     eventEditSheet.hidden = true;
+    planItemSheet.hidden = true;
+    planItemEditSheet.hidden = true;
     planSettingsSheet.hidden = true;
     quickMemoSheet.hidden = true;
-    routinePopup.hidden = true;
     retrospectPreview.hidden = true;
     document.body.classList.remove('is-ui-open');
   }
@@ -192,7 +214,7 @@
       createRoutineGroup.hidden = isUnscheduled;
     }
 
-    const noneOption = eventForm.querySelector('input[name="plan_template_id"][value=""]');
+    const noneOption = eventForm.querySelector('input[name="daily_plan_item_id"][value=""]');
     if (noneOption) {
       noneOption.checked = true;
     }
@@ -242,7 +264,10 @@
     }
 
     checkRadio(form, 'calendar_tag_id', button.dataset.eventTagId || '');
-    checkRadio(form, 'plan_template_id', button.dataset.eventPlanTemplateId || '');
+    checkRadio(form, 'daily_plan_item_id', button.dataset.eventDailyPlanItemId || '');
+    actualLinkAction.value = 'keep';
+    eventEditSheet.dataset.linked = button.dataset.eventDailyPlanItemId ? '1' : '0';
+    actualLinkChoice.hidden = eventEditSheet.dataset.linked !== '1';
 
     const currentTagId = button.dataset.eventTagId || '';
     form.querySelectorAll('[data-tag-option]').forEach(label => {
@@ -253,9 +278,9 @@
       label.classList.toggle('is-disabled', shouldDisable);
     });
 
-    const currentPlanId = button.dataset.eventPlanTemplateId || '';
+    const currentPlanId = button.dataset.eventDailyPlanItemId || '';
     form.querySelectorAll('[data-plan-option]').forEach(label => {
-      const input = label.querySelector('input[name="plan_template_id"]');
+      const input = label.querySelector('input[name="daily_plan_item_id"]');
       if (!input) return;
 
       const shouldDisable = label.dataset.planDisabled === '1' && input.value !== currentPlanId;
@@ -272,13 +297,89 @@
     focusSheetInput(editTitleInput);
   }
 
+  let calendarMode = 'actual';
+
+  function setCalendarMode(mode) {
+    calendarMode = mode === 'plan' ? 'plan' : 'actual';
+    window.sessionStorage?.setItem('lifeflow.calendarMode', calendarMode);
+    document.querySelectorAll('[data-calendar-mode]').forEach(button => {
+      button.setAttribute('aria-selected', button.dataset.calendarMode === calendarMode ? 'true' : 'false');
+    });
+    planLayer.hidden = calendarMode !== 'plan';
+    actualLayer.hidden = calendarMode !== 'actual';
+    if (untimedAction) untimedAction.hidden = calendarMode !== 'actual';
+    document.querySelector('.time-grid-toolbar span').textContent = calendarMode === 'plan'
+      ? '빈 시간 칸을 길게 누른 뒤 드래그하면 오늘의 계획 일정을 추가할 수 있습니다.'
+      : '빈 시간 칸을 길게 누른 뒤 드래그하면 실제 일정 범위를 선택할 수 있습니다.';
+  }
+
+  function openPlanItemSheet(start, end) {
+    planStartInput.value = String(start);
+    planEndInput.value = String(end);
+    planSelectedTime.textContent = `${indexToTime(start)} ~ ${indexToTime(end)}`;
+    planItemTitle.value = '';
+    openPanel(planItemSheet);
+    focusSheetInput(planItemTitle);
+  }
+
+  function openPlanItemEditSheet(button) {
+    const start = Number(button.dataset.planItemStartIndex);
+    const end = Number(button.dataset.planItemEndIndex);
+    planEditItemId.value = button.dataset.planItemId || '';
+    planDeleteItemId.value = button.dataset.planItemId || '';
+    planEditTitle.value = button.dataset.planItemTitle || '';
+    planEditImportance.value = button.dataset.planItemImportance || 'D';
+    planEditGoal.value = button.dataset.planItemGoalId || '';
+    planEditStart.value = String(start);
+    planEditEnd.value = String(end);
+    planEditTime.textContent = `${indexToTime(start)} ~ ${indexToTime(end)}`;
+    planLinkAction.value = 'keep';
+    planItemEditSheet.dataset.linked = button.dataset.planItemLinked || '0';
+    planLinkChoice.hidden = planItemEditSheet.dataset.linked !== '1';
+    openPanel(planItemEditSheet);
+    focusSheetInput(planEditTitle);
+  }
+
   timeGrid.create({
     grid: daygrid,
-    ignoreSelector: '[data-event-open], button, input, select, textarea, a',
+    ignoreSelector: '[data-event-open], [data-plan-item-open], button, input, select, textarea, a',
     onSelect({ start, end }) {
-      openEventSheet(start, end);
+      if (calendarMode === 'plan') {
+        openPlanItemSheet(start, end);
+      } else {
+        openEventSheet(start, end);
+      }
     },
   });
+
+  document.querySelectorAll('[data-calendar-mode]').forEach(button => {
+    button.addEventListener('click', () => setCalendarMode(button.dataset.calendarMode));
+  });
+  document.querySelectorAll('[data-plan-item-open]').forEach(button => {
+    button.addEventListener('click', () => openPlanItemEditSheet(button));
+  });
+  setCalendarMode(window.sessionStorage?.getItem('lifeflow.calendarMode') || 'actual');
+
+  document.getElementById('calendarPlanItemDeleteForm')?.addEventListener('submit', async event => {
+    if (event.currentTarget.dataset.confirmed === '1') return;
+    event.preventDefault();
+    const linked = planItemEditSheet.dataset.linked === '1';
+    const confirmed = ui && typeof ui.confirm === 'function'
+      ? await ui.confirm({
+          title: '계획 일정 삭제',
+          message: linked
+            ? '계획 일정을 삭제하면 연결은 끊어지지만 실제 일정은 유지됩니다.'
+            : '이 계획 일정을 삭제할까요?',
+          confirmText: '삭제',
+          cancelText: '취소',
+        })
+      : confirm(linked ? '연결을 끊고 계획 일정만 삭제할까요?' : '계획 일정을 삭제할까요?');
+    if (confirmed) {
+      event.currentTarget.dataset.confirmed = '1';
+      event.currentTarget.requestSubmit();
+    }
+  });
+
 
   startCurrentTimeCellUpdates();
 
@@ -292,10 +393,6 @@
 
   document.querySelectorAll('[data-calendar-close]').forEach(button => {
     button.addEventListener('click', closePanels);
-  });
-
-  document.querySelectorAll('[data-routine-open]').forEach(button => {
-    button.addEventListener('click', () => openPanel(routinePopup));
   });
 
   document.querySelectorAll('[data-retrospect-preview-open]').forEach(button => {
@@ -415,15 +512,20 @@
         return;
       }
 
-      if (planPicker.dataset.hasLinkedEvents === '1') {
+      if (planPicker.dataset.hasDailyPlan === '1') {
+        const hasLinks = planPicker.dataset.hasLinkedEvents === '1';
         const confirmed = ui && typeof ui.confirm === 'function'
           ? await ui.confirm({
               title: '계획 일정 변경',
-              message: '계획 일정을 변경하면 기존 실제 일정의 계획 연결이 모두 해제됩니다. 계속할까요?',
+              message: hasLinks
+                ? '새 템플릿을 연결하면 현재 오늘의 계획이 교체되고 기존 실제 일정의 연결도 해제됩니다. 계속할까요?'
+                : '새 템플릿을 연결하면 현재 오늘의 계획이 교체됩니다. 계속할까요?',
               confirmText: '변경',
               cancelText: '취소',
             })
-          : confirm('계획 일정을 변경하면 기존 실제 일정의 계획 연결이 모두 해제됩니다. 계속할까요?');
+          : confirm(hasLinks
+              ? '현재 오늘의 계획을 교체하고 실제 일정 연결을 해제할까요?'
+              : '현재 오늘의 계획을 새 템플릿으로 교체할까요?');
 
         if (!confirmed) {
           window.location.reload();

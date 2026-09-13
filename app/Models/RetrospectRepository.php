@@ -299,31 +299,30 @@ final class RetrospectRepository
     public function listPlanBlocksForDay(int $userId, string $date): array
     {
         $day = $this->findCalendarDay($userId, $date);
-        $planGroupId = $day['plan_group_id'] ?? null;
-        if ($planGroupId === null) {
+        if ($day === null) {
             return [];
         }
 
         $stmt = $this->db->prepare(
             'SELECT
-                pb.id AS plan_block_id,
-                pb.plan_group_id,
-                pb.plan_template_id,
-                pb.start_index,
-                pb.end_index,
-                pb.sort_order,
-                pt.title,
-                pt.importance
-             FROM plan_blocks pb
-             INNER JOIN plan_groups pg ON pg.id = pb.plan_group_id
-             INNER JOIN plan_templates pt ON pt.id = pb.plan_template_id
-             WHERE pg.id = :plan_group_id
-                AND pg.user_id = :user_id
-                AND pg.deleted_at IS NULL
-             ORDER BY pb.sort_order ASC, pb.start_index ASC'
+                dpi.id AS plan_block_id,
+                dp.source_plan_group_id AS plan_group_id,
+                dpi.id AS plan_template_id,
+                dpi.goal_id,
+                dpi.start_index,
+                dpi.end_index,
+                dpi.sort_order,
+                dpi.title,
+                dpi.importance
+             FROM daily_plan_items dpi
+             INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+             WHERE dp.calendar_day_id = :calendar_day_id
+                AND dp.user_id = :user_id
+                AND dpi.deleted_at IS NULL
+             ORDER BY dpi.sort_order ASC, dpi.start_index ASC'
         );
         $stmt->execute([
-            'plan_group_id' => (int) $planGroupId,
+            'calendar_day_id' => (int) $day['id'],
             'user_id' => $userId,
         ]);
 
@@ -350,14 +349,14 @@ final class RetrospectRepository
                 ce.memo,
                 ce.start_index,
                 ce.end_index,
-                ce.plan_template_id,
+                ce.daily_plan_item_id AS plan_template_id,
                 ce.calendar_tag_id,
-                pt.importance AS plan_importance,
+                dpi.importance AS plan_importance,
                 ct.name AS tag_name,
                 ct.color_hex AS tag_color,
                 ct.sort_order AS tag_sort_order
              FROM calendar_events ce
-             LEFT JOIN plan_templates pt ON pt.id = ce.plan_template_id
+             LEFT JOIN daily_plan_items dpi ON dpi.id = ce.daily_plan_item_id
              LEFT JOIN calendar_tags ct ON ct.id = ce.calendar_tag_id
                 AND ct.deleted_at IS NULL
              WHERE ce.user_id = :user_id
@@ -426,33 +425,32 @@ final class RetrospectRepository
     {
         $stmt = $this->db->prepare(
             'SELECT
-                pt.goal_id,
+                dpi.goal_id,
                 COUNT(*) AS plan_count,
                 SUM(CASE WHEN EXISTS (
                     SELECT 1 FROM calendar_events ce
                     WHERE ce.calendar_day_id = cd.id
-                        AND ce.plan_template_id = pt.id
+                        AND ce.daily_plan_item_id = dpi.id
                         AND ce.user_id = cd.user_id
                         AND ce.deleted_at IS NULL
                 ) THEN 1 ELSE 0 END) AS executed_plan_count,
                 SUM((
                     SELECT COUNT(*) FROM calendar_events ce_count
                     WHERE ce_count.calendar_day_id = cd.id
-                        AND ce_count.plan_template_id = pt.id
+                        AND ce_count.daily_plan_item_id = dpi.id
                         AND ce_count.user_id = cd.user_id
                         AND ce_count.deleted_at IS NULL
                 )) AS actual_event_count
              FROM calendar_days cd
-             INNER JOIN plan_groups pg ON pg.id = cd.plan_group_id AND pg.user_id = cd.user_id AND pg.deleted_at IS NULL
-             INNER JOIN plan_blocks pb ON pb.plan_group_id = pg.id
-             INNER JOIN plan_templates pt ON pt.id = pb.plan_template_id AND pt.user_id = cd.user_id AND pt.deleted_at IS NULL
-             INNER JOIN goals g ON g.id = pt.goal_id AND g.user_id = pt.user_id AND g.deleted_at IS NULL
+             INNER JOIN daily_plans dp ON dp.calendar_day_id = cd.id AND dp.user_id = cd.user_id
+             INNER JOIN daily_plan_items dpi ON dpi.daily_plan_id = dp.id AND dpi.deleted_at IS NULL
+             INNER JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id AND g.deleted_at IS NULL
              WHERE cd.user_id = :user_id
                 AND cd.calendar_date <= :today
                 AND (g.period_start_date IS NULL OR cd.calendar_date >= g.period_start_date)
                 AND (g.period_end_date IS NULL OR cd.calendar_date <= g.period_end_date)
-                AND pt.goal_id IS NOT NULL
-             GROUP BY pt.goal_id'
+                AND dpi.goal_id IS NOT NULL
+             GROUP BY dpi.goal_id'
         );
         $stmt->execute(['user_id' => $userId, 'today' => date('Y-m-d')]);
 

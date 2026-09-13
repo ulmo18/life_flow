@@ -117,6 +117,47 @@ final class CalendarController
         $this->redirect($this->calendarPath($date));
     }
 
+    public function storePlanItem(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+        $validation = $this->calendarService->validateDailyPlanItemInput($_POST);
+        if (!$validation['ok'] || $this->calendarService->createDailyPlanItem($this->userId(), $validation['data']) === null) {
+            $errors = $validation['errors'] ?: ['general' => '계획 일정을 추가하지 못했습니다. 시간이 겹치는지 확인해주세요.'];
+            $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null), $errors);
+        }
+        $_SESSION['flash_success'] = '오늘의 계획 일정이 추가되었습니다.';
+        $this->redirect($this->calendarPath($validation['data']['date']));
+    }
+
+    public function updatePlanItem(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+        $validation = $this->calendarService->validateDailyPlanItemInput($_POST, true);
+        if (!$validation['ok'] || !$this->calendarService->updateDailyPlanItem($this->userId(), $validation['data'])) {
+            $errors = $validation['errors'] ?: ['general' => '계획 일정을 수정하지 못했습니다. 연결된 실제 일정이나 겹치는 시간을 확인해주세요.'];
+            $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null), $errors);
+        }
+        $_SESSION['flash_success'] = '오늘의 계획 일정이 수정되었습니다.';
+        $this->redirect($this->calendarPath($validation['data']['date']));
+    }
+
+    public function deletePlanItem(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+        $itemId = filter_var($_POST['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        if ($itemId === false || $itemId <= 0 || !$this->calendarService->deleteDailyPlanItem($this->userId(), (int) $itemId)) {
+            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '계획 일정을 삭제하지 못했습니다.']);
+        }
+        $_SESSION['flash_success'] = '계획 일정이 삭제되었습니다. 연결된 실제 일정은 유지됩니다.';
+        $this->redirect($this->calendarPath($_POST['date'] ?? null));
+    }
+
     /** @param array<string, string> $errors */
     private function redirectWithErrors(string $path, array $errors): void
     {

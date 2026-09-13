@@ -88,7 +88,7 @@ final class RetrospectService
             $plan = $planMap[$goalId] ?? [];
             $routine = $routineMap[$goalId] ?? [];
             $planCount = (int) ($plan['plan_count'] ?? 0);
-            $linkedPlanCount = (int) ($goal['linked_plan_count'] ?? 0);
+            $linkedPlanCount = max((int) ($goal['linked_plan_count'] ?? 0), $planCount);
             $executedPlanCount = (int) ($plan['executed_plan_count'] ?? 0);
             $routineCount = (int) ($routine['routine_count'] ?? 0);
             $doneDayCount = (int) ($routine['done_day_count'] ?? 0);

@@ -150,7 +150,7 @@ final class PlanController
             ]);
         }
 
-        $groupId = $this->planService()->createEditedPlanGroup($this->userId(), $sourceGroupId, $name, $validation['blocks']);
+        $groupId = $this->planService()->updatePlanGroup($this->userId(), $sourceGroupId, $name, $validation['blocks']);
         if ($groupId === null) {
             $this->redirectWithErrors($editPath, ['general' => '계획 수정 중 오류가 발생했습니다.'], [
                 'name' => $name,
@@ -158,7 +158,7 @@ final class PlanController
             ]);
         }
 
-        $_SESSION['flash_success'] = '계획 수정본이 저장되었습니다.';
+        $_SESSION['flash_success'] = '계획 템플릿이 수정되었습니다.';
         $this->redirect('/plan/show?id=' . $groupId);
     }
 
@@ -255,7 +255,7 @@ final class PlanController
 
     private function isPlanDatabaseReady(): bool
     {
-        return Database::configuredDriver() === 'mysql';
+        return in_array(Database::configuredDriver(), ['mysql', 'sqlite'], true);
     }
 
     private function renderUnavailable(): void

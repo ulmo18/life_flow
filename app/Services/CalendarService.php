@@ -12,12 +12,14 @@ final class CalendarService
     private CalendarRepository $calendarRepository;
     private RoutineService $routineService;
     private RetrospectService $retrospectService;
+    private GoalService $goalService;
 
     public function __construct()
     {
         $this->calendarRepository = new CalendarRepository();
         $this->routineService = new RoutineService();
         $this->retrospectService = new RetrospectService();
+        $this->goalService = new GoalService();
     }
 
     /** @return array<string, mixed> */
@@ -27,8 +29,9 @@ final class CalendarService
         $day = $this->calendarRepository->getOrCreateDay($userId, $date);
         $selectedPlanGroupId = isset($day['plan_group_id']) ? (int) $day['plan_group_id'] : null;
         $actualEvents = $this->calendarRepository->getActualEvents($userId, (int) $day['id']);
-        $planBlocks = $this->calendarRepository->getPlanBlocksForGroup($userId, $selectedPlanGroupId);
-        $usedTemplateIds = $this->calendarRepository->getUsedPlanTemplateIds($userId, (int) $day['id']);
+        $dailyPlan = $this->calendarRepository->getDailyPlanForDay($userId, (int) $day['id']);
+        $planBlocks = $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']);
+        $usedPlanItemIds = $this->calendarRepository->getUsedDailyPlanItemIds($userId, (int) $day['id']);
         $dateMeta = $this->buildDateMeta($date);
 
         return [
@@ -43,10 +46,12 @@ final class CalendarService
             'currentIndex' => $date === date('Y-m-d') ? $this->currentTimeIndex() : null,
             'dayId' => (int) $day['id'],
             'selectedPlanGroupId' => $selectedPlanGroupId,
+            'dailyPlan' => $dailyPlan,
             'planGroups' => $this->calendarRepository->listPlanGroups($userId),
+            'goalOptions' => $this->goalService->activeGoalOptions($userId),
             'calendarTags' => $this->calendarRepository->listCalendarTags($userId),
-            'planReminderItems' => $this->buildPlanReminderItems($planBlocks, $usedTemplateIds),
-            'planOptions' => $this->buildPlanOptions($planBlocks, $usedTemplateIds),
+            'planReminderItems' => $this->buildPlanReminderItems($planBlocks, $usedPlanItemIds),
+            'planOptions' => $this->buildPlanOptions($planBlocks, $usedPlanItemIds),
             'planSegments' => $this->buildSegmentsFromBlocks($planBlocks, 'plan'),
             'actualSegments' => $this->buildSegmentsFromEvents($actualEvents),
             'unscheduledEvents' => $this->buildUnscheduledEvents($actualEvents),
@@ -64,9 +69,12 @@ final class CalendarService
         $scheduleType = (string) ($input['schedule_type'] ?? 'timed') === 'unscheduled' ? 'unscheduled' : 'timed';
         $startIndex = filter_var($input['start_index'] ?? null, FILTER_VALIDATE_INT);
         $endIndex = filter_var($input['end_index'] ?? null, FILTER_VALIDATE_INT);
-        $planTemplateId = filter_var($input['plan_template_id'] ?? null, FILTER_VALIDATE_INT);
+        $dailyPlanItemId = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
         $calendarTagId = filter_var($input['calendar_tag_id'] ?? null, FILTER_VALIDATE_INT);
         $memo = trim((string) ($input['memo'] ?? ''));
+        $linkAction = in_array(($input['link_action'] ?? 'keep'), ['keep', 'sync', 'detach'], true)
+            ? (string) $input['link_action']
+            : 'keep';
         $routineIds = $this->normalizeRoutineIds($input['routine_ids'] ?? []);
         $sourceEventId = filter_var($input['source_event_id'] ?? null, FILTER_VALIDATE_INT);
         $errors = [];
@@ -96,9 +104,10 @@ final class CalendarService
                 'scheduleType' => $scheduleType,
                 'startIndex' => $scheduleType === 'timed' && $startIndex !== false ? $startIndex : null,
                 'endIndex' => $scheduleType === 'timed' && $endIndex !== false ? $endIndex : null,
-                'planTemplateId' => $scheduleType === 'timed' && $planTemplateId !== false && $planTemplateId > 0 ? $planTemplateId : null,
+                'dailyPlanItemId' => $scheduleType === 'timed' && $dailyPlanItemId !== false && $dailyPlanItemId > 0 ? $dailyPlanItemId : null,
                 'calendarTagId' => $calendarTagId === false || $calendarTagId <= 0 ? null : $calendarTagId,
                 'memo' => $memo,
+                'linkAction' => $linkAction,
                 'routineIds' => $scheduleType === 'timed' ? $routineIds : [],
                 'sourceEventId' => $scheduleType === 'timed' && $sourceEventId !== false && $sourceEventId > 0
                     ? (int) $sourceEventId
@@ -114,9 +123,12 @@ final class CalendarService
         $eventId = filter_var($input['event_id'] ?? null, FILTER_VALIDATE_INT);
         $scheduleType = (string) ($input['schedule_type'] ?? 'timed') === 'unscheduled' ? 'unscheduled' : 'timed';
         $title = trim((string) ($input['title'] ?? ''));
-        $planTemplateId = filter_var($input['plan_template_id'] ?? null, FILTER_VALIDATE_INT);
+        $dailyPlanItemId = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
         $calendarTagId = filter_var($input['calendar_tag_id'] ?? null, FILTER_VALIDATE_INT);
         $memo = trim((string) ($input['memo'] ?? ''));
+        $linkAction = in_array(($input['link_action'] ?? 'keep'), ['keep', 'sync', 'detach'], true)
+            ? (string) $input['link_action']
+            : 'keep';
         $errors = [];
 
         if ($eventId === false || $eventId <= 0) {
@@ -141,9 +153,10 @@ final class CalendarService
                 'eventId' => $eventId === false ? 0 : $eventId,
                 'title' => $title,
                 'scheduleType' => $scheduleType,
-                'planTemplateId' => $scheduleType === 'timed' && $planTemplateId !== false && $planTemplateId > 0 ? $planTemplateId : null,
+                'dailyPlanItemId' => $scheduleType === 'timed' && $dailyPlanItemId !== false && $dailyPlanItemId > 0 ? $dailyPlanItemId : null,
                 'calendarTagId' => $calendarTagId === false || $calendarTagId <= 0 ? null : $calendarTagId,
                 'memo' => $memo,
+                'linkAction' => $linkAction,
             ],
         ];
     }
@@ -159,7 +172,7 @@ final class CalendarService
                 (string) $data['title'],
                 (int) $data['startIndex'],
                 (int) $data['endIndex'],
-                $data['planTemplateId'] === null ? null : (int) $data['planTemplateId'],
+                $data['dailyPlanItemId'] === null ? null : (int) $data['dailyPlanItemId'],
                 $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
                 (string) $data['memo']
             )
@@ -170,7 +183,7 @@ final class CalendarService
                 (string) $data['scheduleType'],
                 $data['startIndex'] === null ? null : (int) $data['startIndex'],
                 $data['endIndex'] === null ? null : (int) $data['endIndex'],
-                $data['planTemplateId'] === null ? null : (int) $data['planTemplateId'],
+                $data['dailyPlanItemId'] === null ? null : (int) $data['dailyPlanItemId'],
                 $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
                 (string) $data['memo']
             );
@@ -192,9 +205,10 @@ final class CalendarService
             (int) $data['eventId'],
             (string) $data['date'],
             (string) $data['title'],
-            $data['planTemplateId'] === null ? null : (int) $data['planTemplateId'],
+            $data['dailyPlanItemId'] === null ? null : (int) $data['dailyPlanItemId'],
             $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
-            (string) $data['memo']
+            (string) $data['memo'],
+            (string) $data['linkAction']
         );
     }
 
@@ -206,6 +220,82 @@ final class CalendarService
     public function setDayPlanGroup(int $userId, string $date, ?int $planGroupId): bool
     {
         return $this->calendarRepository->setDayPlanGroup($userId, $this->normalizeDate($date), $planGroupId);
+    }
+
+    /** @param array<string, mixed> $input */
+    public function validateDailyPlanItemInput(array $input, bool $requireId = false): array
+    {
+        $date = $this->normalizeDate((string) ($input['date'] ?? ''));
+        $itemId = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $title = trim((string) ($input['title'] ?? ''));
+        $importance = $this->normalizeImportance((string) ($input['importance'] ?? 'D'));
+        $goalId = filter_var($input['goal_id'] ?? null, FILTER_VALIDATE_INT);
+        $startIndex = filter_var($input['start_index'] ?? null, FILTER_VALIDATE_INT);
+        $endIndex = filter_var($input['end_index'] ?? null, FILTER_VALIDATE_INT);
+        $linkAction = in_array(($input['link_action'] ?? 'keep'), ['keep', 'sync', 'detach'], true)
+            ? (string) $input['link_action']
+            : 'keep';
+        $errors = [];
+
+        if ($requireId && ($itemId === false || $itemId <= 0)) {
+            $errors['general'] = '수정할 계획 일정을 찾을 수 없습니다.';
+        }
+        if ($title === '' || mb_strlen($title) > 80) {
+            $errors['title'] = '계획 일정명은 1자 이상 80자 이내로 입력해주세요.';
+        }
+        if ($startIndex === false || $endIndex === false
+            || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) {
+            $errors['time'] = '계획 일정 시간 범위가 올바르지 않습니다.';
+        }
+
+        return [
+            'ok' => $errors === [],
+            'errors' => $errors,
+            'data' => [
+                'date' => $date,
+                'itemId' => $itemId === false ? 0 : (int) $itemId,
+                'title' => $title,
+                'importance' => $importance,
+                'goalId' => $goalId === false || $goalId <= 0 ? null : (int) $goalId,
+                'startIndex' => $startIndex === false ? 0 : (int) $startIndex,
+                'endIndex' => $endIndex === false ? 0 : (int) $endIndex,
+                'linkAction' => $linkAction,
+            ],
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public function createDailyPlanItem(int $userId, array $data): ?int
+    {
+        return $this->calendarRepository->createDailyPlanItem(
+            $userId,
+            (string) $data['date'],
+            (string) $data['title'],
+            (string) $data['importance'],
+            $data['goalId'] === null ? null : (int) $data['goalId'],
+            (int) $data['startIndex'],
+            (int) $data['endIndex']
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    public function updateDailyPlanItem(int $userId, array $data): bool
+    {
+        return $this->calendarRepository->updateDailyPlanItem(
+            $userId,
+            (int) $data['itemId'],
+            (string) $data['title'],
+            (string) $data['importance'],
+            $data['goalId'] === null ? null : (int) $data['goalId'],
+            (int) $data['startIndex'],
+            (int) $data['endIndex'],
+            (string) $data['linkAction']
+        );
+    }
+
+    public function deleteDailyPlanItem(int $userId, int $itemId): bool
+    {
+        return $this->calendarRepository->deleteDailyPlanItem($userId, $itemId);
     }
 
     private function normalizeDate(?string $date): string
@@ -280,39 +370,41 @@ final class CalendarService
     }
 
     /** @param array<int, array<string, mixed>> $blocks */
-    private function buildPlanOptions(array $blocks, array $usedTemplateIds): array
+    private function buildPlanOptions(array $blocks, array $usedPlanItemIds): array
     {
-        return array_map(function (array $block) use ($usedTemplateIds): array {
-            $templateId = (int) $block['plan_template_id'];
+        return array_map(function (array $block) use ($usedPlanItemIds): array {
+            $itemId = (int) $block['daily_plan_item_id'];
             $importance = $this->normalizeImportance((string) ($block['importance'] ?? 'D'));
 
             return [
-                'templateId' => $templateId,
+                'itemId' => $itemId,
+                'templateId' => $itemId,
                 'title' => (string) $block['title'],
                 'importance' => $importance,
                 'importanceBadge' => $importance,
                 'timeRange' => $this->formatTimeRange((int) $block['start_index'], (int) $block['end_index']),
-                'disabled' => in_array($templateId, $usedTemplateIds, true),
+                'disabled' => in_array($itemId, $usedPlanItemIds, true),
             ];
         }, $blocks);
     }
 
     /** @param array<int, array<string, mixed>> $blocks */
-    private function buildPlanReminderItems(array $blocks, array $usedTemplateIds): array
+    private function buildPlanReminderItems(array $blocks, array $usedPlanItemIds): array
     {
-        $items = array_map(function (array $block) use ($usedTemplateIds): array {
+        $items = array_map(function (array $block) use ($usedPlanItemIds): array {
             $importance = $this->normalizeImportance((string) ($block['importance'] ?? 'D'));
-            $templateId = (int) $block['plan_template_id'];
+            $itemId = (int) $block['daily_plan_item_id'];
 
             return [
-                'templateId' => $templateId,
+                'itemId' => $itemId,
+                'templateId' => $itemId,
                 'title' => (string) $block['title'],
                 'importance' => $importance,
                 'importanceBadge' => $importance,
                 'timeRange' => $this->formatTimeRange((int) $block['start_index'], (int) $block['end_index']),
                 'durationMinutes' => ((int) $block['end_index'] - (int) $block['start_index']) * 10,
                 'startIndex' => (int) $block['start_index'],
-                'isLinked' => in_array($templateId, $usedTemplateIds, true),
+                'isLinked' => in_array($itemId, $usedPlanItemIds, true),
             ];
         }, $blocks);
 
@@ -345,7 +437,12 @@ final class CalendarService
                 $segments[] = array_merge($segment, [
                     'title' => (string) $block['title'],
                     'type' => $type,
-                    'templateId' => (int) $block['plan_template_id'],
+                    'itemId' => (int) $block['daily_plan_item_id'],
+                    'goalId' => $block['goal_id'] === null ? null : (int) $block['goal_id'],
+                    'goalTitle' => $block['goal_title'] ?? null,
+                    'startIndex' => (int) $block['start_index'],
+                    'endIndex' => (int) $block['end_index'],
+                    'isLinked' => $block['linked_event_id'] !== null,
                     'importance' => $importance,
                     'importanceBadge' => $importance,
                 ]);
@@ -371,7 +468,7 @@ final class CalendarService
                     'id' => (int) $event['id'],
                     'title' => (string) $event['title'],
                     'type' => 'actual',
-                    'planTemplateId' => $event['plan_template_id'] === null ? null : (int) $event['plan_template_id'],
+                    'dailyPlanItemId' => $event['daily_plan_item_id'] === null ? null : (int) $event['daily_plan_item_id'],
                     'planTitle' => $event['plan_title'] ?? null,
                     'tagId' => $event['calendar_tag_id'] === null ? null : (int) $event['calendar_tag_id'],
                     'tagName' => $event['tag_name'] ?? null,
@@ -450,7 +547,7 @@ final class CalendarService
     private function hasLinkedActualEvents(array $actualEvents): bool
     {
         foreach ($actualEvents as $event) {
-            if ($event['plan_template_id'] !== null) {
+            if ($event['daily_plan_item_id'] !== null) {
                 return true;
             }
         }

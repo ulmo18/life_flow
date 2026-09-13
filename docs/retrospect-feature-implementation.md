@@ -4,6 +4,8 @@
 
 Retrospect is the daily review area. It lets a user review the selected day, compare plans with actual events, check routine follow-through, write three reflection fields, save the current memo, publish the report, and revisit published reports by date.
 
+The Plan side of that comparison comes from the selected date's `daily_plan_items`, not the mutable Plan template. Goal feedback uses the `goal_id` copied onto each daily item, while linked actual events use `calendar_events.daily_plan_item_id`. Routine logs and same-day standalone Memos complete the daily context before KPT is written. Published reports remain snapshots.
+
 The current implementation supports:
 
 - date navigation with previous and next day links

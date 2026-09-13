@@ -117,9 +117,9 @@ final class PlanService
     }
 
     /** @param array<int, array{title: string, importance: string, goal_id: int|null, start_index: int, end_index: int}> $blocks */
-    public function createEditedPlanGroup(int $userId, int $sourceGroupId, string $name, array $blocks): ?int
+    public function updatePlanGroup(int $userId, int $groupId, string $name, array $blocks): ?int
     {
-        return $this->planRepository->createEditedVersion($userId, $sourceGroupId, trim($name), $blocks);
+        return $this->planRepository->updateGroup($userId, $groupId, trim($name), $blocks);
     }
 
     public function copyPlanGroup(int $userId, int $groupId): ?int

@@ -94,29 +94,38 @@ final class PlanRepository
     /**
      * @param array<int, array{title: string, importance: string, start_index: int, end_index: int}> $blocks
      */
-    public function createEditedVersion(int $userId, int $sourceGroupId, string $name, array $blocks): ?int
+    public function updateGroup(int $userId, int $groupId, string $name, array $blocks): ?int
     {
-        $source = $this->findGroup($userId, $sourceGroupId, true);
-        if ($source === null) {
+        if ($this->findGroup($userId, $groupId, true) === null) {
             return null;
         }
-
-        $rootGroupId = (int) ($source['source_plan_group_id'] ?? 0);
-        if ($rootGroupId <= 0) {
-            $rootGroupId = (int) $source['id'];
-        }
-
-        $versionNo = ((int) ($source['version_no'] ?? 1)) + 1;
 
         try {
             $this->db->beginTransaction();
 
-            $newGroupId = $this->insertGroup($userId, $name, $rootGroupId, $versionNo);
-            $this->insertBlocksWithNewTemplates($userId, $newGroupId, $blocks);
-            $this->markDeleted($userId, $sourceGroupId);
+            $templateIds = array_map('intval', array_column($this->findBlocks($groupId), 'plan_template_id'));
+            $stmt = $this->db->prepare('DELETE FROM plan_blocks WHERE plan_group_id = :plan_group_id');
+            $stmt->execute(['plan_group_id' => $groupId]);
+
+            if ($templateIds !== []) {
+                $placeholders = implode(', ', array_fill(0, count($templateIds), '?'));
+                $stmt = $this->db->prepare(
+                    'UPDATE plan_templates SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                     WHERE user_id = ? AND id IN (' . $placeholders . ')'
+                );
+                $stmt->execute(array_merge([$userId], $templateIds));
+            }
+
+            $stmt = $this->db->prepare(
+                'UPDATE plan_groups
+                 SET name = :name, source_plan_group_id = NULL, version_no = 1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+            );
+            $stmt->execute(['name' => $name, 'id' => $groupId, 'user_id' => $userId]);
+            $this->insertBlocksWithNewTemplates($userId, $groupId, $blocks);
 
             $this->db->commit();
-            return $newGroupId;
+            return $groupId;
         } catch (Throwable $exception) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
@@ -143,7 +152,7 @@ final class PlanRepository
             $this->db->beginTransaction();
 
             $newGroupId = $this->insertGroup($userId, (string) $group['name'] . '_복사', null, 1);
-            $this->copyBlocks($newGroupId, $blocks);
+            $this->insertBlocksWithNewTemplates($userId, $newGroupId, $blocks);
 
             $this->db->commit();
             return $newGroupId;

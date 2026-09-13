@@ -27,8 +27,8 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Calendar bottom sheets should scroll internally when their content exceeds the mobile viewport.
 - Keep the bottom-sheet header and close button reachable while its content scrolls, and keep touch controls out of the page-level grid gesture handling.
 - Focus a sheet input while the opening click or pointer gesture still has user activation, then scroll the focused control into view when the visual viewport becomes shorter.
-- The expanded "today's plan" summary should stay compact on mobile, using an internal scroll area once it reaches about 40% of the viewport height.
-- Calendar uses one bottom-right `+` menu for quick memo, untimed schedule creation, routine checking, and baseline Plan settings. A divider separates baseline Plan settings from quick actions.
+- Calendar switches between a Plan schedule tab and an Actual schedule tab without changing the selected date. The Plan tab edits the date-specific copy; the Actual tab retains actual-event entry.
+- Calendar uses one bottom-right `+` bottom sheet. It exposes quick Memo and Plan-link actions, then up to three Plan items and three Routine items. Longer lists expand and scroll in the same sheet.
 - Shared confirmation modals opened from calendar sheets must appear above the calendar-local layer.
 - Calendar block title tooltips should remain hover-only and should not appear during mobile touch editing.
 - Keep the WebView bridge contract and native lifecycle safety rules in `docs/android-webview-integration.md` aligned with the shared time-grid controller.
@@ -49,8 +49,10 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Keep DB queries out of services.
 
 ## Persistence
-- `calendar_days` stores one user/date row and the one selected `plan_group_id` for that day.
-- `calendar_events` stores timed actual schedule blocks and untimed entries. Only timed entries can have a `plan_template_id` link.
+- `calendar_days` stores one user/date row. Its legacy `plan_group_id` mirrors the source template group during migration.
+- `daily_plans` stores one mutable date-specific Plan copy per Calendar day.
+- `daily_plan_items` stores copied or directly-created Plan blocks, including the copied goal link.
+- `calendar_events` stores timed actual schedule blocks and untimed entries. Timed entries link to `daily_plan_items`; the legacy `plan_template_id` remains transitional compatibility data.
 - `calendar_tag_palettes` stores the shared 15-color palette for actual-event tags.
 - Palette HEX values remain identical in light and dark mode; actual-event cards choose their foreground color from palette luminance so the label stays readable.
 - `calendar_tags` stores four default system tags plus user-created personal tags.
@@ -58,12 +60,12 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - See `docs/calendar-feature-implementation.md` for table, route, and UI details.
 
 ## Routine Entry Point
-- The Calendar routine popup reads active routines for the selected date.
+- The Calendar floating bottom sheet reads active routines for the selected date and updates them without another navigation depth.
 - Routine execution toggles from Calendar and Routine page must write to the same `routine_logs` table.
 - Routine execution toggles should update in place with JSON when JavaScript is available, while keeping POST redirect fallback behavior.
 - Calendar uses the shared Routine state control: blank is an empty neutral square, `O` is a filled check, and `X` is a muted cross. A successful toggle changes the control in place without reloading the page.
 - Routine execution controls are available for today and past dates only. Future dates remain visible as calendar dates but cannot receive Routine logs.
-- Keep the popup light enough that it does not block actual schedule input.
+- Keep the Routine section light enough that it does not block actual schedule input.
 
 ## Retrospect Entry Point
 - Calendar shows a Retrospect button as a daily reminder entry point.
@@ -78,7 +80,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - CSS lives in `public/assets/css/components/toast.css`.
 - JavaScript lives in `public/assets/js/components/toast.js`.
 - Use `window.LifeFlowToast.show(message, options)` from page scripts.
-- Calendar may render an initial toast when the selected date has no plan group so the user is nudged to set a baseline plan.
+- Calendar may render an initial toast when the selected date has no daily Plan so the user is nudged to add one directly or connect a template.
 
 ## Notifications
 - Calendar contributes only future selected-Plan reminders for the currently viewed date. Each reminder is scheduled five minutes before its Plan block starts in `Asia/Seoul`.

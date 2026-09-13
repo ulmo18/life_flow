@@ -248,7 +248,7 @@
     }
 
     const summary = sourcePlanInput
-      ? '수정 저장 시 기존 계획은 숨김 처리되고 새 버전으로 저장됩니다. 기존 캘린더와 목표 연결은 이전 버전을 계속 참조합니다.'
+      ? '계획 템플릿을 수정합니다. 이미 캘린더에 복사된 날짜별 계획은 그대로 유지됩니다.'
       : '계획을 저장할까요?';
 
     const confirmed = ui && typeof ui.confirm === 'function'

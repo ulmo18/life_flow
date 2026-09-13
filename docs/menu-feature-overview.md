@@ -17,13 +17,13 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Memo appears directly below Goal in the aside and owns standalone quick notes.
 
 ## Plan
-- Plan stores daily schedule templates.
+- Plan stores reusable daily schedule templates. Editing a template updates that template in place and never changes a date-specific plan already copied into Calendar.
 - The Plan list omits the large menu-name introduction so the first plan card or empty state begins at the top of the content area; a screen-reader heading remains available.
 - A plan is built in the same day-grid style as the calendar.
 - Users define a plan from `00:00` to `24:00` in 10-minute blocks.
 - Saved plans are shown as a list.
-- A saved plan can be selected in the calendar and displayed as a gray schedule block.
-- Plan data is a template source for actual calendar entries and retrospective analysis.
+- Selecting a saved Plan in Calendar creates a date-specific copy, including each block's goal link. Calendar edits apply only to that copy.
+- Plan data is copied into Calendar as daily intention; the daily copy and its actual links feed retrospective analysis.
 
 ## Routine
 - Routine is a habit-tracking area.
@@ -46,8 +46,8 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - See `docs/routine-feature-implementation.md` for table, route, and UI details.
 
 ## Calendar
-- Calendar is the actual execution screen.
-- Users enter real schedules here based on what they actually did.
+- Calendar is the daily intention and execution screen.
+- The Plan schedule tab edits only the selected date's copied plan blocks. The Actual schedule tab keeps the existing actual-event behavior.
 - Calendar uses the current day-grid interaction model.
 - Calendar supports untimed entries for work that belongs to a date but does not have a fixed time range.
 - Calendar event creation can mark selected routines complete for the same date, avoiding duplicate completion work across menus.
@@ -55,6 +55,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Calendar uses the latest submitted Retrospect report as a reminder for how to approach the selected day.
 - If a calendar entry overlaps with a plan, the UI should help the user confirm whether the entry is a copy of that plan or a different schedule.
 - Actual calendar entries are used for retrospective reports together with Plan and Routine data.
+- The floating action opens a bottom sheet with quick Memo and Plan-link actions plus the first three daily Plan and Routine items. Longer lists expand in the same sheet.
 - Fixed schedule tags can be enabled or hidden per user. Hiding a fixed tag removes it from new event choices while preserving its color and all existing event links.
 
 ## Retrospect
@@ -103,8 +104,8 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - See `docs/memo-feature-implementation.md` for routes, persistence, and UI rules.
 
 ## Cross-Menu Rules
-- Plan defines intention.
-- Calendar records execution.
+- Plan defines reusable intention templates.
+- Calendar owns the copied intention for one date and records execution.
 - Routine captures repetition and consistency.
 - Retrospect summarizes the day and stores the report.
 - Goal connects lower-level actions to longer-term outcomes.

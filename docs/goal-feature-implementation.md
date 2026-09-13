@@ -1,5 +1,7 @@
 # Goal Feature Implementation
 
+When a Plan template is connected to Calendar, each block's `goal_id` is copied into the date-specific `daily_plan_items` row. Goal review uses that copied execution context, so later template edits do not rewrite historical daily evidence.
+
 ## Purpose
 Goal helps users live intentionally by connecting long-term outcomes to smaller plans and routines.
 

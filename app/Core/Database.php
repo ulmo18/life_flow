@@ -87,6 +87,7 @@ final class Database
             self::ensureSqliteRoutineGoalColumn($connection);
             self::ensureSqliteRoutineLifecycle($connection);
             self::ensureSqliteCalendarScheduleType($connection);
+            self::ensureSqliteDailyPlans($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteSchemaObjects($connection);
             return;
@@ -159,6 +160,28 @@ final class Database
         $migrationSql = is_file($migrationPath) ? file_get_contents($migrationPath) : false;
         if (!is_string($migrationSql) || trim($migrationSql) === '') {
             throw new PDOException('SQLite calendar migration file not found.');
+        }
+
+        $connection->exec($migrationSql);
+    }
+
+    private static function ensureSqliteDailyPlans(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='calendar_events' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+
+        $columns = $connection->query('PRAGMA table_info(calendar_events)');
+        $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        if (!in_array('daily_plan_item_id', $columnNames, true)) {
+            $connection->exec('ALTER TABLE calendar_events ADD COLUMN daily_plan_item_id INTEGER NULL');
+        }
+
+        $migrationPath = __DIR__ . '/../../sql/migration.daily_plans.sqlite.sql';
+        $migrationSql = is_file($migrationPath) ? file_get_contents($migrationPath) : false;
+        if (!is_string($migrationSql) || trim($migrationSql) === '') {
+            throw new PDOException('SQLite daily plan migration file not found.');
         }
 
         $connection->exec($migrationSql);

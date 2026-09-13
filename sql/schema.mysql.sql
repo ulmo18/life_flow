@@ -284,6 +284,56 @@ CREATE TABLE IF NOT EXISTS `calendar_days` (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `daily_plans` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `calendar_day_id` BIGINT UNSIGNED NOT NULL,
+  `source_plan_group_id` BIGINT UNSIGNED NULL,
+  `name` VARCHAR(80) NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_daily_plans_calendar_day` (`calendar_day_id`),
+  KEY `idx_daily_plans_user` (`user_id`),
+  KEY `idx_daily_plans_source_group` (`source_plan_group_id`),
+  CONSTRAINT `fk_daily_plans_user`
+    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_daily_plans_day`
+    FOREIGN KEY (`calendar_day_id`) REFERENCES `calendar_days` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_daily_plans_source_group`
+    FOREIGN KEY (`source_plan_group_id`) REFERENCES `plan_groups` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `daily_plan_items` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `daily_plan_id` BIGINT UNSIGNED NOT NULL,
+  `source_plan_block_id` BIGINT UNSIGNED NULL,
+  `source_plan_template_id` BIGINT UNSIGNED NULL,
+  `goal_id` BIGINT UNSIGNED NULL,
+  `title` VARCHAR(80) NOT NULL,
+  `importance` CHAR(1) NOT NULL DEFAULT 'D',
+  `start_index` SMALLINT UNSIGNED NOT NULL,
+  `end_index` SMALLINT UNSIGNED NOT NULL,
+  `sort_order` INT UNSIGNED NOT NULL DEFAULT 1,
+  `deleted_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_daily_plan_items_plan_order` (`daily_plan_id`, `sort_order`),
+  KEY `idx_daily_plan_items_goal` (`goal_id`),
+  KEY `idx_daily_plan_items_source_template` (`source_plan_template_id`),
+  CONSTRAINT `fk_daily_plan_items_plan`
+    FOREIGN KEY (`daily_plan_id`) REFERENCES `daily_plans` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_daily_plan_items_source_block`
+    FOREIGN KEY (`source_plan_block_id`) REFERENCES `plan_blocks` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_daily_plan_items_source_template`
+    FOREIGN KEY (`source_plan_template_id`) REFERENCES `plan_templates` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_daily_plan_items_goal`
+    FOREIGN KEY (`goal_id`) REFERENCES `goals` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `chk_daily_plan_items_index_range`
+    CHECK (`start_index` >= 0 AND `end_index` <= 144 AND `start_index` < `end_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `calendar_tag_palettes` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `slug` VARCHAR(40) NOT NULL,
@@ -394,6 +444,7 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
   `start_index` SMALLINT UNSIGNED NULL,
   `end_index` SMALLINT UNSIGNED NULL,
   `plan_template_id` BIGINT UNSIGNED NULL,
+  `daily_plan_item_id` BIGINT UNSIGNED NULL,
   `calendar_tag_id` BIGINT UNSIGNED NULL,
   `memo` TEXT NULL,
   `deleted_at` DATETIME NULL,
@@ -403,6 +454,7 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
   KEY `idx_calendar_events_user_day` (`user_id`, `calendar_day_id`, `deleted_at`),
   KEY `idx_calendar_events_day_time` (`calendar_day_id`, `start_index`, `end_index`),
   KEY `idx_calendar_events_plan_template_id` (`plan_template_id`),
+  KEY `idx_calendar_events_daily_plan_item_id` (`daily_plan_item_id`),
   KEY `idx_calendar_events_tag_id` (`calendar_tag_id`),
   CONSTRAINT `fk_calendar_events_user`
     FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
@@ -414,6 +466,10 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
     ON UPDATE CASCADE,
   CONSTRAINT `fk_calendar_events_plan_template`
     FOREIGN KEY (`plan_template_id`) REFERENCES `plan_templates` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_calendar_events_daily_plan_item`
+    FOREIGN KEY (`daily_plan_item_id`) REFERENCES `daily_plan_items` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT `fk_calendar_events_tag`

@@ -1,5 +1,7 @@
 # Plan Feature Implementation
 
+Plan groups and their blocks are reusable templates. Editing a Plan updates the template in place. Calendar connections are date-specific copies, so an edit never rewrites already-connected days or published Retrospect snapshots.
+
 ## Scope
 
 Plan stores reusable daily schedule groups. A user creates a plan group, drags one or more 10-minute blocks onto the day grid, names each block, chooses an Eisenhower importance level, and saves the group.
@@ -9,28 +11,17 @@ The current implementation supports:
 - Plan group list
 - Plan group creation
 - Plan group detail/preview
-- Versioned plan editing
+- In-place plan template editing
 - Plan group copy
 - Plan group soft delete
 
 ## Runtime Rule
 
-Plan persistence is enabled only when the configured database driver is `mysql`.
+Plan persistence is supported on MySQL/MariaDB and SQLite. Repository statements stay driver-compatible and both explicit schema files contain the Plan template and Calendar daily-copy tables.
 
-If `DB_CONNECTION=sqlite` or `DB_DRIVER=sqlite`, Plan routes render an unavailable page. SQLite schema definitions are still kept as reference/fallback documentation, but the Plan feature should be used with MySQL.
+## Editing Rule
 
-## Versioning Rule
-
-Plan edits always create a new visible version.
-
-That means:
-
-- changing the plan group name creates a new version
-- changing block names creates a new version
-- changing block importance creates a new version
-- changing block positions creates a new version
-
-This keeps existing Calendar and future Goal references stable.
+Plan is a template list, so edits update the selected template group in place. Calendar stability comes from copying the template into `daily_plans` and `daily_plan_items` when it is connected; already-copied days never read mutable template values again.
 
 ## Tables
 
@@ -53,9 +44,7 @@ Delete behavior:
 
 `deleted_at` is used for soft deletion. Deleted groups disappear from the Plan list, while historical calendar and retrospect references can remain valid in future work.
 
-Version behavior:
-
-Plan edit is versioned. Editing a group creates a new `plan_groups` row and soft-deletes the previous visible row. Existing Calendar and Goal references should continue to point at the old row.
+`source_plan_group_id` and `version_no` remain as legacy compatibility columns but new edits reset them to the single current template identity.
 
 ### `plan_blocks`
 
@@ -97,7 +86,7 @@ When creating or editing a plan group, each block creates its own `plan_template
 
 Copy behavior:
 
-When copying a plan group, `plan_templates` rows are not copied. The copied `plan_blocks` reuse the existing `plan_template_id`, so the copy shares the same reusable plan data.
+When copying a plan group, each block receives a new `plan_templates` row so later edits to either template group stay independent.
 
 Goal linkage:
 
@@ -115,9 +104,9 @@ Importance mapping:
 - `GET /plan`: list saved plan groups
 - `GET /plan/show?id={id}`: preview saved plan group and block titles
 - `GET /plan/new`: open plan creation page
-- `GET /plan/edit?id={id}`: open versioned edit page
+- `GET /plan/edit?id={id}`: open the template edit page
 - `POST /plan`: create a plan group
-- `POST /plan/update`: create an edited version and hide the previous visible version
+- `POST /plan/update`: update the selected template group in place
 - `POST /plan/copy`: copy a plan group
 - `POST /plan/delete`: soft delete a plan group
 
@@ -127,7 +116,7 @@ All POST routes require CSRF verification.
 
 - The Plan list keeps its page heading available to screen readers but removes the large visible menu-name header so the first plan card or empty state begins near the top of the content area.
 - The list page shows each visible plan group with its name, time range, block count, detail button, edit button, copy button, and delete button.
-- Plan `version_no` is kept as internal data for versioned editing but is not shown in user-facing Plan or Calendar labels.
+- Legacy Plan version fields are not shown in user-facing Plan or Calendar labels.
 - The list page uses a floating `계획 추가` submit button with the same visual treatment as the editor's floating `계획 저장` button.
 - Plan list action buttons are intentionally compact so repeated plan cards do not become dominated by controls.
 - The detail page shows the saved day grid and a block summary list with block title, time range, importance badge, and template id.
@@ -162,22 +151,15 @@ The shared UI layer also provides hover tooltips for elements with `data-ui-tool
 
 ## Editing Policy
 
-Do not mutate existing plan groups in place.
-
-Use versioned editing:
-
-- Read the current visible plan group.
-- Create a new `plan_groups` row.
-- Create new `plan_templates` and `plan_blocks` for the edited content.
-- Soft-delete the previous visible group.
-- Redirect to the new detail page.
-
-This keeps future Calendar and Goal references to older plan data stable.
+- Verify ownership of the current visible template group.
+- Replace that group's template blocks in one transaction.
+- Archive replaced `plan_templates` rows and create independent rows for the new block set.
+- Redirect to the same group detail page.
+- Never update `daily_plans` or `daily_plan_items` from a Plan edit.
 
 ## Future Notes
 
-- Calendar should link one selected `plan_group` to one day.
-- If a day already has actual schedule entries linked to a plan and the selected plan group changes, the UI should warn that existing actual-plan links must be cleared and re-linked.
-- Deleted plan groups should be displayable later as `Deleted Plan` when historical calendar or retrospect data references them.
+- Calendar copies one selected `plan_group` into one `daily_plan` per day.
+- Replacing a daily Plan warns that the existing copy will be replaced and linked actual events will be detached.
+- Deleted template groups do not affect existing daily copies.
 - Goal linkage uses `plan_templates.goal_id`, not `plan_groups` or `plan_blocks`.
-- If editing history becomes user-facing, add a history page that groups rows by `source_plan_group_id`.

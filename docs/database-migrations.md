@@ -1,5 +1,14 @@
 # Database Migrations
 
+## Daily Plan Copies
+
+Apply after Goal, Plan, and Calendar base tables:
+
+- MySQL/MariaDB: `sql/migration.daily_plans.mysql.sql` once.
+- SQLite: application bootstrap applies `sql/migration.daily_plans.sqlite.sql` after adding `calendar_events.daily_plan_item_id`.
+
+The migration creates `daily_plans` and `daily_plan_items`, copies existing `calendar_days.plan_group_id` selections, preserves copied goal links, and backfills actual-event links where a source template match exists.
+
 ## Purpose
 
 This document records the deployment order for the current Calendar, notification-preference, and Memo schema additions. Both MySQL and SQLite remain supported.
