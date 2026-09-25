@@ -10,7 +10,9 @@
   const sheetLabel = document.getElementById('lifeFlowSheetLabel');
   const sheetInput = document.getElementById('lifeFlowSheetInput');
   const sheetImportanceGroup = document.getElementById('lifeFlowSheetImportanceGroup');
-  const sheetImportance = document.getElementById('lifeFlowSheetImportance');
+  const sheetImportanceInputs = sheetImportanceGroup
+    ? sheetImportanceGroup.querySelectorAll('input[name="life_flow_sheet_importance"]')
+    : [];
   const sheetGoalGroup = document.getElementById('lifeFlowSheetGoalGroup');
   const sheetGoal = document.getElementById('lifeFlowSheetGoal');
   const sheetError = document.getElementById('lifeFlowSheetError');
@@ -19,7 +21,7 @@
   const sheetCancel = sheet ? sheet.querySelector('[data-ui-cancel]') : null;
   const closers = layer ? layer.querySelectorAll('[data-ui-close]') : [];
 
-  if (!layer || !modal || !sheet || !modalTitle || !modalBody || !modalConfirm || !modalCancel || !sheetTitle || !sheetLabel || !sheetInput || !sheetImportanceGroup || !sheetImportance || !sheetGoalGroup || !sheetGoal || !sheetError || !sheetForm || !sheetSubmit || !sheetCancel) {
+  if (!layer || !modal || !sheet || !modalTitle || !modalBody || !modalConfirm || !modalCancel || !sheetTitle || !sheetLabel || !sheetInput || !sheetImportanceGroup || sheetImportanceInputs.length === 0 || !sheetGoalGroup || !sheetGoal || !sheetError || !sheetForm || !sheetSubmit || !sheetCancel) {
     return;
   }
 
@@ -170,7 +172,10 @@
       sheetSubmit.textContent = options.confirmText || '확인';
       sheetCancel.textContent = options.cancelText || '취소';
       sheetImportanceGroup.hidden = !options.showImportance;
-      sheetImportance.value = options.importance || 'D';
+      const selectedImportance = String(options.importance || 'D').toUpperCase();
+      sheetImportanceInputs.forEach(input => {
+        input.checked = input.value === selectedImportance;
+      });
       sheetGoalGroup.hidden = !options.showGoal;
       sheetGoal.innerHTML = '<option value="">연결하지 않음</option>';
       (options.goalOptions || []).forEach(goal => {
@@ -216,9 +221,10 @@
     }
 
     if (sheetOptions?.showImportance) {
+      const selectedImportance = Array.from(sheetImportanceInputs).find(input => input.checked);
       closeLayer({
         title: value,
-        importance: String(sheetImportance.value || 'D').toUpperCase(),
+        importance: String(selectedImportance?.value || 'D').toUpperCase(),
         goalId: sheetGoalGroup.hidden ? null : (sheetGoal.value || null),
       });
       return;

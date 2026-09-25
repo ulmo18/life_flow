@@ -34,19 +34,47 @@ final class CalendarTagController
     public function store(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($this->isJsonRequest()) {
+                $this->respondJson(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], 419);
+            }
             $this->redirectWithErrors(['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $validation = $this->tagService->validateInput($this->userId(), $_POST);
         if (!$validation['ok']) {
+            if ($this->isJsonRequest()) {
+                $message = reset($validation['errors']) ?: '태그 정보를 다시 확인해주세요.';
+                $this->respondJson([
+                    'ok' => false,
+                    'message' => $message,
+                    'errors' => $validation['errors'],
+                ], 422);
+            }
             $this->redirectWithErrors($validation['errors'], $_POST);
         }
 
-        if ($this->tagService->createTag($this->userId(), $validation['data']) === null) {
+        $tagId = $this->tagService->createTag($this->userId(), $validation['data']);
+        if ($tagId === null) {
+            if ($this->isJsonRequest()) {
+                $this->respondJson(['ok' => false, 'message' => '태그 저장 중 오류가 발생했습니다.'], 422);
+            }
             $this->redirectWithErrors(['general' => '태그 저장 중 오류가 발생했습니다.'], $_POST);
         }
 
-        $_SESSION['flash_success'] = '태그가 추가되었습니다.';
+        $message = '태그가 추가되었습니다.';
+        if ($this->isJsonRequest()) {
+            $this->respondJson([
+                'ok' => true,
+                'message' => $message,
+                'tag' => [
+                    'id' => $tagId,
+                    'name' => (string) $validation['data']['name'],
+                    'colorHex' => (string) $validation['data']['colorHex'],
+                ],
+            ]);
+        }
+
+        $_SESSION['flash_success'] = $message;
         $this->redirect('/tags');
     }
 
@@ -114,6 +142,23 @@ final class CalendarTagController
     private function userId(): int
     {
         return (int) ($_SESSION['user_id'] ?? 0);
+    }
+
+    private function isJsonRequest(): bool
+    {
+        $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
+        $requestedWith = (string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '');
+
+        return stripos($accept, 'application/json') !== false || strtolower($requestedWith) === 'xmlhttprequest';
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function respondJson(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     private function render(string $viewPath, array $data = []): void

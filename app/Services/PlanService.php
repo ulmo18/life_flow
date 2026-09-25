@@ -6,16 +6,101 @@ namespace App\Services;
 
 use App\Models\GoalRepository;
 use App\Models\PlanRepository;
+use App\Models\PlanBlockTemplateRepository;
 
 final class PlanService
 {
     private PlanRepository $planRepository;
     private GoalRepository $goalRepository;
+    private PlanBlockTemplateRepository $blockTemplateRepository;
 
     public function __construct()
     {
         $this->planRepository = new PlanRepository();
         $this->goalRepository = new GoalRepository();
+        $this->blockTemplateRepository = new PlanBlockTemplateRepository();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function getBlockTemplates(int $userId): array
+    {
+        return array_map(function (array $template): array {
+            $durationIndex = (int) $template['duration_index'];
+
+            return [
+                'id' => (int) $template['id'],
+                'title' => (string) $template['title'],
+                'durationIndex' => $durationIndex,
+                'durationMinutes' => $durationIndex * 10,
+                'durationLabel' => $this->formatDuration($durationIndex),
+                'importance' => $this->normalizeImportance((string) $template['importance']),
+                'goalId' => $template['goal_id'] === null ? null : (int) $template['goal_id'],
+                'goalTitle' => (string) ($template['goal_title'] ?? ''),
+            ];
+        }, $this->blockTemplateRepository->listForUser($userId));
+    }
+
+    /** @param array<string, mixed> $input */
+    public function validateBlockTemplateInput(int $userId, array $input): array
+    {
+        $title = trim((string) ($input['title'] ?? ''));
+        $durationIndex = filter_var($input['duration_index'] ?? null, FILTER_VALIDATE_INT);
+        $importance = $this->normalizeImportance((string) ($input['importance'] ?? 'D'));
+        $goalId = filter_var($input['goal_id'] ?? null, FILTER_VALIDATE_INT);
+        $errors = [];
+
+        if ($title === '' || mb_strlen($title) > 80) {
+            $errors['title'] = '계획 블록명은 1자 이상 80자 이내로 입력해주세요.';
+        }
+        if ($durationIndex === false || $durationIndex < 1 || $durationIndex > 143) {
+            $errors['duration'] = '기본 소요 시간은 10분부터 23시간 50분까지 선택해주세요.';
+        }
+
+        $normalizedGoalId = $goalId !== false && $goalId > 0
+            && $this->goalRepository->activeGoalExists($userId, (int) $goalId)
+            ? (int) $goalId
+            : null;
+
+        return [
+            'ok' => $errors === [],
+            'errors' => $errors,
+            'data' => [
+                'title' => $title,
+                'durationIndex' => $durationIndex === false ? 0 : (int) $durationIndex,
+                'importance' => $importance,
+                'goalId' => $normalizedGoalId,
+            ],
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public function createBlockTemplate(int $userId, array $data): ?int
+    {
+        return $this->blockTemplateRepository->create(
+            $userId,
+            (string) $data['title'],
+            (int) $data['durationIndex'],
+            (string) $data['importance'],
+            $data['goalId'] === null ? null : (int) $data['goalId']
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    public function updateBlockTemplate(int $userId, int $templateId, array $data): bool
+    {
+        return $this->blockTemplateRepository->update(
+            $userId,
+            $templateId,
+            (string) $data['title'],
+            (int) $data['durationIndex'],
+            (string) $data['importance'],
+            $data['goalId'] === null ? null : (int) $data['goalId']
+        );
+    }
+
+    public function deleteBlockTemplate(int $userId, int $templateId): bool
+    {
+        return $this->blockTemplateRepository->softDelete($userId, $templateId);
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -235,5 +320,21 @@ final class PlanService
         $minute = $minutes % 60;
 
         return sprintf('%02d:%02d', $hour, $minute);
+    }
+
+    private function formatDuration(int $durationIndex): string
+    {
+        $minutes = $durationIndex * 10;
+        $hours = intdiv($minutes, 60);
+        $remainingMinutes = $minutes % 60;
+
+        if ($hours === 0) {
+            return $remainingMinutes . '분';
+        }
+        if ($remainingMinutes === 0) {
+            return $hours . '시간';
+        }
+
+        return $hours . '시간 ' . $remainingMinutes . '분';
     }
 }

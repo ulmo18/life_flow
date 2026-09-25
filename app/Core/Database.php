@@ -88,7 +88,10 @@ final class Database
             self::ensureSqliteRoutineLifecycle($connection);
             self::ensureSqliteCalendarScheduleType($connection);
             self::ensureSqliteDailyPlans($connection);
+            self::ensureSqliteUntimedDailyPlans($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
+            self::ensureSqliteUntimedRetrospectPlans($connection);
+            self::ensureSqlitePlanBlockTemplates($connection);
             self::ensureSqliteSchemaObjects($connection);
             return;
         }
@@ -185,6 +188,65 @@ final class Database
         }
 
         $connection->exec($migrationSql);
+    }
+
+    private static function ensureSqliteUntimedDailyPlans(PDO $connection): void
+    {
+        $columns = $connection->query('PRAGMA table_info(daily_plan_items)');
+        $columnRows = $columns !== false ? $columns->fetchAll() : [];
+        $startColumn = null;
+        foreach ($columnRows as $column) {
+            if ((string) ($column['name'] ?? '') === 'start_index') {
+                $startColumn = $column;
+                break;
+            }
+        }
+        if ($startColumn === null || (int) ($startColumn['notnull'] ?? 0) === 0) {
+            return;
+        }
+
+        self::runSqliteMigration($connection, 'migration.daily_plan_untimed.sqlite.sql');
+    }
+
+    private static function ensureSqliteUntimedRetrospectPlans(PDO $connection): void
+    {
+        $columns = $connection->query('PRAGMA table_info(retrospect_report_plan_items)');
+        $columnRows = $columns !== false ? $columns->fetchAll() : [];
+        $startColumn = null;
+        foreach ($columnRows as $column) {
+            if ((string) ($column['name'] ?? '') === 'start_index') {
+                $startColumn = $column;
+                break;
+            }
+        }
+        if ($startColumn === null || (int) ($startColumn['notnull'] ?? 0) === 0) {
+            return;
+        }
+
+        self::runSqliteMigration($connection, 'migration.retrospect_plan_untimed.sqlite.sql');
+    }
+
+    private static function runSqliteMigration(PDO $connection, string $filename): void
+    {
+        $migrationPath = __DIR__ . '/../../sql/' . $filename;
+        $migrationSql = is_file($migrationPath) ? file_get_contents($migrationPath) : false;
+        if (!is_string($migrationSql) || trim($migrationSql) === '') {
+            throw new PDOException('SQLite migration file not found: ' . $filename);
+        }
+
+        $connection->exec($migrationSql);
+    }
+
+    private static function ensureSqlitePlanBlockTemplates(PDO $connection): void
+    {
+        $table = $connection->query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='plan_block_templates' LIMIT 1"
+        );
+        if ($table !== false && $table->fetchColumn() !== false) {
+            return;
+        }
+
+        self::runSqliteMigration($connection, 'migration.plan_block_templates.sqlite.sql');
     }
 
     private static function ensureSqliteRoutineLifecycle(PDO $connection): void

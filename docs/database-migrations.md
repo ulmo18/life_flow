@@ -30,6 +30,9 @@ Back up the database, then apply these one-time migrations after their prerequis
 5. `sql/migration.routine_lifecycle_validation_triggers.mysql.sql` — optional DB-level validation fallback for hosted MySQL/MariaDB versions that do not enforce CHECK constraints.
 6. `sql/migration.retrospect_event_memo.mysql.sql` — preserves Calendar event memos in published Retrospect snapshots.
 7. `sql/migration.calendar_tag_preferences.mysql.sql` — requires `user` and `calendar_tags`; stores each user's fixed-tag visibility without changing shared tags or historical events.
+8. `sql/migration.daily_plan_untimed.mysql.sql` — requires `daily_plan_items` and `retrospect_report_plan_items`; allows both time indexes to be null for time-unspecified daily Plan items and their published snapshots.
+
+9. `sql/migration.plan_block_templates.mysql.sql` — requires `user` and `goals`; creates the reusable Plan-block template library.
 
 The Routine validation trigger migration depends on the lifecycle columns; the other feature migrations are independent. The order above is the recommended release order for repeatable deployments. Record each applied migration because the `ALTER TABLE` statements are not intended to be rerun.
 
@@ -45,6 +48,8 @@ MySQL application connections set the session timezone to `+00:00`. Before deplo
 - `UserPreferenceRepository` adds missing notification-preference columns for an existing local database.
 - `app/Core/Database.php` automatically applies `sql/migration.routine_lifecycle.sqlite.sql` when the existing Routine table still has the 7-day minimum or lacks lifecycle columns.
 - `app/Core/Database.php` adds `retrospect_report_actual_items.memo_snapshot` when it is missing.
+- `app/Core/Database.php` automatically applies `migration.daily_plan_untimed.sqlite.sql` and `migration.retrospect_plan_untimed.sqlite.sql` when existing Plan time columns are still non-nullable.
+- `app/Core/Database.php` automatically applies `migration.plan_block_templates.sqlite.sql` when the reusable Plan-block template table is missing.
 - Reapplying `sql/schema.sqlite.sql` creates `calendar_tag_preferences`; `sql/migration.calendar_tag_preferences.sqlite.sql` is available for controlled manual migration.
 - The matching `*.sqlite.sql` files remain available for controlled manual migrations.
 - Do not delete SQLite compatibility or fallback code even when production uses MySQL; it remains part of local and fallback support.

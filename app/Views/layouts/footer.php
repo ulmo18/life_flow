@@ -51,15 +51,12 @@
                 <label class="form-label" for="lifeFlowSheetInput" id="lifeFlowSheetLabel"></label>
                 <input class="input" id="lifeFlowSheetInput" type="text" maxlength="80" autocomplete="off">
             </div>
-            <div class="ui-field" id="lifeFlowSheetImportanceGroup" hidden>
-                <label class="form-label" for="lifeFlowSheetImportance">중요도</label>
-                <select class="input" id="lifeFlowSheetImportance">
-                    <option value="A">A - 중요하고 긴급</option>
-                    <option value="B">B - 중요하지만 긴급하지 않음</option>
-                    <option value="C">C - 긴급하지만 중요하지 않음</option>
-                    <option value="D" selected>D - 중요하지도 긴급하지도 않음</option>
-                </select>
-            </div>
+            <fieldset class="importance-choice-group" id="lifeFlowSheetImportanceGroup" hidden>
+                <legend>중요도</legend>
+                <?php foreach (['A' => '중요·긴급', 'B' => '중요·비긴급', 'C' => '긴급·비중요', 'D' => '일반'] as $importance => $label): ?>
+                    <label><input type="radio" name="life_flow_sheet_importance" value="<?= $importance ?>" <?= $importance === 'D' ? 'checked' : '' ?>><span><strong><?= $importance ?></strong><small><?= e($label) ?></small></span></label>
+                <?php endforeach; ?>
+            </fieldset>
             <div class="ui-field" id="lifeFlowSheetGoalGroup" hidden>
                 <label class="form-label" for="lifeFlowSheetGoal">목표</label>
                 <select class="input" id="lifeFlowSheetGoal">
@@ -75,7 +72,11 @@
     </section>
 </div>
 <script src="/assets/js/components/toast.js"></script>
-<script src="/assets/js/components/ui.js"></script>
+<?php
+$uiJsPath = dirname(__DIR__, 3) . '/public/assets/js/components/ui.js';
+$uiJsVersion = is_file($uiJsPath) ? filemtime($uiJsPath) : false;
+?>
+<script src="/assets/js/components/ui.js<?= $uiJsVersion === false ? '' : '?v=' . e((string) $uiJsVersion) ?>"></script>
 <script src="/assets/js/components/android-bridge.js"></script>
 <?php if ($showAppChrome ?? false): ?>
     <script src="/assets/js/components/app-layout.js"></script>

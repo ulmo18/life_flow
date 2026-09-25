@@ -29,6 +29,9 @@
         <script type="application/json" id="planGoalOptionsJson">
             <?= json_encode($goalOptions ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]' ?>
         </script>
+        <script type="application/json" id="planBlockTemplatesJson">
+            <?= json_encode($blockTemplates ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '[]' ?>
+        </script>
 
         <div class="form-group plan-name-field">
             <label class="form-label" for="planName">계획 그룹명</label>
@@ -52,7 +55,14 @@
         <?php endif; ?>
 
         <div class="time-grid-toolbar">
-            <span>빈 시간 칸을 길게 누른 뒤 드래그하면 계획 범위를 선택할 수 있습니다.</span>
+            <label for="planBlockTemplatePicker">계획 블록</label>
+            <select class="input" id="planBlockTemplatePicker">
+                <option value="">직접 입력</option>
+                <?php foreach (($blockTemplates ?? []) as $template): ?>
+                    <option value="<?= e((string) $template['id']) ?>"><?= e((string) $template['title']) ?> · <?= e((string) $template['durationLabel']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <small>템플릿을 선택하면 선택한 시작 시각부터 기본 소요 시간만큼 배치합니다.</small>
         </div>
 
         <section class="daygrid-wrap" aria-label="계획 일정 그리드">

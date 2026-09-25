@@ -6,6 +6,8 @@
   const nameInput = document.getElementById('planName');
   const sourcePlanInput = document.querySelector('input[name="source_plan_group_id"]');
   const goalOptionsJson = document.getElementById('planGoalOptionsJson');
+  const blockTemplatesJson = document.getElementById('planBlockTemplatesJson');
+  const blockTemplatePicker = document.getElementById('planBlockTemplatePicker');
   const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
 
@@ -16,6 +18,7 @@
   let blocks = parseInitialBlocks();
   let allowSubmit = false;
   const goalOptions = parseGoalOptions();
+  const blockTemplates = parseBlockTemplates();
 
   function parseGoalOptions() {
     if (!goalOptionsJson) {
@@ -52,6 +55,21 @@
     } catch (error) {
       return [];
     }
+  }
+
+  function parseBlockTemplates() {
+    if (!blockTemplatesJson) return [];
+    try {
+      const parsed = JSON.parse(blockTemplatesJson.textContent || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function selectedBlockTemplate() {
+    const selectedId = Number(blockTemplatePicker?.value || 0);
+    return blockTemplates.find(template => Number(template.id) === selectedId) || null;
   }
 
   function normalizeImportance(value) {
@@ -205,20 +223,42 @@
     grid: daygrid,
     ignoreSelector: '[data-block-index], button, input, select, textarea, a',
     async onSelect({ start, end }) {
+      const selectedTemplate = selectedBlockTemplate();
       const block = {
         start_index: start,
-        end_index: end,
+        end_index: selectedTemplate ? start + Number(selectedTemplate.durationIndex || 0) : end,
       };
+
+      if (selectedTemplate && block.end_index > 143) {
+        if (start >= 143) {
+          ui?.show?.('23:50 이후에는 오늘 일정으로 배치할 수 없습니다.');
+          return;
+        }
+        const confirmed = ui && typeof ui.confirm === 'function'
+          ? await ui.confirm({
+              title: '오늘 범위를 넘는 계획',
+              message: '이 계획은 오늘 범위를 넘어갑니다. 이후 구간을 제외하고 23:50까지만 배치할까요?',
+              confirmText: '오늘까지만 배치',
+              cancelText: '취소',
+            })
+          : confirm('오늘 이후 구간을 제외하고 23:50까지만 배치할까요?');
+        if (!confirmed) return;
+        block.end_index = 143;
+      }
 
       if (overlaps(block)) {
         ui?.show?.('겹치는 계획 블록은 추가할 수 없습니다.');
         return;
       }
 
-      const details = await promptBlockDetails(block);
-      if (!details) {
-        return;
-      }
+      const details = selectedTemplate
+        ? {
+            title: selectedTemplate.title,
+            importance: selectedTemplate.importance,
+            goalId: selectedTemplate.goalId,
+          }
+        : await promptBlockDetails(block);
+      if (!details) return;
 
       const title = String(details.title || '').trim().slice(0, 80);
       if (!title) {

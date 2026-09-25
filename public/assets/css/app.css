@@ -155,9 +155,87 @@ body[data-theme='dark'] .section {
   font-weight: 700;
 }
 
+.site-brand a {
+  text-decoration: none;
+}
+
 .settings-theme-form {
   display: grid;
   gap: var(--space-2);
+}
+
+.importance-choice-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.importance-choice-group legend {
+  margin-bottom: 6px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.importance-choice-group {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.importance-choice-group legend {
+  grid-column: 1 / -1;
+}
+
+.importance-choice-group label {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.importance-choice-group input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.importance-choice-group label > span {
+  min-height: 52px;
+  display: grid;
+  place-content: center;
+  gap: 1px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-surface-soft);
+  padding: 5px 3px;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.importance-choice-group strong {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.importance-choice-group small {
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.importance-choice-group input:checked + span {
+  border-color: var(--color-primary);
+  background: rgba(255, 94, 91, 0.13);
+  color: var(--color-primary);
+}
+
+.importance-choice-group input:focus-visible + span {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 .settings-theme-option {
@@ -223,10 +301,64 @@ body[data-theme='dark'] .settings-time-option {
 }
 
 .has-app-chrome .site-header-inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-2);
   min-height: 56px;
+}
+
+.has-app-chrome .site-brand {
+  grid-column: 1;
+}
+
+.site-header-guidance {
+  grid-column: 2;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.site-header-guidance a,
+.site-header-guidance button {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 94, 91, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 94, 91, 0.08);
+  padding: 6px 10px;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.site-header-guidance a span:first-child,
+.site-header-guidance button span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-header-guidance a:hover,
+.site-header-guidance a:focus-visible,
+.site-header-guidance button:hover,
+.site-header-guidance button:focus-visible {
+  border-color: rgba(255, 94, 91, 0.48);
+  background: rgba(255, 94, 91, 0.14);
+}
+
+body[data-theme='dark'] .site-header-guidance a,
+body[data-theme='dark'] .site-header-guidance button {
+  border-color: rgba(255, 117, 111, 0.3);
+  background: rgba(255, 117, 111, 0.12);
 }
 
 .menu-toggle,
@@ -238,6 +370,7 @@ body[data-theme='dark'] .settings-time-option {
 }
 
 .menu-toggle {
+  grid-column: 3;
   width: 44px;
   height: 44px;
   display: inline-grid;

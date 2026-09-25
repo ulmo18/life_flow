@@ -369,8 +369,8 @@ final class CalendarRepository
         string $title,
         string $importance,
         ?int $goalId,
-        int $startIndex,
-        int $endIndex
+        ?int $startIndex,
+        ?int $endIndex
     ): ?int {
         try {
             $this->db->beginTransaction();
@@ -395,7 +395,8 @@ final class CalendarRepository
                 $dailyPlanId = (int) $dailyPlan['id'];
             }
 
-            if ($this->hasOverlappingDailyPlanItem($dailyPlanId, $startIndex, $endIndex)) {
+            if ($startIndex !== null && $endIndex !== null
+                && $this->hasOverlappingDailyPlanItem($dailyPlanId, $startIndex, $endIndex)) {
                 $this->db->rollBack();
                 return null;
             }
@@ -446,8 +447,8 @@ final class CalendarRepository
         string $title,
         string $importance,
         ?int $goalId,
-        int $startIndex,
-        int $endIndex,
+        ?int $startIndex,
+        ?int $endIndex,
         string $linkAction
     ): bool {
         try {
@@ -455,7 +456,8 @@ final class CalendarRepository
             $item = $this->findOwnedDailyPlanItem($userId, $itemId);
             if ($item === null
                 || ($goalId !== null && !$this->userOwnsGoal($userId, $goalId))
-                || $this->hasOverlappingDailyPlanItem((int) $item['daily_plan_id'], $startIndex, $endIndex, $itemId)) {
+                || ($startIndex !== null && $endIndex !== null
+                    && $this->hasOverlappingDailyPlanItem((int) $item['daily_plan_id'], $startIndex, $endIndex, $itemId))) {
                 $this->db->rollBack();
                 return false;
             }
@@ -469,29 +471,38 @@ final class CalendarRepository
                 );
                 $stmt->execute(['id' => $linkedEventId, 'user_id' => $userId]);
             } elseif ($linkedEventId !== null && $linkAction === 'sync') {
-                if ($this->hasOverlappingEvent(
-                    $userId,
-                    (int) $item['calendar_day_id'],
-                    $startIndex,
-                    $endIndex,
-                    $linkedEventId
-                )) {
-                    $this->db->rollBack();
-                    return false;
+                if ($startIndex === null || $endIndex === null) {
+                    $stmt = $this->db->prepare(
+                        'UPDATE calendar_events
+                         SET title = :title, updated_at = CURRENT_TIMESTAMP
+                         WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+                    );
+                    $stmt->execute(['title' => $title, 'id' => $linkedEventId, 'user_id' => $userId]);
+                } else {
+                    if ($this->hasOverlappingEvent(
+                        $userId,
+                        (int) $item['calendar_day_id'],
+                        $startIndex,
+                        $endIndex,
+                        $linkedEventId
+                    )) {
+                        $this->db->rollBack();
+                        return false;
+                    }
+                    $stmt = $this->db->prepare(
+                        'UPDATE calendar_events
+                         SET title = :title, start_index = :start_index, end_index = :end_index,
+                             updated_at = CURRENT_TIMESTAMP
+                         WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+                    );
+                    $stmt->execute([
+                        'title' => $title,
+                        'start_index' => $startIndex,
+                        'end_index' => $endIndex,
+                        'id' => $linkedEventId,
+                        'user_id' => $userId,
+                    ]);
                 }
-                $stmt = $this->db->prepare(
-                    'UPDATE calendar_events
-                     SET title = :title, start_index = :start_index, end_index = :end_index,
-                         updated_at = CURRENT_TIMESTAMP
-                     WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
-                );
-                $stmt->execute([
-                    'title' => $title,
-                    'start_index' => $startIndex,
-                    'end_index' => $endIndex,
-                    'id' => $linkedEventId,
-                    'user_id' => $userId,
-                ]);
             }
 
             $stmt = $this->db->prepare(
@@ -576,7 +587,11 @@ final class CalendarRepository
                 $this->db->rollBack();
                 return null;
             }
-            $planTemplateId = $dailyPlanItemId === null ? null : $this->sourceTemplateIdForDailyItem($dailyPlanItemId);
+            $planData = $dailyPlanItemId === null ? null : $this->dailyPlanItemLinkData($dailyPlanItemId);
+            $planTemplateId = $planData['source_plan_template_id'] ?? null;
+            if ($planData !== null) {
+                $title = (string) $planData['title'];
+            }
 
             if ($scheduleType === 'timed' && $startIndex !== null && $endIndex !== null
                 && $this->hasOverlappingEvent($userId, (int) $day['id'], $startIndex, $endIndex)) {
@@ -632,33 +647,35 @@ final class CalendarRepository
         string $title,
         ?int $dailyPlanItemId,
         ?int $calendarTagId,
-        string $memo,
-        string $linkAction
+        string $memo
     ): bool {
         try {
             $this->db->beginTransaction();
             $day = $this->getOrCreateDay($userId, $date);
 
+            $stmt = $this->db->prepare(
+                'SELECT daily_plan_item_id FROM calendar_events
+                 WHERE id = :id AND user_id = :user_id AND calendar_day_id = :calendar_day_id
+                   AND deleted_at IS NULL LIMIT 1'
+            );
+            $stmt->execute(['id' => $eventId, 'user_id' => $userId, 'calendar_day_id' => (int) $day['id']]);
+            $currentEvent = $stmt->fetch();
+            if ($currentEvent === false) {
+                $this->db->rollBack();
+                return false;
+            }
+            $currentPlanItemId = $currentEvent['daily_plan_item_id'] === null
+                ? null
+                : (int) $currentEvent['daily_plan_item_id'];
+
             if ($dailyPlanItemId !== null && !$this->canUseDailyPlanItem($userId, (int) $day['id'], $dailyPlanItemId, $eventId)) {
                 $this->db->rollBack();
                 return false;
             }
-            $planTemplateId = $dailyPlanItemId === null ? null : $this->sourceTemplateIdForDailyItem($dailyPlanItemId);
-
-            if ($dailyPlanItemId !== null && $linkAction === 'detach') {
-                $dailyPlanItemId = null;
-                $planTemplateId = null;
-            } elseif ($dailyPlanItemId !== null && $linkAction === 'sync') {
-                $stmt = $this->db->prepare(
-                    'UPDATE daily_plan_items
-                     SET title = :title, updated_at = CURRENT_TIMESTAMP
-                     WHERE id = :id
-                       AND EXISTS (
-                           SELECT 1 FROM daily_plans dp
-                           WHERE dp.id = daily_plan_items.daily_plan_id AND dp.user_id = :user_id
-                       )'
-                );
-                $stmt->execute(['title' => $title, 'id' => $dailyPlanItemId, 'user_id' => $userId]);
+            $planData = $dailyPlanItemId === null ? null : $this->dailyPlanItemLinkData($dailyPlanItemId);
+            $planTemplateId = $planData['source_plan_template_id'] ?? null;
+            if ($dailyPlanItemId !== null && $dailyPlanItemId !== $currentPlanItemId && $planData !== null) {
+                $title = (string) $planData['title'];
             }
 
             if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId, $eventId)) {
@@ -727,7 +744,11 @@ final class CalendarRepository
                 $this->db->rollBack();
                 return null;
             }
-            $planTemplateId = $dailyPlanItemId === null ? null : $this->sourceTemplateIdForDailyItem($dailyPlanItemId);
+            $planData = $dailyPlanItemId === null ? null : $this->dailyPlanItemLinkData($dailyPlanItemId);
+            $planTemplateId = $planData['source_plan_template_id'] ?? null;
+            if ($planData !== null) {
+                $title = (string) $planData['title'];
+            }
 
             if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId, $eventId)) {
                 $this->db->rollBack();
@@ -965,15 +986,28 @@ final class CalendarRepository
         return $stmt->fetchColumn() !== false;
     }
 
-    private function sourceTemplateIdForDailyItem(int $dailyPlanItemId): ?int
+    /** @return array{title: string, source_plan_template_id: int|null}|null */
+    private function dailyPlanItemLinkData(int $dailyPlanItemId): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT source_plan_template_id FROM daily_plan_items WHERE id = :id LIMIT 1'
+            'SELECT title, source_plan_template_id
+             FROM daily_plan_items
+             WHERE id = :id AND deleted_at IS NULL
+             LIMIT 1'
         );
         $stmt->execute(['id' => $dailyPlanItemId]);
-        $value = $stmt->fetchColumn();
+        $item = $stmt->fetch();
 
-        return $value === false || $value === null ? null : (int) $value;
+        if ($item === false) {
+            return null;
+        }
+
+        return [
+            'title' => (string) $item['title'],
+            'source_plan_template_id' => $item['source_plan_template_id'] === null
+                ? null
+                : (int) $item['source_plan_template_id'],
+        ];
     }
 
     private function calendarTagExists(int $userId, int $calendarTagId, ?int $currentEventId = null): bool

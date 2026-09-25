@@ -467,17 +467,20 @@ final class RetrospectService
     private function formatPlanItems(array $items): array
     {
         return array_map(function (array $item): array {
+            $isTimed = $item['start_index'] !== null && $item['end_index'] !== null;
             return [
                 'plan_group_id' => (int) $item['plan_group_id'],
                 'plan_block_id' => (int) $item['plan_block_id'],
                 'plan_template_id' => (int) $item['plan_template_id'],
                 'title' => (string) $item['title'],
-                'start_index' => (int) $item['start_index'],
-                'end_index' => (int) $item['end_index'],
+                'start_index' => $isTimed ? (int) $item['start_index'] : null,
+                'end_index' => $isTimed ? (int) $item['end_index'] : null,
                 'importance' => $this->normalizeImportance((string) ($item['importance'] ?? 'D')),
                 'is_linked' => false,
                 'sort_order' => (int) $item['sort_order'],
-                'timeRange' => $this->formatTimeRange((int) $item['start_index'], (int) $item['end_index']),
+                'timeRange' => $isTimed
+                    ? $this->formatTimeRange((int) $item['start_index'], (int) $item['end_index'])
+                    : '시간 미정',
             ];
         }, $items);
     }
@@ -533,13 +536,16 @@ final class RetrospectService
     private function formatSnapshotPlanItems(array $items): array
     {
         return array_map(function (array $item): array {
+            $isTimed = $item['start_index'] !== null && $item['end_index'] !== null;
             return [
                 'title' => (string) $item['title_snapshot'],
-                'start_index' => (int) $item['start_index'],
-                'end_index' => (int) $item['end_index'],
+                'start_index' => $isTimed ? (int) $item['start_index'] : null,
+                'end_index' => $isTimed ? (int) $item['end_index'] : null,
                 'importance' => $this->normalizeImportance((string) ($item['importance_snapshot'] ?? 'D')),
                 'is_linked' => (int) $item['is_linked'] === 1,
-                'timeRange' => $this->formatTimeRange((int) $item['start_index'], (int) $item['end_index']),
+                'timeRange' => $isTimed
+                    ? $this->formatTimeRange((int) $item['start_index'], (int) $item['end_index'])
+                    : '시간 미정',
             ];
         }, $items);
     }

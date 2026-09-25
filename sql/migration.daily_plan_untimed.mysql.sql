@@ -1,0 +1,7 @@
+ALTER TABLE `daily_plan_items`
+  MODIFY COLUMN `start_index` SMALLINT UNSIGNED NULL,
+  MODIFY COLUMN `end_index` SMALLINT UNSIGNED NULL;
+
+ALTER TABLE `retrospect_report_plan_items`
+  MODIFY COLUMN `start_index` SMALLINT UNSIGNED NULL,
+  MODIFY COLUMN `end_index` SMALLINT UNSIGNED NULL;

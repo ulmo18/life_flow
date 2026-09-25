@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
   `goal_id` BIGINT UNSIGNED NULL,
   `title` VARCHAR(80) NOT NULL,
   `importance` CHAR(1) NOT NULL DEFAULT 'D',
-  `start_index` SMALLINT UNSIGNED NOT NULL,
-  `end_index` SMALLINT UNSIGNED NOT NULL,
+  `start_index` SMALLINT UNSIGNED NULL,
+  `end_index` SMALLINT UNSIGNED NULL,
   `sort_order` INT UNSIGNED NOT NULL DEFAULT 1,
   `deleted_at` DATETIME NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -37,7 +37,11 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
   CONSTRAINT `fk_daily_plan_items_source_block` FOREIGN KEY (`source_plan_block_id`) REFERENCES `plan_blocks` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_daily_plan_items_source_template` FOREIGN KEY (`source_plan_template_id`) REFERENCES `plan_templates` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_daily_plan_items_goal` FOREIGN KEY (`goal_id`) REFERENCES `goals` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `chk_daily_plan_items_index_range` CHECK (`start_index` >= 0 AND `end_index` <= 144 AND `start_index` < `end_index`)
+  CONSTRAINT `chk_daily_plan_items_index_range` CHECK (
+    (`start_index` IS NULL AND `end_index` IS NULL)
+    OR (`start_index` IS NOT NULL AND `end_index` IS NOT NULL
+        AND `start_index` >= 0 AND `end_index` <= 144 AND `start_index` < `end_index`)
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ALTER TABLE `calendar_events`

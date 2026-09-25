@@ -117,6 +117,7 @@ Rules:
 
 - Plan achievement rate is `linked plan items / total plan items`.
 - A plan item is linked when an actual event references the same `plan_template_id`.
+- `start_index` and `end_index` are both null for a time-unspecified daily Plan snapshot; the UI labels it `시간 미정` and still includes it in count/link metrics.
 
 ### `retrospect_report_actual_items`
 
@@ -203,7 +204,7 @@ All POST routes require CSRF verification.
 - Goal review does not infer goal completion. It reports execution evidence and offers lightweight next-action feedback.
 - Completed Routine history dates are grouped under `YYYY년 M월` headings and placed sequentially in seven columns without weekday headers or calendar-leading blanks. Past-state corrections use the shared Routine endpoint and update the selected cell in place.
 - Daily Retrospect uses the shared Routine state control and updates the affected state, Routine score, and achievement rate in place after a successful JSON response.
-- Calendar's Retrospect button opens the latest submitted-report preview on or before the selected calendar date.
+- Calendar's Retrospect button opens the user's latest submitted-report preview regardless of the selected calendar date.
 - Calendar disables the Retrospect button only when no submitted report exists yet.
 
 ## Metric Definitions

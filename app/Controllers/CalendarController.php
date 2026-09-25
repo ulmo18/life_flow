@@ -21,20 +21,27 @@ final class CalendarController
 
     public function index(): void
     {
-        $calendar = $this->calendarService->getDayViewData($this->userId(), $_GET['date'] ?? null);
+        $userId = $this->userId();
+        $notificationSettings = $this->notificationService->settings($userId);
+        $calendar = $this->calendarService->getDayViewData(
+            $userId,
+            $_GET['date'] ?? null,
+            $notificationSettings
+        );
 
         $this->render('pages/calendar/index', [
             'title' => 'Calendar',
             'calendar' => $calendar,
+            'headerGuidance' => $calendar['headerGuidance'] ?? null,
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($this->userId(), $calendar),
-            'pageStyles' => ['/assets/css/components/routine-state.css', '/assets/css/pages/calendar.css'],
+            'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($userId, $calendar),
+            'pageStyles' => ['/assets/css/components/routine-state.css', $this->versionedAsset('/assets/css/pages/calendar.css')],
             'pageScripts' => [
                 '/assets/js/components/time-grid-selection.js',
                 '/assets/js/components/routine-state.js',
-                '/assets/js/pages/calendar.js',
+                $this->versionedAsset('/assets/js/pages/calendar.js'),
             ],
         ]);
 
@@ -147,15 +154,59 @@ final class CalendarController
 
     public function deletePlanItem(): void
     {
+        $path = $this->calendarPath($_POST['date'] ?? null);
+
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
-            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            if ($this->isJsonRequest()) {
+                $this->respondJson(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], 419);
+            }
+            $this->redirectWithErrors($path, ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
+
         $itemId = filter_var($_POST['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
         if ($itemId === false || $itemId <= 0 || !$this->calendarService->deleteDailyPlanItem($this->userId(), (int) $itemId)) {
-            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '계획 일정을 삭제하지 못했습니다.']);
+            if ($this->isJsonRequest()) {
+                $this->respondJson(['ok' => false, 'message' => '계획 일정을 삭제하지 못했습니다.'], 422);
+            }
+            $this->redirectWithErrors($path, ['general' => '계획 일정을 삭제하지 못했습니다.']);
         }
-        $_SESSION['flash_success'] = '계획 일정이 삭제되었습니다. 연결된 실제 일정은 유지됩니다.';
-        $this->redirect($this->calendarPath($_POST['date'] ?? null));
+
+        $message = '계획 일정이 삭제되었습니다. 연결된 실제 일정은 유지됩니다.';
+        $_SESSION['flash_success'] = $message;
+        if ($this->isJsonRequest()) {
+            $this->respondJson([
+                'ok' => true,
+                'itemId' => (int) $itemId,
+                'message' => $message,
+                'redirect' => $path,
+            ]);
+        }
+        $this->redirect($path);
+    }
+
+    private function versionedAsset(string $publicPath): string
+    {
+        $filePath = dirname(__DIR__, 2) . '/public' . $publicPath;
+        $version = is_file($filePath) ? filemtime($filePath) : false;
+
+        return $version === false ? $publicPath : $publicPath . '?v=' . $version;
+    }
+
+    private function isJsonRequest(): bool
+    {
+        $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
+        $requestedWith = (string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '');
+
+        return stripos($accept, 'application/json') !== false || strtolower($requestedWith) === 'xmlhttprequest';
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function respondJson(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     /** @param array<string, string> $errors */

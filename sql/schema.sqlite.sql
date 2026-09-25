@@ -177,6 +177,27 @@ CREATE INDEX IF NOT EXISTS idx_plan_groups_source_id ON plan_groups(source_plan_
 CREATE INDEX IF NOT EXISTS idx_plan_groups_user_deleted ON plan_groups(user_id, deleted_at);
 CREATE INDEX IF NOT EXISTS idx_plan_groups_user_updated ON plan_groups(user_id, updated_at);
 
+CREATE TABLE IF NOT EXISTS plan_block_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  goal_id INTEGER NULL,
+  title TEXT NOT NULL,
+  duration_index INTEGER NOT NULL,
+  importance TEXT NOT NULL DEFAULT 'D',
+  deleted_at TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE SET NULL ON UPDATE CASCADE,
+  CHECK (duration_index BETWEEN 1 AND 143),
+  CHECK (importance IN ('A', 'B', 'C', 'D'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_block_templates_user_deleted
+  ON plan_block_templates(user_id, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_plan_block_templates_goal_id
+  ON plan_block_templates(goal_id);
+
 CREATE TABLE IF NOT EXISTS plan_blocks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   plan_group_id INTEGER NOT NULL,
@@ -249,8 +270,8 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
   goal_id INTEGER NULL,
   title TEXT NOT NULL,
   importance TEXT NOT NULL DEFAULT 'D',
-  start_index INTEGER NOT NULL,
-  end_index INTEGER NOT NULL,
+  start_index INTEGER NULL,
+  end_index INTEGER NULL,
   sort_order INTEGER NOT NULL DEFAULT 1,
   deleted_at TEXT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -259,7 +280,11 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
   FOREIGN KEY (source_plan_block_id) REFERENCES plan_blocks(id) ON DELETE SET NULL ON UPDATE CASCADE,
   FOREIGN KEY (source_plan_template_id) REFERENCES plan_templates(id) ON DELETE SET NULL ON UPDATE CASCADE,
   FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE SET NULL ON UPDATE CASCADE,
-  CHECK (start_index >= 0 AND end_index <= 144 AND start_index < end_index)
+  CHECK (
+    (start_index IS NULL AND end_index IS NULL)
+    OR (start_index IS NOT NULL AND end_index IS NOT NULL
+        AND start_index >= 0 AND end_index <= 144 AND start_index < end_index)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_daily_plan_items_plan_order ON daily_plan_items(daily_plan_id, sort_order);
@@ -455,8 +480,8 @@ CREATE TABLE IF NOT EXISTS retrospect_report_plan_items (
   plan_block_id INTEGER NULL,
   plan_template_id INTEGER NULL,
   title_snapshot TEXT NOT NULL,
-  start_index INTEGER NOT NULL,
-  end_index INTEGER NOT NULL,
+  start_index INTEGER NULL,
+  end_index INTEGER NULL,
   importance_snapshot TEXT NOT NULL DEFAULT 'D',
   is_linked INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 1,

@@ -13,17 +13,15 @@
   const titleInput = document.getElementById('calendarEventTitle');
   const startInput = document.getElementById('calendarStartIndex');
   const endInput = document.getElementById('calendarEndIndex');
+  const timeFields = document.querySelector('[data-calendar-time-fields]');
   const scheduleTypeInput = document.getElementById('calendarScheduleType');
   const sourceEventIdInput = document.getElementById('calendarSourceEventId');
   const createMemoInput = document.getElementById('calendarEventMemo');
-  const selectedTime = document.getElementById('calendarSelectedTime');
   const editEventId = document.getElementById('calendarEditEventId');
   const editScheduleTypeInput = document.getElementById('calendarEditScheduleType');
   const deleteEventId = document.getElementById('calendarDeleteEventId');
   const editTitleInput = document.getElementById('calendarEditEventTitle');
   const editMemoInput = document.getElementById('calendarEditMemo');
-  const actualLinkAction = document.getElementById('calendarActualLinkAction');
-  const actualLinkChoice = document.querySelector('[data-actual-link-choice]');
   const planPicker = document.querySelector('.calendar-plan-picker');
   const createPlanGroup = document.querySelector('[data-create-plan-group]');
   const createRoutineGroup = document.querySelector('[data-create-routine-group]');
@@ -37,20 +35,25 @@
   const planLayer = document.getElementById('planLayer');
   const actualLayer = document.getElementById('actualLayer');
   const planItemTitle = document.getElementById('calendarPlanItemTitle');
+  const planItemForm = document.getElementById('calendarPlanItemForm');
+  const planItemGoal = document.getElementById('calendarPlanItemGoal');
+  const planBlockTemplatePicker = document.getElementById('calendarPlanBlockTemplate');
+  const planScheduleType = document.getElementById('calendarPlanScheduleType');
+  const planTimeToggle = document.getElementById('calendarPlanTimeToggle');
+  const planCreateTimeFields = document.querySelector('[data-plan-create-time-fields]');
   const planStartInput = document.getElementById('calendarPlanStartIndex');
   const planEndInput = document.getElementById('calendarPlanEndIndex');
   const planSelectedTime = document.getElementById('calendarPlanSelectedTime');
   const planEditItemId = document.getElementById('calendarPlanEditItemId');
   const planDeleteItemId = document.getElementById('calendarPlanDeleteItemId');
   const planEditTitle = document.getElementById('calendarPlanEditTitle');
-  const planEditImportance = document.getElementById('calendarPlanEditImportance');
   const planEditGoal = document.getElementById('calendarPlanEditGoal');
+  const planEditScheduleType = document.getElementById('calendarPlanEditScheduleType');
+  const planEditTimeFields = document.querySelector('[data-plan-edit-time-fields]');
   const planEditStart = document.getElementById('calendarPlanEditStartIndex');
   const planEditEnd = document.getElementById('calendarPlanEditEndIndex');
-  const planEditTime = document.getElementById('calendarPlanEditSelectedTime');
   const planLinkAction = document.getElementById('calendarPlanLinkAction');
   const planLinkChoice = document.querySelector('[data-plan-link-choice]');
-  const untimedAction = document.querySelector('.calendar-untimed-action');
   const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
   const routineState = window.LifeFlowRoutineState;
@@ -64,15 +67,36 @@
     hourCycle: 'h23',
   });
 
-  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !selectedTime || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !planLayer || !actualLayer || !timeGrid) {
+  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !timeFields || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !planLayer || !actualLayer || !planScheduleType || !planTimeToggle || !planCreateTimeFields || !planStartInput || !planEndInput || !planEditScheduleType || !planEditTimeFields || !planEditStart || !planEditEnd || !timeGrid) {
     return;
   }
 
-  function indexToTime(index) {
-    const minutes = index * 10;
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  function getDefaultEventRange() {
+    const currentIndex = Number.parseInt(page.dataset.currentIndex || '', 10);
+    const start = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < 144
+      ? Math.min(currentIndex, 138)
+      : 54;
+
+    return { start, end: Math.min(start + 6, 144) };
+  }
+
+  function rangeOverlaps(start, end, occupiedStart, occupiedEnd) {
+    return start < occupiedEnd && end > occupiedStart;
+  }
+
+  function hasOccupiedRange(start, end, selector, startKey, endKey, excludeKey = '', excludeValue = '') {
+    return Array.from(document.querySelectorAll(selector)).some(element => {
+      if (excludeKey && element.dataset[excludeKey] === String(excludeValue)) return false;
+      const occupiedStart = Number.parseInt(element.dataset[startKey] || '', 10);
+      const occupiedEnd = Number.parseInt(element.dataset[endKey] || '', 10);
+      return Number.isInteger(occupiedStart)
+        && Number.isInteger(occupiedEnd)
+        && rangeOverlaps(start, end, occupiedStart, occupiedEnd);
+    });
+  }
+
+  function showCalendarToast(message) {
+    window.LifeFlowToast?.show?.(message);
   }
 
   function getSeoulCurrentTime() {
@@ -172,6 +196,7 @@
     planSettingsSheet.hidden = true;
     quickMemoSheet.hidden = true;
     retrospectPreview.hidden = true;
+    document.querySelectorAll('[data-quick-tag-create]').forEach(editor => closeQuickTagEditor(editor));
     document.body.classList.remove('is-ui-open');
   }
 
@@ -191,13 +216,20 @@
     checkRadio(eventForm, 'calendar_tag_id', '');
   }
 
-  function openEventSheet(start, end, scheduleType = 'timed') {
+  function openEventSheet(start, end, scheduleType = 'timed', focusTime = false) {
     const isUnscheduled = scheduleType === 'unscheduled';
+    const defaultRange = getDefaultEventRange();
+    const selectedStart = Number.isInteger(start) ? start : defaultRange.start;
+    const selectedEnd = Number.isInteger(end) ? end : defaultRange.end;
     scheduleTypeInput.value = isUnscheduled ? 'unscheduled' : 'timed';
-    startInput.value = isUnscheduled ? '' : String(start);
-    endInput.value = isUnscheduled ? '' : String(end);
+    startInput.disabled = isUnscheduled;
+    endInput.disabled = isUnscheduled;
+    startInput.required = !isUnscheduled;
+    endInput.required = !isUnscheduled;
+    timeFields.hidden = isUnscheduled;
+    startInput.value = String(selectedStart);
+    endInput.value = String(selectedEnd);
     sourceEventIdInput.value = '';
-    selectedTime.textContent = isUnscheduled ? '시간 미정' : `${indexToTime(start)} ~ ${indexToTime(end)}`;
     titleInput.value = '';
     createMemoInput.value = '';
     if (sourceTabs) {
@@ -229,7 +261,7 @@
     });
 
     openPanel(eventSheet);
-    focusSheetInput(titleInput);
+    focusSheetInput(focusTime && !isUnscheduled ? startInput : titleInput);
   }
 
   function checkRadio(form, name, value) {
@@ -259,15 +291,9 @@
     editMemoInput.value = button.dataset.eventMemoTarget
       ? (document.getElementById(button.dataset.eventMemoTarget)?.value || '')
       : (button.dataset.eventMemo || '');
-    if (editPlanGroup) {
-      editPlanGroup.hidden = scheduleType === 'unscheduled';
-    }
-
     checkRadio(form, 'calendar_tag_id', button.dataset.eventTagId || '');
     checkRadio(form, 'daily_plan_item_id', button.dataset.eventDailyPlanItemId || '');
-    actualLinkAction.value = 'keep';
-    eventEditSheet.dataset.linked = button.dataset.eventDailyPlanItemId ? '1' : '0';
-    actualLinkChoice.hidden = eventEditSheet.dataset.linked !== '1';
+    form.dataset.originalPlanId = button.dataset.eventDailyPlanItemId || '';
 
     const currentTagId = button.dataset.eventTagId || '';
     form.querySelectorAll('[data-tag-option]').forEach(label => {
@@ -289,9 +315,17 @@
 
       if (input.value === currentPlanId) {
         input.disabled = false;
+        input.checked = true;
         label.classList.remove('is-disabled');
       }
     });
+
+    if (editPlanGroup) {
+      const hasSelectablePlan = currentPlanId !== '' || Array.from(
+        editPlanGroup.querySelectorAll('input[name="daily_plan_item_id"]:not([value=""])')
+      ).some(input => !input.disabled);
+      editPlanGroup.hidden = scheduleType === 'unscheduled' || !hasSelectablePlan;
+    }
 
     openPanel(eventEditSheet);
     focusSheetInput(editTitleInput);
@@ -301,38 +335,103 @@
 
   function setCalendarMode(mode) {
     calendarMode = mode === 'plan' ? 'plan' : 'actual';
-    window.sessionStorage?.setItem('lifeflow.calendarMode', calendarMode);
     document.querySelectorAll('[data-calendar-mode]').forEach(button => {
       button.setAttribute('aria-selected', button.dataset.calendarMode === calendarMode ? 'true' : 'false');
     });
-    planLayer.hidden = calendarMode !== 'plan';
+    planLayer.hidden = false;
+    planLayer.classList.toggle('is-background', calendarMode === 'actual');
     actualLayer.hidden = calendarMode !== 'actual';
-    if (untimedAction) untimedAction.hidden = calendarMode !== 'actual';
-    document.querySelector('.time-grid-toolbar span').textContent = calendarMode === 'plan'
-      ? '빈 시간 칸을 길게 누른 뒤 드래그하면 오늘의 계획 일정을 추가할 수 있습니다.'
-      : '빈 시간 칸을 길게 누른 뒤 드래그하면 실제 일정 범위를 선택할 수 있습니다.';
+    document.querySelectorAll('[data-calendar-empty-mode]').forEach(prompt => {
+      prompt.hidden = prompt.dataset.calendarEmptyMode !== calendarMode;
+    });
   }
 
-  function openPlanItemSheet(start, end) {
-    planStartInput.value = String(start);
-    planEndInput.value = String(end);
-    planSelectedTime.textContent = `${indexToTime(start)} ~ ${indexToTime(end)}`;
+  function setPlanCreateScheduleType(scheduleType) {
+    const isTimed = scheduleType === 'timed';
+    planScheduleType.value = isTimed ? 'timed' : 'unscheduled';
+    planTimeToggle.checked = isTimed;
+    planCreateTimeFields.hidden = !isTimed;
+    planStartInput.disabled = !isTimed;
+    planEndInput.disabled = !isTimed;
+    planStartInput.required = isTimed;
+    planEndInput.required = isTimed;
+    planSelectedTime.textContent = isTimed
+      ? '선택한 시간에 계획 블록으로 표시됩니다.'
+      : '시간을 정하지 않은 계획은 + 메뉴의 오늘의 계획에서 확인할 수 있습니다.';
+  }
+
+  async function applySelectedPlanBlockTemplate() {
+    if (!planBlockTemplatePicker || !planItemForm) return;
+    const option = planBlockTemplatePicker.selectedOptions[0];
+    if (!option || option.value === '') return;
+
+    planItemTitle.value = option.dataset.title || '';
+    checkRadio(planItemForm, 'importance', option.dataset.importance || 'D');
+    if (planItemGoal) planItemGoal.value = option.dataset.goalId || '';
+    if (planScheduleType.value !== 'timed') return;
+
+    const start = Number.parseInt(planStartInput.value, 10);
+    const duration = Number.parseInt(option.dataset.durationIndex || '', 10);
+    if (!Number.isInteger(start) || !Number.isInteger(duration) || duration < 1) return;
+
+    const desiredEnd = start + duration;
+    if (desiredEnd <= 143) {
+      planEndInput.value = String(desiredEnd);
+      return;
+    }
+
+    if (start >= 143) {
+      showCalendarToast('23:50 이후에는 오늘 일정으로 배치할 수 없습니다.');
+      planBlockTemplatePicker.value = '';
+      return;
+    }
+
+    const confirmed = ui && typeof ui.confirm === 'function'
+      ? await ui.confirm({
+          title: '오늘 범위를 넘는 계획',
+          message: '이 계획은 오늘 범위를 넘어갑니다. 이후 구간을 제외하고 23:50까지만 등록할까요?',
+          confirmText: '오늘까지만 등록',
+          cancelText: '취소',
+        })
+      : confirm('오늘 이후 구간을 제외하고 23:50까지만 등록할까요?');
+    if (confirmed) {
+      planEndInput.value = '143';
+    } else {
+      planBlockTemplatePicker.value = '';
+    }
+  }
+
+  function openPlanItemSheet(start, end, scheduleType = '') {
+    const isTimed = scheduleType === 'timed'
+      || (scheduleType !== 'unscheduled' && Number.isInteger(start) && Number.isInteger(end));
+    const selectedStart = Number.isInteger(start) ? start : 54;
+    const selectedEnd = Number.isInteger(end) ? end : 60;
+    planStartInput.value = String(selectedStart);
+    planEndInput.value = String(selectedEnd);
+    setPlanCreateScheduleType(isTimed ? 'timed' : 'unscheduled');
     planItemTitle.value = '';
+    if (planBlockTemplatePicker) planBlockTemplatePicker.value = '';
+    if (planItemForm) checkRadio(planItemForm, 'importance', 'D');
+    if (planItemGoal) planItemGoal.value = '';
     openPanel(planItemSheet);
     focusSheetInput(planItemTitle);
   }
 
   function openPlanItemEditSheet(button) {
-    const start = Number(button.dataset.planItemStartIndex);
-    const end = Number(button.dataset.planItemEndIndex);
+    const scheduleType = button.dataset.planItemScheduleType === 'unscheduled' ? 'unscheduled' : 'timed';
+    const parsedStart = Number.parseInt(button.dataset.planItemStartIndex || '', 10);
+    const parsedEnd = Number.parseInt(button.dataset.planItemEndIndex || '', 10);
+    const start = Number.isInteger(parsedStart) ? parsedStart : 54;
+    const end = Number.isInteger(parsedEnd) ? parsedEnd : 60;
     planEditItemId.value = button.dataset.planItemId || '';
     planDeleteItemId.value = button.dataset.planItemId || '';
     planEditTitle.value = button.dataset.planItemTitle || '';
-    planEditImportance.value = button.dataset.planItemImportance || 'D';
+    checkRadio(document.getElementById('calendarPlanItemEditForm'), 'importance', button.dataset.planItemImportance || 'D');
     planEditGoal.value = button.dataset.planItemGoalId || '';
+    planEditScheduleType.value = scheduleType;
     planEditStart.value = String(start);
     planEditEnd.value = String(end);
-    planEditTime.textContent = `${indexToTime(start)} ~ ${indexToTime(end)}`;
+    setPlanEditScheduleType(scheduleType);
     planLinkAction.value = 'keep';
     planItemEditSheet.dataset.linked = button.dataset.planItemLinked || '0';
     planLinkChoice.hidden = planItemEditSheet.dataset.linked !== '1';
@@ -340,13 +439,31 @@
     focusSheetInput(planEditTitle);
   }
 
+  function setPlanEditScheduleType(scheduleType) {
+    const isTimed = scheduleType === 'timed';
+    planEditScheduleType.value = isTimed ? 'timed' : 'unscheduled';
+    planEditTimeFields.hidden = !isTimed;
+    planEditStart.disabled = !isTimed;
+    planEditEnd.disabled = !isTimed;
+    planEditStart.required = isTimed;
+    planEditEnd.required = isTimed;
+  }
+
   timeGrid.create({
     grid: daygrid,
     ignoreSelector: '[data-event-open], [data-plan-item-open], button, input, select, textarea, a',
     onSelect({ start, end }) {
       if (calendarMode === 'plan') {
+        if (hasOccupiedRange(start, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex')) {
+          showCalendarToast('이미 등록된 계획 일정과 시간이 겹칩니다.');
+          return;
+        }
         openPlanItemSheet(start, end);
       } else {
+        if (hasOccupiedRange(start, end, '[data-event-open][data-event-start-index]', 'eventStartIndex', 'eventEndIndex')) {
+          showCalendarToast('이미 등록된 실제 일정과 시간이 겹칩니다.');
+          return;
+        }
         openEventSheet(start, end);
       }
     },
@@ -358,10 +475,106 @@
   document.querySelectorAll('[data-plan-item-open]').forEach(button => {
     button.addEventListener('click', () => openPlanItemEditSheet(button));
   });
-  setCalendarMode(window.sessionStorage?.getItem('lifeflow.calendarMode') || 'actual');
+  document.querySelectorAll('[data-plan-add-open]').forEach(button => {
+    button.addEventListener('click', () => openPlanItemSheet());
+  });
+  planTimeToggle.addEventListener('change', async () => {
+    setPlanCreateScheduleType(planTimeToggle.checked ? 'timed' : 'unscheduled');
+    if (planTimeToggle.checked) await applySelectedPlanBlockTemplate();
+  });
+  planBlockTemplatePicker?.addEventListener('change', applySelectedPlanBlockTemplate);
+  planStartInput.addEventListener('change', async () => {
+    if (planBlockTemplatePicker?.value) {
+      await applySelectedPlanBlockTemplate();
+      return;
+    }
+    const start = Number.parseInt(planStartInput.value, 10);
+    const end = Number.parseInt(planEndInput.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      planEndInput.value = String(Math.min(start + 6, 144));
+    }
+  });
+  planEndInput.addEventListener('change', () => {
+    const start = Number.parseInt(planStartInput.value, 10);
+    const end = Number.parseInt(planEndInput.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      planEndInput.value = String(Math.min(start + 1, 144));
+      showCalendarToast('종료시간은 시작시간보다 늦어야 합니다.');
+    }
+  });
+  document.getElementById('calendarPlanItemForm')?.addEventListener('submit', event => {
+    if (planScheduleType.value !== 'timed') return;
+    const start = Number.parseInt(planStartInput.value, 10);
+    const end = Number.parseInt(planEndInput.value, 10);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 144 || end <= start) {
+      event.preventDefault();
+      showCalendarToast('시작시간보다 늦은 종료시간을 선택해주세요.');
+      return;
+    }
+    if (hasOccupiedRange(start, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex')) {
+      event.preventDefault();
+      showCalendarToast('이미 등록된 계획 일정과 시간이 겹칩니다.');
+    }
+  });
+  planEditScheduleType.addEventListener('change', () => {
+    setPlanEditScheduleType(planEditScheduleType.value);
+  });
+  planEditStart.addEventListener('change', () => {
+    const start = Number.parseInt(planEditStart.value, 10);
+    const end = Number.parseInt(planEditEnd.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      planEditEnd.value = String(Math.min(start + 6, 144));
+    }
+  });
+  planEditEnd.addEventListener('change', () => {
+    const start = Number.parseInt(planEditStart.value, 10);
+    const end = Number.parseInt(planEditEnd.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      planEditEnd.value = String(Math.min(start + 1, 144));
+      showCalendarToast('종료시간은 시작시간보다 늦어야 합니다.');
+    }
+  });
+  document.getElementById('calendarPlanItemEditForm')?.addEventListener('submit', event => {
+    if (planEditScheduleType.value !== 'timed') return;
+    const start = Number.parseInt(planEditStart.value, 10);
+    const end = Number.parseInt(planEditEnd.value, 10);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 144 || end <= start) {
+      event.preventDefault();
+      showCalendarToast('시작시간보다 늦은 종료시간을 선택해주세요.');
+      return;
+    }
+    if (hasOccupiedRange(
+      start,
+      end,
+      '[data-plan-item-open]',
+      'planItemStartIndex',
+      'planItemEndIndex',
+      'planItemId',
+      planEditItemId.value
+    )) {
+      event.preventDefault();
+      showCalendarToast('이미 등록된 계획 일정과 시간이 겹칩니다.');
+    }
+  });
+
+  eventForm.querySelectorAll('input[name="daily_plan_item_id"][data-plan-title]').forEach(input => {
+    input.addEventListener('change', () => {
+      if (input.checked) titleInput.value = input.dataset.planTitle || '';
+    });
+  });
+
+  document.getElementById('calendarEventEditForm')?.querySelectorAll('input[name="daily_plan_item_id"][data-plan-title]').forEach(input => {
+    input.addEventListener('change', () => {
+      const form = input.form;
+      if (input.checked && input.value !== (form?.dataset.originalPlanId || '')) {
+        editTitleInput.value = input.dataset.planTitle || '';
+      }
+    });
+  });
+  setCalendarMode('actual');
 
   document.getElementById('calendarPlanItemDeleteForm')?.addEventListener('submit', async event => {
-    if (event.currentTarget.dataset.confirmed === '1') return;
+    const deleteForm = event.currentTarget;
     event.preventDefault();
     const linked = planItemEditSheet.dataset.linked === '1';
     const confirmed = ui && typeof ui.confirm === 'function'
@@ -375,8 +588,30 @@
         })
       : confirm(linked ? '연결을 끊고 계획 일정만 삭제할까요?' : '계획 일정을 삭제할까요?');
     if (confirmed) {
-      event.currentTarget.dataset.confirmed = '1';
-      event.currentTarget.requestSubmit();
+      if (typeof window.fetch !== 'function') {
+        deleteForm.submit();
+        return;
+      }
+
+      try {
+        const response = await fetch(deleteForm.action, {
+          method: 'POST',
+          body: new FormData(deleteForm),
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.message || '계획 일정을 삭제하지 못했습니다.');
+        }
+
+        closePanels();
+        window.location.assign(payload.redirect || `/calendar?date=${encodeURIComponent(page.dataset.calendarDate)}`);
+      } catch (error) {
+        window.LifeFlowToast?.show?.(error.message || '계획 일정을 삭제하지 못했습니다.');
+      }
     }
   });
 
@@ -407,8 +642,30 @@
     button.addEventListener('click', () => openPanel(planSettingsSheet));
   });
 
-  document.querySelectorAll('[data-unscheduled-open]').forEach(button => {
-    button.addEventListener('click', () => openEventSheet(null, null, 'unscheduled'));
+  document.querySelectorAll('[data-actual-event-open]').forEach(button => {
+    button.addEventListener('click', () => openEventSheet(null, null, 'timed', true));
+  });
+
+  document.querySelectorAll('[data-calendar-header-action]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.dataset.calendarHeaderAction === 'plan') {
+        openPlanItemSheet();
+        return;
+      }
+
+      if (button.dataset.calendarHeaderAction !== 'actual') return;
+      const start = Number.parseInt(button.dataset.startIndex || '', 10);
+      const end = Number.parseInt(button.dataset.endIndex || '', 10);
+      const hasRange = Number.isInteger(start) && Number.isInteger(end);
+      openEventSheet(hasRange ? start : null, hasRange ? end : null, 'timed', !hasRange);
+
+      const planItemId = button.dataset.planItemId || '';
+      if (planItemId !== '') {
+        checkRadio(eventForm, 'daily_plan_item_id', planItemId);
+        titleInput.value = button.dataset.planTitle || '';
+        focusSheetInput(titleInput);
+      }
+    });
   });
 
   document.querySelectorAll('[data-quick-memo-open]').forEach(button => {
@@ -434,11 +691,181 @@
     });
   });
 
+  function closeQuickTagEditor(editor) {
+    const group = editor.closest('[data-calendar-tag-group]');
+    const toggle = group?.querySelector('[data-quick-tag-toggle]');
+    const error = editor.querySelector('[data-quick-tag-error]');
+    editor.hidden = true;
+    if (toggle) toggle.hidden = editor.querySelector('[data-quick-tag-palette]') === null;
+    if (error) {
+      error.hidden = true;
+      error.textContent = '';
+    }
+  }
+
+  function appendTagOption(group, tag, selected) {
+    if (!(group instanceof HTMLElement) || !tag?.id) return;
+
+    const label = document.createElement('label');
+    label.className = 'calendar-tag-link';
+    label.dataset.tagOption = String(tag.id);
+    label.dataset.tagDisabled = '0';
+    label.style.setProperty('--tag-color', tag.colorHex || 'var(--color-primary)');
+
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'calendar_tag_id';
+    input.value = String(tag.id);
+    input.checked = selected;
+
+    const swatch = document.createElement('span');
+    swatch.className = 'calendar-tag-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+
+    const name = document.createElement('span');
+    name.textContent = tag.name || '';
+
+    label.append(input, swatch, name);
+    group.insertBefore(label, group.querySelector('[data-quick-tag-toggle]'));
+  }
+
+  function removeUsedQuickTagPalette(paletteId) {
+    document.querySelectorAll('[data-quick-tag-create]').forEach(editor => {
+      editor.querySelectorAll('[data-quick-tag-palette]').forEach(input => {
+        if (input.value === String(paletteId)) {
+          input.closest('label')?.remove();
+        }
+      });
+
+      const remaining = editor.querySelectorAll('[data-quick-tag-palette]');
+      if (remaining.length > 0) {
+        remaining[0].checked = true;
+        return;
+      }
+
+      editor.hidden = true;
+      const group = editor.closest('[data-calendar-tag-group]');
+      const toggle = group?.querySelector('[data-quick-tag-toggle]');
+      if (toggle) toggle.hidden = true;
+    });
+  }
+
+  document.querySelectorAll('[data-quick-tag-toggle]').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      const editor = toggle.parentElement?.querySelector('[data-quick-tag-create]');
+      if (!(editor instanceof HTMLElement)) return;
+      toggle.hidden = true;
+      editor.hidden = false;
+      const nameInput = editor.querySelector('[data-quick-tag-name]');
+      if (nameInput instanceof HTMLInputElement) focusSheetInput(nameInput);
+    });
+  });
+
+  document.querySelectorAll('[data-quick-tag-cancel]').forEach(button => {
+    button.addEventListener('click', () => {
+      const editor = button.closest('[data-quick-tag-create]');
+      if (editor instanceof HTMLElement) closeQuickTagEditor(editor);
+    });
+  });
+
+  document.querySelectorAll('[data-quick-tag-submit]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const editor = button.closest('[data-quick-tag-create]');
+      const group = editor?.closest('[data-calendar-tag-group]');
+      const form = editor?.closest('form');
+      const nameInput = editor?.querySelector('[data-quick-tag-name]');
+      const paletteInput = editor?.querySelector('[data-quick-tag-palette]:checked');
+      const error = editor?.querySelector('[data-quick-tag-error]');
+      const csrfInput = form?.querySelector('input[name="_csrf_token"]');
+      if (!(editor instanceof HTMLElement) || !(group instanceof HTMLElement)
+        || !(nameInput instanceof HTMLInputElement) || !(paletteInput instanceof HTMLInputElement)
+        || !(csrfInput instanceof HTMLInputElement)) return;
+
+      const name = nameInput.value.trim();
+      if (name === '') {
+        if (error) {
+          error.textContent = '태그명을 입력해주세요.';
+          error.hidden = false;
+        }
+        focusSheetInput(nameInput);
+        return;
+      }
+
+      const body = new FormData();
+      body.append('_csrf_token', csrfInput.value);
+      body.append('name', name);
+      body.append('palette_id', paletteInput.value);
+      button.disabled = true;
+
+      try {
+        const response = await fetch('/tags', {
+          method: 'POST',
+          body,
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok || !payload.tag) {
+          throw new Error(payload.message || '태그를 추가하지 못했습니다.');
+        }
+
+        document.querySelectorAll('[data-calendar-tag-group]').forEach(tagGroup => {
+          appendTagOption(tagGroup, payload.tag, tagGroup === group);
+        });
+        removeUsedQuickTagPalette(paletteInput.value);
+        nameInput.value = '';
+        closeQuickTagEditor(editor);
+        showCalendarToast(payload.message || '태그가 추가되었습니다.');
+      } catch (requestError) {
+        if (error) {
+          error.textContent = requestError.message || '태그를 추가하지 못했습니다.';
+          error.hidden = false;
+        }
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
+
+  startInput.addEventListener('change', () => {
+    const start = Number.parseInt(startInput.value, 10);
+    const end = Number.parseInt(endInput.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      endInput.value = String(Math.min(start + 6, 144));
+    }
+  });
+
+  endInput.addEventListener('change', () => {
+    const start = Number.parseInt(startInput.value, 10);
+    const end = Number.parseInt(endInput.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      endInput.value = String(Math.min(start + 1, 144));
+      showCalendarToast('종료시간은 시작시간보다 늦어야 합니다.');
+    }
+  });
+
   eventForm.addEventListener('submit', event => {
+    if (scheduleTypeInput.value === 'timed') {
+      const start = Number.parseInt(startInput.value, 10);
+      const end = Number.parseInt(endInput.value, 10);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 144 || end <= start) {
+        event.preventDefault();
+        showCalendarToast('시작시간보다 늦은 종료시간을 선택해주세요.');
+        return;
+      }
+      if (hasOccupiedRange(start, end, '[data-event-open][data-event-start-index]', 'eventStartIndex', 'eventEndIndex')) {
+        event.preventDefault();
+        showCalendarToast('이미 등록된 실제 일정과 시간이 겹칩니다.');
+        return;
+      }
+    }
+
     const sourceTab = sourceTabs?.querySelector('[data-event-source-tab][aria-selected="true"]')?.dataset.eventSourceTab;
     if (scheduleTypeInput.value === 'timed' && sourceTab === 'unscheduled' && !sourceEventIdInput.value) {
       event.preventDefault();
-      window.LifeFlowToast?.show?.('시간을 배치할 일정을 선택해주세요.');
+      showCalendarToast('시간을 배치할 일정을 선택해주세요.');
     }
   });
 
@@ -501,6 +928,86 @@
         input.click();
       }
     });
+  });
+
+  document.querySelectorAll('[data-calendar-date-swipe]').forEach(header => {
+    let startX = null;
+    let startY = null;
+    let activePointerId = null;
+    let suppressClick = false;
+
+    function navigateFromGesture(endX, endY) {
+      if (startX === null || startY === null) {
+        startX = null;
+        startY = null;
+        return;
+      }
+
+      const deltaX = endX - startX;
+      const deltaY = endY - startY;
+      startX = null;
+      startY = null;
+
+      if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+
+      const targetDate = deltaX > 0 ? header.dataset.prevDate : header.dataset.nextDate;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate || '')) return;
+
+      suppressClick = true;
+      window.setTimeout(() => { suppressClick = false; }, 500);
+      window.location.href = `/calendar?date=${encodeURIComponent(targetDate)}`;
+    }
+
+    if (window.PointerEvent) {
+      header.addEventListener('pointerdown', event => {
+        if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        activePointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+      });
+
+      header.addEventListener('pointerup', event => {
+        if (event.pointerId !== activePointerId) return;
+        activePointerId = null;
+        navigateFromGesture(event.clientX, event.clientY);
+      });
+
+      header.addEventListener('pointercancel', event => {
+        if (event.pointerId !== activePointerId) return;
+        activePointerId = null;
+        startX = null;
+        startY = null;
+      });
+    } else {
+      header.addEventListener('touchstart', event => {
+        if (event.touches.length !== 1) return;
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+      }, { passive: true });
+
+      header.addEventListener('touchend', event => {
+        if (event.changedTouches.length !== 1) {
+          startX = null;
+          startY = null;
+          return;
+        }
+        navigateFromGesture(event.changedTouches[0].clientX, event.changedTouches[0].clientY);
+      }, { passive: true });
+
+      header.addEventListener('touchcancel', () => {
+        startX = null;
+        startY = null;
+      }, { passive: true });
+    }
+
+    header.addEventListener('dragstart', event => event.preventDefault());
+
+    header.addEventListener('click', event => {
+      if (!suppressClick) return;
+      event.preventDefault();
+      event.stopPropagation();
+      suppressClick = false;
+    }, true);
   });
 
   if (planPicker) {

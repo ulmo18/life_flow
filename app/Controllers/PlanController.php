@@ -24,10 +24,13 @@ final class PlanController
         $this->render('pages/plan/index', [
             'title' => 'Plan',
             'plans' => $this->planService()->getPlanList($this->userId()),
+            'blockTemplates' => $this->planService()->getBlockTemplates($this->userId()),
+            'goalOptions' => $this->goalService()->activeGoalOptions($this->userId()),
+            'activeView' => ($_GET['view'] ?? '') === 'blocks' ? 'blocks' : 'days',
             'csrfToken' => Csrf::token(),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
-            'pageStyles' => ['/assets/css/pages/plan.css'],
+            'pageStyles' => [$this->versionedAsset('/assets/css/pages/plan.css')],
         ]);
 
         unset($_SESSION['flash_success'], $_SESSION['errors']);
@@ -52,8 +55,8 @@ final class PlanController
             'plan' => $plan,
             'csrfToken' => Csrf::token(),
             'pageStyles' => [
-                '/assets/css/pages/calendar.css',
-                '/assets/css/pages/plan.css',
+                $this->versionedAsset('/assets/css/pages/calendar.css'),
+                $this->versionedAsset('/assets/css/pages/plan.css'),
             ],
         ]);
     }
@@ -203,6 +206,62 @@ final class PlanController
         $this->redirect('/plan');
     }
 
+    public function storeBlockTemplate(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $validation = $this->planService()->validateBlockTemplateInput($this->userId(), $_POST);
+        if (!$validation['ok'] || $this->planService()->createBlockTemplate($this->userId(), $validation['data']) === null) {
+            $this->redirectWithErrors(
+                '/plan?view=blocks',
+                $validation['errors'] ?: ['general' => '계획 블록 템플릿을 저장하지 못했습니다.']
+            );
+        }
+
+        $_SESSION['flash_success'] = '계획 블록 템플릿이 저장되었습니다.';
+        $this->redirect('/plan?view=blocks');
+    }
+
+    public function updateBlockTemplate(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $templateId = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
+        $validation = $this->planService()->validateBlockTemplateInput($this->userId(), $_POST);
+        if (
+            $templateId === false || $templateId <= 0 || !$validation['ok']
+            || !$this->planService()->updateBlockTemplate($this->userId(), (int) $templateId, $validation['data'])
+        ) {
+            $this->redirectWithErrors(
+                '/plan?view=blocks',
+                $validation['errors'] ?: ['general' => '계획 블록 템플릿을 수정하지 못했습니다.']
+            );
+        }
+
+        $_SESSION['flash_success'] = '계획 블록 템플릿이 수정되었습니다.';
+        $this->redirect('/plan?view=blocks');
+    }
+
+    public function deleteBlockTemplate(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $templateId = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
+        if ($templateId === false || $templateId <= 0
+            || !$this->planService()->deleteBlockTemplate($this->userId(), (int) $templateId)) {
+            $this->redirectWithErrors('/plan?view=blocks', ['general' => '계획 블록 템플릿을 삭제하지 못했습니다.']);
+        }
+
+        $_SESSION['flash_success'] = '계획 블록 템플릿이 삭제되었습니다. 이미 복사한 일정은 유지됩니다.';
+        $this->redirect('/plan?view=blocks');
+    }
+
     /** @return array<int, mixed> */
     private function decodeBlocks(string $blocksJson): array
     {
@@ -222,13 +281,14 @@ final class PlanController
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
             'goalOptions' => $this->goalService()->activeGoalOptions($this->userId()),
+            'blockTemplates' => $this->planService()->getBlockTemplates($this->userId()),
             'pageStyles' => [
-                '/assets/css/pages/calendar.css',
-                '/assets/css/pages/plan.css',
+                $this->versionedAsset('/assets/css/pages/calendar.css'),
+                $this->versionedAsset('/assets/css/pages/plan.css'),
             ],
             'pageScripts' => [
                 '/assets/js/components/time-grid-selection.js',
-                '/assets/js/pages/plan.js',
+                $this->versionedAsset('/assets/js/pages/plan.js'),
             ],
         ], $extraData));
 
@@ -292,5 +352,13 @@ final class PlanController
     {
         header('Location: ' . $path);
         exit;
+    }
+
+    private function versionedAsset(string $publicPath): string
+    {
+        $filePath = dirname(__DIR__, 2) . '/public' . $publicPath;
+        $version = is_file($filePath) ? filemtime($filePath) : false;
+
+        return $version === false ? $publicPath : $publicPath . '?v=' . $version;
     }
 }

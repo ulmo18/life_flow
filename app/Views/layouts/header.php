@@ -1,10 +1,14 @@
+<?php
+$appCssPath = dirname(__DIR__, 3) . '/public/assets/css/app.css';
+$appCssVersion = is_file($appCssPath) ? filemtime($appCssPath) : false;
+?>
 <!doctype html>
 <html lang="ko">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e($title ?? 'LifeFlow') ?></title>
-    <link rel="stylesheet" href="/assets/css/app.css">
+    <link rel="stylesheet" href="/assets/css/app.css<?= $appCssVersion === false ? '' : '?v=' . e((string) $appCssVersion) ?>">
     <link rel="stylesheet" href="/assets/css/components/ui.css">
     <link rel="stylesheet" href="/assets/css/components/toast.css">
     <?php foreach (($pageStyles ?? []) as $stylePath): ?>
@@ -30,8 +34,30 @@ $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
 <div class="app-shell<?= $showAppChrome ? ' has-app-chrome' : '' ?>">
     <header class="site-header">
         <div class="site-header-inner">
-            <h1 class="site-brand">LifeFlow</h1>
+            <h1 class="site-brand"><a href="/dashboard">LifeFlow</a></h1>
             <?php if ($showAppChrome): ?>
+                <?php if (is_array($headerGuidance ?? null) && !empty($headerGuidance['message'])): ?>
+                    <div class="site-header-guidance">
+                        <?php if (($headerGuidance['kind'] ?? '') === 'retrospect' && !empty($headerGuidance['href'])): ?>
+                            <a href="<?= e((string) $headerGuidance['href']) ?>">
+                                <span><?= e((string) $headerGuidance['message']) ?></span>
+                                <span aria-hidden="true">&rsaquo;</span>
+                            </a>
+                        <?php else: ?>
+                            <button
+                                type="button"
+                                data-calendar-header-action="<?= e((string) ($headerGuidance['kind'] ?? '')) ?>"
+                                data-plan-item-id="<?= e((string) ($headerGuidance['planItemId'] ?? '')) ?>"
+                                data-plan-title="<?= e((string) ($headerGuidance['planTitle'] ?? '')) ?>"
+                                data-start-index="<?= e((string) ($headerGuidance['startIndex'] ?? '')) ?>"
+                                data-end-index="<?= e((string) ($headerGuidance['endIndex'] ?? '')) ?>"
+                            >
+                                <span><?= e((string) $headerGuidance['message']) ?></span>
+                                <span aria-hidden="true">&rsaquo;</span>
+                            </button>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
                 <button
                     class="menu-toggle"
                     type="button"

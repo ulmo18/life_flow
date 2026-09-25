@@ -1,6 +1,6 @@
 # Plan Feature Implementation
 
-Plan groups and their blocks are reusable templates. Editing a Plan updates the template in place. Calendar connections are date-specific copies, so an edit never rewrites already-connected days or published Retrospect snapshots.
+Plan owns a reusable Plan-block library and reusable daily templates. Daily templates and Calendar plans receive copies, so library edits never rewrite previously composed schedules, connected days, or published Retrospect snapshots.
 
 ## Scope
 
@@ -14,6 +14,8 @@ The current implementation supports:
 - In-place plan template editing
 - Plan group copy
 - Plan group soft delete
+- Plan-block template create, list, edit, and soft delete
+- Mixing copied Plan-block templates with directly entered blocks in one daily template
 
 ## Runtime Rule
 
@@ -99,6 +101,24 @@ Importance mapping:
 - `C`: urgent but not important
 - `D`: not important and not urgent
 
+### `plan_block_templates`
+
+The user-owned library unit for one reusable activity. It is separate from `plan_templates`, which remains a snapshot owned by a placed daily-template block.
+
+Important columns:
+
+- `id`
+- `user_id`
+- `goal_id`
+- `title`
+- `duration_index`
+- `importance`
+- `deleted_at`
+- `created_at`
+- `updated_at`
+
+`duration_index` is a 10-minute count from `1` through `143`, representing 10 minutes through 23 hours 50 minutes. The library does not store start or end clock times. Deleting a library item hides it from future selection and does not change copies already placed in daily templates or Calendar.
+
 ## Current Routes
 
 - `GET /plan`: list saved plan groups
@@ -109,6 +129,9 @@ Importance mapping:
 - `POST /plan/update`: update the selected template group in place
 - `POST /plan/copy`: copy a plan group
 - `POST /plan/delete`: soft delete a plan group
+- `POST /plan/block-template`: create a Plan-block template
+- `POST /plan/block-template/update`: update an owned visible Plan-block template
+- `POST /plan/block-template/delete`: soft delete an owned Plan-block template
 
 All POST routes require CSRF verification.
 
@@ -132,6 +155,10 @@ All POST routes require CSRF verification.
 - `Plan Save` is a floating button.
 - Copying a plan group redirects back to the plan list, not to the copied plan detail page.
 - Plan block backgrounds stay neutral in an organic gray tone. Eisenhower importance colors are applied only inside the circular `A/B/C/D` badge so future tag colors can own the block background.
+- The Plan list separates `하루 템플릿` and `계획 블록` tabs. The Plan-block tab manages the reusable library without mixing library rows into daily-template cards.
+- Plan-block create/edit forms expose A through D as four horizontal radio-style buttons.
+- The daily-template editor offers `직접 입력` plus saved Plan-block templates. Selecting a library item copies its title, importance, goal, and default duration at the selected start time.
+- If the default duration exceeds today's range, the editor asks whether to discard the later portion and end the placed copy at `23:50`; cancellation leaves the template unchanged and no block is added.
 
 ## Shared UI Layer
 
@@ -163,3 +190,12 @@ The shared UI layer also provides hover tooltips for elements with `data-ui-tool
 - Replacing a daily Plan warns that the existing copy will be replaced and linked actual events will be detached.
 - Deleted template groups do not affect existing daily copies.
 - Goal linkage uses `plan_templates.goal_id`, not `plan_groups` or `plan_blocks`.
+
+## Manual Test Checklist
+
+- Create, edit, and delete a Plan-block template; confirm deleted templates disappear from both Plan and Calendar pickers.
+- Confirm the duration accepts 10-minute units from 10 minutes through 23 hours 50 minutes and stores no start/end clock time.
+- In a daily-template editor, mix a saved Plan block with a directly entered block and save the day template.
+- Edit a library item after placing it and confirm the already placed copy remains unchanged.
+- Select a saved block near midnight; confirm cancellation adds nothing and confirmation shortens only the placed copy to `23:50`.
+- In Calendar Plan entry, confirm a saved block copies its title, importance, goal, and duration while direct entry remains available.

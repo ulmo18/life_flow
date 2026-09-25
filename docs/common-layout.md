@@ -15,6 +15,8 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The header is sticky.
 - The header contains the `LifeFlow` brand and a hamburger menu button.
 - Do not place primary navigation links directly in the header.
+- The brand links to Dashboard.
+- A feature may supply one compact, single-line contextual action between the brand and hamburger. Calendar uses this slot only for today's highest-priority Plan, Actual, or Retrospect next action; the text truncates rather than increasing the header height.
 
 ## Aside Menu
 - The aside is opened from the header hamburger button.
@@ -47,6 +49,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 
 ## Assets
 - Shared layout CSS lives in `public/assets/css/app.css`.
+- The shared app stylesheet URL includes its file modification time so header and shell changes are refreshed in browsers and WebViews after deployment.
 - Shared layout JavaScript lives in `public/assets/js/components/app-layout.js`.
 - Page-specific CSS and JavaScript should continue using `$pageStyles` and `$pageScripts`.
 - Android bridge JavaScript is loaded as a shared component so Settings and feature pages can sync notification payloads and temporarily control native pull-to-refresh during touch range selection.
@@ -56,6 +59,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Shared UI modals must stack above page-local sheets so confirmation dialogs opened from a sheet are never hidden behind it.
 - Shared hover tooltips should only appear on hover-capable fine pointers, not on touch devices.
 - Shared `.input` fields use the app typography, 15px text, soft card-like surfaces, and visible focus states so inputs and textareas match the current visual system.
+- Shared Eisenhower importance input uses four accessible radio controls displayed horizontally as A/B/C/D buttons. The shared prompt sheet and Calendar/Plan forms reuse this pattern.
 - Shared `.sr-only` keeps semantic page headings available to assistive technology when a content-first feature page omits its large visible menu introduction.
 - Shared bottom sheets focus their primary input during the opening user action and keep the active input visible when the mobile visual viewport changes.
 
@@ -74,3 +78,4 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Mobile is the primary layout target.
 - Tablet keeps the same navigation model with wider content.
 - Desktop keeps the same navigation model with a wider content container and drawer.
+- Feature pages, including Calendar, should use the shared `.page` container so their content widths follow the same responsive breakpoints.
