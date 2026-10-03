@@ -194,6 +194,7 @@ final class RetrospectRepository
         array $planItems,
         array $actualItems,
         array $routineItems,
+        array $memoItems,
         array $texts
     ): bool {
         try {
@@ -204,6 +205,7 @@ final class RetrospectRepository
             $this->insertPlanItems($reportId, $planItems);
             $this->insertActualItems($reportId, $actualItems);
             $this->insertRoutineItems($reportId, $routineItems);
+            $this->insertMemoItems($reportId, $memoItems);
 
             $this->db->commit();
             return true;
@@ -258,6 +260,18 @@ final class RetrospectRepository
     }
 
     /** @return array<int, array<string, mixed>> */
+    public function listMemoItems(int $reportId): array
+    {
+        return $this->fetchItems(
+            'SELECT *
+             FROM retrospect_report_memo_items
+             WHERE report_id = :report_id
+             ORDER BY created_at_snapshot ASC, id ASC',
+            $reportId
+        );
+    }
+
+    /** @return array<int, array<string, mixed>> */
     public function listRecentPublishedReports(int $userId, int $limit = 10): array
     {
         $stmt = $this->db->prepare(
@@ -272,6 +286,24 @@ final class RetrospectRepository
             'user_id' => $userId,
             'status' => 'submitted',
         ]);
+
+        return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listPublishedReports(int $userId, int $limit, int $offset): array
+    {
+        $limit = max(1, min(51, $limit));
+        $offset = max(0, $offset);
+        $stmt = $this->db->prepare(
+            'SELECT id, report_date, today_review, today_thoughts, tomorrow_plan,
+                    plan_achievement_rate, routine_achievement_rate, submitted_at, updated_at
+             FROM retrospect_reports
+             WHERE user_id = :user_id AND status = :status
+             ORDER BY report_date DESC, id DESC
+             LIMIT ' . $limit . ' OFFSET ' . $offset
+        );
+        $stmt->execute(['user_id' => $userId, 'status' => 'submitted']);
 
         return $stmt->fetchAll();
     }
@@ -313,9 +345,11 @@ final class RetrospectRepository
                 dpi.end_index,
                 dpi.sort_order,
                 dpi.title,
-                dpi.importance
+                dpi.importance,
+                g.title AS goal_title
              FROM daily_plan_items dpi
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+             LEFT JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id
              WHERE dp.calendar_day_id = :calendar_day_id
                 AND dp.user_id = :user_id
                 AND dpi.deleted_at IS NULL
@@ -380,8 +414,15 @@ final class RetrospectRepository
             'SELECT
                 r.id,
                 r.name,
+                r.goal_id,
+                g.title AS goal_title,
+                r.start_date,
+                r.duration_days,
+                r.status,
+                r.ended_at,
                 rl.is_done AS state
              FROM routines r
+             LEFT JOIN goals g ON g.id = r.goal_id AND g.user_id = r.user_id
              LEFT JOIN routine_logs rl ON rl.routine_id = r.id
                 AND rl.user_id = r.user_id
                 AND rl.log_date = :log_date
@@ -402,6 +443,23 @@ final class RetrospectRepository
         ]);
 
         return $stmt->fetchAll();
+    }
+
+    /** @return array<string, mixed>|null */
+    public function findRoutineDetail(int $userId, int $routineId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT r.id, r.name, r.goal_id, g.title AS goal_title, r.start_date,
+                    r.duration_days, r.status, r.ended_at
+             FROM routines r
+             LEFT JOIN goals g ON g.id = r.goal_id AND g.user_id = r.user_id
+             WHERE r.user_id = :user_id AND r.id = :routine_id
+             LIMIT 1'
+        );
+        $stmt->execute(['user_id' => $userId, 'routine_id' => $routineId]);
+        $routine = $stmt->fetch();
+
+        return $routine !== false ? $routine : null;
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -625,6 +683,7 @@ final class RetrospectRepository
             'retrospect_report_plan_items',
             'retrospect_report_actual_items',
             'retrospect_report_routine_items',
+            'retrospect_report_memo_items',
         ] as $table) {
             $stmt = $this->db->prepare('DELETE FROM ' . $table . ' WHERE report_id = :report_id');
             $stmt->execute(['report_id' => $reportId]);
@@ -637,11 +696,11 @@ final class RetrospectRepository
         $sql = 'INSERT INTO retrospect_report_plan_items (
                     report_id, plan_group_id, plan_block_id, plan_template_id,
                     title_snapshot, start_index, end_index, importance_snapshot,
-                    is_linked, sort_order, created_at
+                goal_title_snapshot, is_linked, sort_order, created_at
                 ) VALUES (
                     :report_id, :plan_group_id, :plan_block_id, :plan_template_id,
                     :title_snapshot, :start_index, :end_index, :importance_snapshot,
-                    :is_linked, :sort_order, CURRENT_TIMESTAMP
+                :goal_title_snapshot, :is_linked, :sort_order, CURRENT_TIMESTAMP
                 )';
         $stmt = $this->db->prepare($sql);
 
@@ -655,6 +714,7 @@ final class RetrospectRepository
                 'start_index' => $item['start_index'],
                 'end_index' => $item['end_index'],
                 'importance_snapshot' => $item['importance'],
+                'goal_title_snapshot' => (string) ($item['goalTitle'] ?? ''),
                 'is_linked' => !empty($item['is_linked']) ? 1 : 0,
                 'sort_order' => $item['sort_order'],
             ]);
@@ -701,10 +761,10 @@ final class RetrospectRepository
     {
         $sql = 'INSERT INTO retrospect_report_routine_items (
                     report_id, routine_id, routine_name_snapshot,
-                    state_snapshot, was_active, sort_order, created_at
+                    goal_title_snapshot, state_snapshot, was_active, sort_order, created_at
                 ) VALUES (
                     :report_id, :routine_id, :routine_name_snapshot,
-                    :state_snapshot, :was_active, :sort_order, CURRENT_TIMESTAMP
+                    :goal_title_snapshot, :state_snapshot, :was_active, :sort_order, CURRENT_TIMESTAMP
                 )';
         $stmt = $this->db->prepare($sql);
 
@@ -713,9 +773,32 @@ final class RetrospectRepository
                 'report_id' => $reportId,
                 'routine_id' => $item['id'],
                 'routine_name_snapshot' => $item['name'],
+                'goal_title_snapshot' => (string) ($item['goalTitle'] ?? ''),
                 'state_snapshot' => $item['state'],
                 'was_active' => 1,
                 'sort_order' => $item['sort_order'],
+            ]);
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $items */
+    private function insertMemoItems(int $reportId, array $items): void
+    {
+        $stmt = $this->db->prepare(
+            'INSERT INTO retrospect_report_memo_items (
+                report_id, note_id, content_snapshot, created_at_snapshot, sort_order, created_at
+             ) VALUES (
+                :report_id, :note_id, :content_snapshot, :created_at_snapshot, :sort_order, CURRENT_TIMESTAMP
+             )'
+        );
+
+        foreach ($items as $index => $item) {
+            $stmt->execute([
+                'report_id' => $reportId,
+                'note_id' => $item['id'] ?? null,
+                'content_snapshot' => (string) ($item['content'] ?? ''),
+                'created_at_snapshot' => (string) ($item['created_at'] ?? ''),
+                'sort_order' => $index + 1,
             ]);
         }
     }

@@ -56,10 +56,7 @@ final class GoalRepository
             $params['goal_type'] = $goalType;
         }
 
-        $sql .= ' ORDER BY ' . $this->goalTypeOrderExpression('g.goal_type') . ',
-                    g.sort_order ASC,
-                    g.updated_at DESC,
-                    g.id DESC';
+        $sql .= ' ORDER BY g.sort_order ASC, g.id ASC';
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -217,6 +214,34 @@ final class GoalRepository
         return $routines;
     }
 
+    /** @param array<int, int> $goalIds @return array<int, int> */
+    public function countLinkedDailyPlanItemsByGoalIds(int $userId, array $goalIds): array
+    {
+        if ($goalIds === []) {
+            return [];
+        }
+
+        $params = [];
+        $placeholders = $this->buildInPlaceholders('goal_id', $goalIds, $params);
+        $sql = 'SELECT dpi.goal_id, COUNT(*) AS item_count
+                FROM daily_plan_items dpi
+                INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                WHERE dp.user_id = :user_id
+                    AND dpi.deleted_at IS NULL
+                    AND dpi.goal_id IN (' . $placeholders . ')
+                GROUP BY dpi.goal_id';
+        $params['user_id'] = $userId;
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        $counts = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $counts[(int) $row['goal_id']] = (int) $row['item_count'];
+        }
+
+        return $counts;
+    }
+
     /** @return array<string, mixed>|null */
     public function findActive(int $userId, int $goalId): ?array
     {
@@ -334,7 +359,7 @@ final class GoalRepository
                 'period_start_date' => $data['periodStartDate'],
                 'period_end_date' => $data['periodEndDate'],
                 'status' => $data['status'],
-                'sort_order' => $this->nextSortOrder($userId, (string) $data['goalType']),
+                'sort_order' => $this->nextSortOrder($userId, $data['parentGoalId']),
                 'completed_at' => $data['status'] === 'completed' ? $this->currentTimestampExpressionValue() : null,
             ]);
 
@@ -348,9 +373,14 @@ final class GoalRepository
     /** @param array<string, mixed> $data */
     public function update(int $userId, int $goalId, array $data): bool
     {
-        if ($this->findActive($userId, $goalId) === null) {
+        $existing = $this->findActive($userId, $goalId);
+        if ($existing === null) {
             return false;
         }
+        $parentChanged = (int) ($existing['parent_goal_id'] ?? 0) !== (int) ($data['parentGoalId'] ?? 0);
+        $sortOrder = $parentChanged
+            ? $this->nextSortOrder($userId, $data['parentGoalId'])
+            : (int) $existing['sort_order'];
 
         $sql = 'UPDATE goals
                 SET parent_goal_id = :parent_goal_id,
@@ -362,6 +392,7 @@ final class GoalRepository
                     period_start_date = :period_start_date,
                     period_end_date = :period_end_date,
                     status = :status,
+                    sort_order = :sort_order,
                     completed_at = :completed_at,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
@@ -379,6 +410,7 @@ final class GoalRepository
             'period_start_date' => $data['periodStartDate'],
             'period_end_date' => $data['periodEndDate'],
             'status' => $data['status'],
+            'sort_order' => $sortOrder,
             'completed_at' => $data['status'] === 'completed' ? $this->currentTimestampExpressionValue() : null,
             'id' => $goalId,
             'user_id' => $userId,
@@ -461,18 +493,80 @@ final class GoalRepository
         }
     }
 
-    private function nextSortOrder(int $userId, string $goalType): int
+    public function move(int $userId, int $goalId, ?int $parentGoalId, ?int $beforeGoalId): bool
+    {
+        $goal = $this->findActive($userId, $goalId);
+        if ($goal === null || ($parentGoalId !== null && $this->findActive($userId, $parentGoalId) === null)) {
+            return false;
+        }
+        if ($beforeGoalId !== null) {
+            $before = $this->findActive($userId, $beforeGoalId);
+            if ($before === null || $beforeGoalId === $goalId
+                || (int) ($before['parent_goal_id'] ?? 0) !== (int) ($parentGoalId ?? 0)) {
+                return false;
+            }
+        }
+
+        try {
+            $this->db->beginTransaction();
+            $stmt = $this->db->prepare(
+                'SELECT id FROM goals
+                 WHERE user_id = :user_id AND deleted_at IS NULL AND id <> :goal_id
+                   AND ((:parent_is_null = 1 AND parent_goal_id IS NULL) OR parent_goal_id = :parent_goal_id)
+                 ORDER BY sort_order ASC, id ASC'
+            );
+            $stmt->execute([
+                'user_id' => $userId,
+                'goal_id' => $goalId,
+                'parent_is_null' => $parentGoalId === null ? 1 : 0,
+                'parent_goal_id' => $parentGoalId,
+            ]);
+            $orderedIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+            $insertAt = $beforeGoalId === null ? count($orderedIds) : array_search($beforeGoalId, $orderedIds, true);
+            if ($insertAt === false) {
+                $this->db->rollBack();
+                return false;
+            }
+            array_splice($orderedIds, (int) $insertAt, 0, [$goalId]);
+
+            $updateGoal = $this->db->prepare(
+                'UPDATE goals SET parent_goal_id = :parent_goal_id, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+            );
+            $updateGoal->execute(['parent_goal_id' => $parentGoalId, 'id' => $goalId, 'user_id' => $userId]);
+
+            $updateOrder = $this->db->prepare(
+                'UPDATE goals SET sort_order = :sort_order, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+            );
+            foreach ($orderedIds as $index => $id) {
+                $updateOrder->execute(['sort_order' => $index + 1, 'id' => $id, 'user_id' => $userId]);
+            }
+
+            $this->db->commit();
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('[goal] move failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
+
+    private function nextSortOrder(int $userId, ?int $parentGoalId): int
     {
         $sql = 'SELECT COALESCE(MAX(sort_order), 0) + 1
                 FROM goals
                 WHERE user_id = :user_id
-                    AND goal_type = :goal_type
+                    AND ((:parent_is_null = 1 AND parent_goal_id IS NULL) OR parent_goal_id = :parent_goal_id)
                     AND deleted_at IS NULL';
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             'user_id' => $userId,
-            'goal_type' => $goalType,
+            'parent_is_null' => $parentGoalId === null ? 1 : 0,
+            'parent_goal_id' => $parentGoalId,
         ]);
 
         return (int) $stmt->fetchColumn();

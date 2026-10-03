@@ -19,7 +19,7 @@ final class MemoController
     public function index(): void
     {
         $this->render('pages/memo/index', [
-            'title' => 'Memo',
+            'title' => t('nav.memo'),
             'memoData' => $this->memoService->pageData(
                 $this->userId(),
                 $_GET['type'] ?? 'short',

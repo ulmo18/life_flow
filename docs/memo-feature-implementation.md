@@ -4,9 +4,11 @@
 
 Memo is a standalone capture area for thoughts that should not automatically become schedules, routines, goals, or Retrospect content. Users can write from Calendar's quick menu or manage notes from the aside Memo menu.
 
-Retrospect may display active standalone Memo records as read-only context grouped by `created_at` date. This does not link a Memo to a goal or copy it into a Retrospect report snapshot.
+Retrospect displays active standalone Memo records as read-only context grouped by `created_at` date. A Memo is not linked to a Goal; publishing copies its content and creation time only into the report's durable Memo snapshot.
 
-Timestamps are stored in UTC. Memo list labels explicitly convert UTC values to `Asia/Seoul`, and daily Retrospect grouping converts the selected Korean day to a UTC half-open range (`00:00` inclusive through the next `00:00` exclusive). Memos written between Korean midnight and 09:00 therefore remain under the correct Korean date. MySQL connections set their session timezone to `+00:00`; SQLite `CURRENT_TIMESTAMP` already uses UTC.
+Timestamps are stored in UTC. Memo list labels explicitly convert UTC values to the signed-in user's configured IANA time zone, and daily Retrospect grouping converts the selected local day to a UTC half-open range (`00:00` inclusive through the next `00:00` exclusive). MySQL connections set their session timezone to `+00:00`; SQLite `CURRENT_TIMESTAMP` already uses UTC.
+
+Daily Retrospect excludes deleted Memos from live data. Publishing copies active same-day Memo content and creation time into `retrospect_report_memo_items`; deleting the source Memo later does not alter that published report.
 
 ## Current Scope
 

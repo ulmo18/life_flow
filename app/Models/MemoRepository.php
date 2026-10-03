@@ -85,9 +85,9 @@ final class MemoRepository
     /** @return array<int, array<string, mixed>> */
     public function listForDate(int $userId, string $date): array
     {
-        $koreaTimezone = new DateTimeZone('Asia/Seoul');
+        $userTimezone = new DateTimeZone(date_default_timezone_get());
         $utcTimezone = new DateTimeZone('UTC');
-        $startAt = (new DateTimeImmutable($date . ' 00:00:00', $koreaTimezone))->setTimezone($utcTimezone);
+        $startAt = (new DateTimeImmutable($date . ' 00:00:00', $userTimezone))->setTimezone($utcTimezone);
         $endAt = $startAt->modify('+1 day');
         $stmt = $this->db->prepare(
             'SELECT id, content, created_at

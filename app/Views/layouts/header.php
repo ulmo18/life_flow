@@ -1,9 +1,10 @@
 <?php
 $appCssPath = dirname(__DIR__, 3) . '/public/assets/css/app.css';
 $appCssVersion = is_file($appCssPath) ? filemtime($appCssPath) : false;
+$localePreference = \App\Core\I18n::normalizeLocale((string) ($_SESSION['locale_preference'] ?? 'ko'));
 ?>
 <!doctype html>
-<html lang="ko">
+<html lang="<?= e($localePreference) ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -23,9 +24,11 @@ $asideDisplayName = $asideNickname !== '' ? $asideNickname : '회원 #' . (strin
 $isCalendarActive = $currentPath === '/calendar';
 $isPlanActive = $currentPath === '/plan' || strpos($currentPath, '/plan/') === 0;
 $isRoutineActive = $currentPath === '/routine';
+$isRoutineManageActive = $currentPath === '/manage/routines';
 $isRetrospectActive = $currentPath === '/retrospect';
 $isGoalActive = $currentPath === '/goal';
 $isMemoActive = $currentPath === '/memo';
+$isExecutionEnergyActive = $currentPath === '/execution-energy';
 $themePreference = (string) ($_SESSION['theme_preference'] ?? 'light');
 $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
 ?>
@@ -61,7 +64,7 @@ $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
                 <button
                     class="menu-toggle"
                     type="button"
-                    aria-label="메뉴 열기"
+                    aria-label="<?= e(t('common.menu_open')) ?>"
                     aria-controls="appAside"
                     aria-expanded="false"
                     data-menu-toggle
@@ -75,15 +78,15 @@ $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
     </header>
     <?php if ($showAppChrome): ?>
         <div class="app-overlay" data-menu-close hidden></div>
-        <aside class="app-aside" id="appAside" aria-label="앱 메뉴" aria-hidden="true">
+        <aside class="app-aside" id="appAside" aria-label="<?= e(t('nav.primary')) ?>" aria-hidden="true">
             <div class="app-aside-header">
                 <a
                     class="aside-settings-link"
                     href="/settings"
-                    aria-label="설정"
+                    aria-label="<?= e(t('common.settings')) ?>"
                     <?= $currentPath === '/settings' ? 'aria-current="page"' : '' ?>
                 >&#9881;</a>
-                <button class="aside-close" type="button" aria-label="메뉴 닫기" data-menu-close>×</button>
+                <button class="aside-close" type="button" aria-label="<?= e(t('common.menu_close')) ?>" data-menu-close>×</button>
             </div>
             <section class="aside-user" aria-label="로그인 회원 정보">
                 <span class="aside-user-avatar" aria-hidden="true"><?= e(mb_substr($asideDisplayName, 0, 1)) ?></span>
@@ -92,24 +95,25 @@ $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
                     <?php if ($asideEmail !== ''): ?>
                         <small><?= e($asideEmail) ?></small>
                     <?php else: ?>
-                        <small>로그인 중</small>
+                        <small><?= e(t('common.signed_in')) ?></small>
                     <?php endif; ?>
                 </div>
             </section>
-            <nav class="aside-nav" aria-label="관리 메뉴">
+            <nav class="aside-nav" aria-label="<?= e(t('nav.primary')) ?>">
                 <div class="aside-nav-group">
-                    <a href="/dashboard" <?= $currentPath === '/dashboard' ? 'aria-current="page"' : '' ?>>대시보드</a>
+                    <a href="/dashboard" <?= $currentPath === '/dashboard' ? 'aria-current="page"' : '' ?>><?= e(t('nav.dashboard')) ?></a>
                 </div>
                 <div class="aside-nav-group">
-                    <a href="/calendar" <?= $isCalendarActive ? 'aria-current="page"' : '' ?>>캘린더</a>
-                    <a href="/plan" <?= $isPlanActive ? 'aria-current="page"' : '' ?>>계획</a>
-                    <a href="/routine" <?= $isRoutineActive ? 'aria-current="page"' : '' ?>>루틴</a>
-                    <a href="/retrospect" <?= $isRetrospectActive ? 'aria-current="page"' : '' ?>>회고</a>
-                    <a href="/goal" <?= $isGoalActive ? 'aria-current="page"' : '' ?>>목표</a>
-                    <a href="/memo" <?= $isMemoActive ? 'aria-current="page"' : '' ?>>메모</a>
+                    <span class="aside-nav-label"><?= e(t('nav.manage')) ?></span>
+                    <a href="/plan" <?= $isPlanActive ? 'aria-current="page"' : '' ?>><?= e(t('nav.plan')) ?></a>
+                    <a href="/manage/routines" <?= $isRoutineManageActive ? 'aria-current="page"' : '' ?>><?= e(t('nav.routine_manage')) ?></a>
+                    <a href="/goal" <?= $isGoalActive ? 'aria-current="page"' : '' ?>><?= e(t('nav.goal')) ?></a>
+                    <a href="/execution-energy" <?= $isExecutionEnergyActive ? 'aria-current="page"' : '' ?>><?= e(t('nav.execution_energy_manage')) ?></a>
                 </div>
                 <div class="aside-nav-group">
-                    <a href="/tags" <?= $currentPath === '/tags' ? 'aria-current="page"' : '' ?>>일정 태그 관리</a>
+                    <span class="aside-nav-label"><?= e(t('nav.tools')) ?></span>
+                    <a href="/memo" <?= $isMemoActive ? 'aria-current="page"' : '' ?>><?= e(t('nav.memo')) ?></a>
+                    <a href="/tags" <?= $currentPath === '/tags' ? 'aria-current="page"' : '' ?>><?= e(t('nav.tags')) ?></a>
                 </div>
             </nav>
         </aside>

@@ -1,8 +1,8 @@
-<?php $title = '설정'; ?>
+<?php $title = t('settings.title'); ?>
 <?php require __DIR__ . '/../layouts/header.php'; ?>
 
 <main class="page">
-    <h1 class="page-title">설정</h1>
+    <h1 class="page-title"><?= e(t('settings.title')) ?></h1>
 
     <?php if (!empty($flashSuccess)): ?>
         <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
@@ -13,39 +13,69 @@
     <?php endif; ?>
 
     <section class="section">
-        <h2>화면 모드</h2>
-        <form class="settings-theme-form" method="post" action="/settings/theme" data-theme-form>
+        <h2><?= e(t('settings.language')) ?></h2>
+        <p class="muted"><?= e(t('settings.language_help')) ?></p>
+        <form class="settings-localization-form" method="post" action="/settings/localization">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-            <label class="settings-theme-option">
-                <input type="radio" name="theme" value="light" <?= ($theme ?? 'light') === 'light' ? 'checked' : '' ?>>
-                <span>라이트 모드</span>
-            </label>
-            <label class="settings-theme-option">
-                <input type="radio" name="theme" value="dark" <?= ($theme ?? 'light') === 'dark' ? 'checked' : '' ?>>
-                <span>다크 모드</span>
-            </label>
-            <noscript><button type="submit" class="btn btn-primary">화면 모드 저장</button></noscript>
+            <label class="form-label" for="settingsLocale"><?= e(t('settings.language')) ?></label>
+            <select class="input" id="settingsLocale" name="locale">
+                <option value="ko" <?= ($locale ?? 'ko') === 'ko' ? 'selected' : '' ?>>한국어</option>
+                <option value="en" <?= ($locale ?? 'ko') === 'en' ? 'selected' : '' ?>>English</option>
+                <option value="ja" <?= ($locale ?? 'ko') === 'ja' ? 'selected' : '' ?>>日本語</option>
+            </select>
+            <?php if (!empty($errors['locale'])): ?>
+                <p class="field-error"><?= e((string) $errors['locale']) ?></p>
+            <?php endif; ?>
+
+            <h3><?= e(t('settings.region')) ?></h3>
+            <label class="form-label" for="settingsTimezone"><?= e(t('settings.timezone')) ?></label>
+            <select class="input" id="settingsTimezone" name="timezone" data-timezone-select>
+                <?php foreach (($timezoneOptions ?? []) as $timezoneOption): ?>
+                    <option value="<?= e((string) $timezoneOption) ?>" <?= ($timezone ?? 'Asia/Seoul') === $timezoneOption ? 'selected' : '' ?>><?= e((string) $timezoneOption) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <p class="muted"><?= e(t('settings.timezone_help')) ?></p>
+            <?php if (!empty($errors['timezone'])): ?>
+                <p class="field-error"><?= e((string) $errors['timezone']) ?></p>
+            <?php endif; ?>
+            <button type="submit" class="btn btn-primary"><?= e(t('settings.save_preferences')) ?></button>
         </form>
     </section>
 
     <section class="section">
-        <h2>알림 설정</h2>
+        <h2><?= e(t('settings.display')) ?></h2>
+        <form class="settings-theme-form" method="post" action="/settings/theme" data-theme-form>
+            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <label class="settings-theme-option">
+                <input type="radio" name="theme" value="light" <?= ($theme ?? 'light') === 'light' ? 'checked' : '' ?>>
+                <span><?= e(t('settings.light')) ?></span>
+            </label>
+            <label class="settings-theme-option">
+                <input type="radio" name="theme" value="dark" <?= ($theme ?? 'light') === 'dark' ? 'checked' : '' ?>>
+                <span><?= e(t('settings.dark')) ?></span>
+            </label>
+            <noscript><button type="submit" class="btn btn-primary"><?= e(t('settings.display_save')) ?></button></noscript>
+        </form>
+    </section>
+
+    <section class="section">
+        <h2><?= e(t('settings.notifications')) ?></h2>
         <?php $notificationSettings = $notificationSettings ?? []; ?>
         <div class="settings-notification-actions">
-            <button type="button" class="btn btn-secondary" data-notification-permission>앱 알림 권한 요청</button>
-            <button type="button" class="btn btn-ghost" data-notification-test>테스트 알림 보내기</button>
+            <button type="button" class="btn btn-secondary" data-notification-permission><?= e(t('settings.permission')) ?></button>
+            <button type="button" class="btn btn-ghost" data-notification-test><?= e(t('settings.test_notification')) ?></button>
         </div>
         <form class="settings-notification-form" method="post" action="/settings/notifications">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
 
             <label class="settings-toggle-option">
                 <input type="checkbox" name="notification_enabled" value="1" <?= !empty($notificationSettings['notification_enabled']) ? 'checked' : '' ?>>
-                <span>앱 푸시 알림 사용</span>
+                <span><?= e(t('settings.push_enabled')) ?></span>
             </label>
 
             <div class="settings-notification-grid">
                 <label class="settings-time-option">
-                    <span>아침 회고 알림</span>
+                    <span><?= e(t('settings.morning_review')) ?></span>
                     <input type="checkbox" name="retrospect_morning_enabled" value="1" <?= !empty($notificationSettings['retrospect_morning_enabled']) ? 'checked' : '' ?>>
                     <input class="input" name="retrospect_morning_time" type="time" value="<?= e((string) ($notificationSettings['retrospect_morning_time'] ?? '07:00')) ?>">
                 </label>
@@ -54,7 +84,7 @@
                 <?php endif; ?>
 
                 <label class="settings-time-option">
-                    <span>저녁 회고 알림</span>
+                    <span><?= e(t('settings.evening_review')) ?></span>
                     <input type="checkbox" name="retrospect_evening_enabled" value="1" <?= !empty($notificationSettings['retrospect_evening_enabled']) ? 'checked' : '' ?>>
                     <input class="input" name="retrospect_evening_time" type="time" value="<?= e((string) ($notificationSettings['retrospect_evening_time'] ?? '20:00')) ?>">
                 </label>
@@ -63,7 +93,7 @@
                 <?php endif; ?>
 
                 <label class="settings-time-option">
-                    <span>선택 루틴 알림</span>
+                    <span><?= e(t('settings.routine_reminder')) ?></span>
                     <input type="checkbox" name="routine_reminder_enabled" value="1" <?= !empty($notificationSettings['routine_reminder_enabled']) ? 'checked' : '' ?>>
                     <input class="input" name="routine_reminder_time" type="time" value="<?= e((string) ($notificationSettings['routine_reminder_time'] ?? '14:00')) ?>">
                 </label>
@@ -73,11 +103,11 @@
 
                 <label class="settings-toggle-option">
                     <input type="checkbox" name="calendar_plan_reminder_enabled" value="1" <?= !empty($notificationSettings['calendar_plan_reminder_enabled']) ? 'checked' : '' ?>>
-                    <span>캘린더 선택 계획 시작 알림</span>
+                    <span><?= e(t('settings.plan_reminder')) ?></span>
                 </label>
 
                 <label class="settings-time-option">
-                    <span>목표 마감 알림</span>
+                    <span><?= e(t('settings.goal_deadline')) ?></span>
                     <input type="checkbox" name="goal_deadline_reminder_enabled" value="1" <?= !empty($notificationSettings['goal_deadline_reminder_enabled']) ? 'checked' : '' ?>>
                     <input class="input" name="goal_deadline_time" type="time" value="<?= e((string) ($notificationSettings['goal_deadline_time'] ?? '12:00')) ?>">
                 </label>
@@ -87,28 +117,28 @@
 
                 <label class="settings-toggle-option">
                     <input type="checkbox" name="goal_deadline_day_before_enabled" value="1" <?= !empty($notificationSettings['goal_deadline_day_before_enabled']) ? 'checked' : '' ?>>
-                    <span>목표 마감 하루 전 알림</span>
+                    <span><?= e(t('settings.goal_day_before')) ?></span>
                 </label>
             </div>
 
-            <button type="submit" class="btn btn-primary">알림 설정 저장</button>
+            <button type="submit" class="btn btn-primary"><?= e(t('settings.notification_save')) ?></button>
         </form>
-        <p><a class="link" href="/notification-guide">알림 권한 안내 보기</a></p>
+        <p><a class="link" href="/notification-guide"><?= e(t('settings.notification_guide')) ?></a></p>
     </section>
 
     <section class="section">
-        <h2>정책 및 계정 관리</h2>
+        <h2><?= e(t('settings.account')) ?></h2>
         <ul class="list">
-            <li><a class="link" href="/privacy-policy">개인정보처리방침</a></li>
-            <li><a class="link" href="/terms">이용약관</a></li>
-            <li><a class="link" href="/contact">문의하기</a></li>
+            <li><a class="link" href="/privacy-policy"><?= e(t('settings.privacy')) ?></a></li>
+            <li><a class="link" href="/terms"><?= e(t('settings.terms')) ?></a></li>
+            <li><a class="link" href="/contact"><?= e(t('settings.contact')) ?></a></li>
             <li>
                 <form class="settings-logout-form" method="post" action="/logout">
                     <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-                    <button type="submit" class="btn btn-ghost">로그아웃</button>
+                    <button type="submit" class="btn btn-ghost"><?= e(t('settings.logout')) ?></button>
                 </form>
             </li>
-            <li><a class="link" href="/withdraw">회원탈퇴</a></li>
+            <li><a class="link" href="/withdraw"><?= e(t('settings.withdraw')) ?></a></li>
         </ul>
     </section>
 </main>

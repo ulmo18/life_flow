@@ -22,19 +22,11 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The aside is opened from the header hamburger button.
 - Show a compact signed-in user summary near the top of the aside.
 - The aside header uses a settings gear link instead of a text brand.
-- The aside owns management navigation:
+- The aside owns infrequent navigation:
   - Dashboard
-  - Calendar
-  - Plan
-  - Routine
-  - Retrospect
-  - Goal
-  - Memo
-  - Schedule Tag Management
-- Group aside links with separators:
-  - Dashboard
-  - Calendar, Plan, Routine, Retrospect, Goal, Memo
-  - Schedule Tag Management
+  - Management: Plan, Routine Management, Goal, Execution Energy Management
+  - Tools: Memo, Schedule Tag Management
+- Use visible group labels for Management and Tools. Daily execution pages stay in the bottom navigator.
 - Logout lives inside the Settings page and must remain a POST form with a CSRF token.
 - Account identity is shown in the aside only; Settings does not repeat the same account-information card.
 
@@ -42,10 +34,13 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The bottom navigator is fixed to the bottom center of the viewport.
 - It owns the primary feature navigation in this order:
   - Retrospect
-  - Plan
   - Routine
-  - Calendar
+  - Execution Energy (a center glass-liquid orb showing the current value; its compact label omits the management suffix)
+  - To-do
+  - Today
+- Today links to Calendar, while Routine and To-do always resolve from the signed-in user's current time zone.
 - Keep active page state through `aria-current="page"`.
+- The center orb intentionally overflows the navigator frame so the frame reads like a belt. Its liquid fill uses the current-capacity percentage from top to bottom, includes a restrained bubble effect, and responds to available device orientation data; pointer movement is the browser fallback. Respect reduced-motion preferences.
 
 ## Assets
 - Shared layout CSS lives in `public/assets/css/app.css`.
@@ -73,6 +68,14 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The shared 15 Calendar tag colors do not change when the theme changes because they identify user-owned schedule categories. Components that fill a card with a tag color must calculate a readable dark or light foreground instead of assuming white text.
 - Dark mode coverage must include shared inputs, buttons, toast, aside profile/settings surfaces, page cards, bottom sheets, and page-local selection controls.
 - Page-specific CSS should use `body[data-theme='dark']` for dark overrides because the shell writes the theme to the body `data-theme` attribute.
+
+## Language And Time Zone
+
+- Settings persists display language and time zone independently in `user_preferences.locale` and `user_preferences.timezone`.
+- Supported display languages are Korean (`ko`), English (`en`), and Japanese (`ja`). User-authored content is never translated.
+- The shared shell writes the selected locale to `<html lang>` and uses centralized translation keys for common navigation and shared controls.
+- Time zones use IANA identifiers such as `Asia/Seoul` and must not be inferred from display language.
+- The selected time zone defines Today, Routine editability, Retrospect date boundaries, Goal deadlines, and notification calculations.
 
 ## Responsive Rules
 - Mobile is the primary layout target.

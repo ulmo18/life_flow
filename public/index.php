@@ -7,14 +7,18 @@ date_default_timezone_set('Asia/Seoul');
 use App\Controllers\AuthController;
 use App\Controllers\CalendarController;
 use App\Controllers\CalendarTagController;
+use App\Controllers\ExecutionEnergyController;
 use App\Controllers\GoalController;
 use App\Controllers\MemoController;
 use App\Controllers\PlanController;
 use App\Controllers\RetrospectController;
 use App\Controllers\RoutineController;
+use App\Controllers\TodoController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\GuestMiddleware;
+use App\Models\UserPreferenceRepository;
+use App\Core\I18n;
 use App\Services\RememberMeService;
 
 require_once dirname(__DIR__) . '/config/bootstrap.php';
@@ -47,15 +51,30 @@ require __DIR__ . '/../app/Core/helpers.php';
 $rememberMeService = new RememberMeService();
 $rememberMeService->autoLoginFromCookie();
 
+if (isset($_SESSION['user_id'])
+    && (!isset($_SESSION['locale_preference']) || !isset($_SESSION['timezone_preference']))) {
+    $sessionPreferences = (new UserPreferenceRepository())->get((int) $_SESSION['user_id']);
+    $_SESSION['locale_preference'] = I18n::normalizeLocale((string) ($sessionPreferences['locale'] ?? 'ko'));
+    $_SESSION['timezone_preference'] = (string) ($sessionPreferences['timezone'] ?? 'Asia/Seoul');
+}
+
+$sessionTimezone = (string) ($_SESSION['timezone_preference'] ?? 'Asia/Seoul');
+if (!in_array($sessionTimezone, timezone_identifiers_list(), true)) {
+    $sessionTimezone = 'Asia/Seoul';
+}
+date_default_timezone_set($sessionTimezone);
+
 $router = new Router();
 $authController = new AuthController();
 $calendarController = new CalendarController();
 $calendarTagController = new CalendarTagController();
+$executionEnergyController = new ExecutionEnergyController();
 $goalController = new GoalController();
 $memoController = new MemoController();
 $planController = new PlanController();
 $retrospectController = new RetrospectController();
 $routineController = new RoutineController();
+$todoController = new TodoController();
 
 $router->aliasMiddleware('auth', AuthMiddleware::class);
 $router->aliasMiddleware('guest', GuestMiddleware::class);
@@ -74,6 +93,12 @@ $router->post('/retrospect/draft', [$retrospectController, 'saveDraft'], ['auth'
 $router->post('/retrospect/publish', [$retrospectController, 'publish'], ['auth']);
 $router->post('/retrospect/republish', [$retrospectController, 'republish'], ['auth']);
 $router->post('/retrospect/settings', [$retrospectController, 'updateSettings'], ['auth']);
+$router->get('/execution-energy', [$executionEnergyController, 'index'], ['auth']);
+$router->get('/execution-energy/status', [$executionEnergyController, 'status'], ['auth']);
+$router->post('/execution-energy/profile', [$executionEnergyController, 'updateProfile'], ['auth']);
+$router->post('/execution-energy/group', [$executionEnergyController, 'storeGroup'], ['auth']);
+$router->post('/execution-energy/group/update', [$executionEnergyController, 'updateGroup'], ['auth']);
+$router->post('/execution-energy/morning', [$executionEnergyController, 'saveMorning'], ['auth']);
 $router->get('/calendar', [$calendarController, 'index'], ['auth']);
 $router->post('/calendar/event', [$calendarController, 'storeEvent'], ['auth']);
 $router->post('/calendar/event/update', [$calendarController, 'updateEvent'], ['auth']);
@@ -88,16 +113,20 @@ $router->post('/tags/update', [$calendarTagController, 'update'], ['auth']);
 $router->post('/tags/delete', [$calendarTagController, 'delete'], ['auth']);
 $router->post('/tags/system-toggle', [$calendarTagController, 'toggleSystem'], ['auth']);
 $router->get('/routine', [$routineController, 'index'], ['auth']);
+$router->get('/manage/routines', [$routineController, 'manage'], ['auth']);
 $router->post('/routine', [$routineController, 'store'], ['auth']);
 $router->post('/routine/update', [$routineController, 'update'], ['auth']);
 $router->post('/routine/extend', [$routineController, 'extend'], ['auth']);
 $router->post('/routine/finish', [$routineController, 'finish'], ['auth']);
 $router->post('/routine/delete', [$routineController, 'delete'], ['auth']);
 $router->post('/routine/toggle', [$routineController, 'toggle'], ['auth']);
+$router->get('/todo', [$todoController, 'index'], ['auth']);
+$router->post('/todo/complete', [$todoController, 'complete'], ['auth']);
 $router->get('/goal', [$goalController, 'index'], ['auth']);
 $router->post('/goal', [$goalController, 'store'], ['auth']);
 $router->post('/goal/update', [$goalController, 'update'], ['auth']);
 $router->post('/goal/delete', [$goalController, 'delete'], ['auth']);
+$router->post('/goal/move', [$goalController, 'move'], ['auth']);
 $router->get('/memo', [$memoController, 'index'], ['auth']);
 $router->post('/memo', [$memoController, 'store'], ['auth']);
 $router->post('/memo/update', [$memoController, 'update'], ['auth']);
@@ -117,6 +146,7 @@ $router->post('/plan/block-template/update', [$planController, 'updateBlockTempl
 $router->post('/plan/block-template/delete', [$planController, 'deleteBlockTemplate'], ['auth']);
 $router->get('/settings', [$authController, 'settings'], ['auth']);
 $router->post('/settings/theme', [$authController, 'updateTheme'], ['auth']);
+$router->post('/settings/localization', [$authController, 'updateLocalization'], ['auth']);
 $router->post('/settings/notifications', [$authController, 'updateNotifications'], ['auth']);
 $router->get('/notification-guide', [$authController, 'notificationGuide'], ['auth']);
 $router->get('/privacy-policy', [$authController, 'privacyPolicy']);

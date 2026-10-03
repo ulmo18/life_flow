@@ -80,12 +80,18 @@ final class CalendarRepository
                     COALESCE(dpi.title, pt.title) AS plan_title,
                     COALESCE(dpi.importance, pt.importance) AS plan_importance,
                     ct.name AS tag_name,
-                    ct.color_hex AS tag_color
+                    ct.color_hex AS tag_color,
+                    ees.group_id_snapshot AS execution_energy_group_id,
+                    ees.group_name_snapshot AS execution_energy_group_name,
+                    ees.effect_type AS execution_energy_type,
+                    ees.energy_value AS execution_energy_value,
+                    ees.is_override AS execution_energy_is_override
                 FROM calendar_events ce
                 LEFT JOIN plan_templates pt ON pt.id = ce.plan_template_id
                 LEFT JOIN daily_plan_items dpi ON dpi.id = ce.daily_plan_item_id
                 LEFT JOIN calendar_tags ct ON ct.id = ce.calendar_tag_id
                     AND ct.deleted_at IS NULL
+                LEFT JOIN execution_energy_event_settings ees ON ees.calendar_event_id = ce.id
                 WHERE ce.user_id = :user_id
                     AND ce.calendar_day_id = :calendar_day_id
                     AND ce.deleted_at IS NULL
@@ -213,6 +219,37 @@ final class CalendarRepository
         $stmt->execute(['user_id' => $userId, 'calendar_day_id' => $calendarDayId]);
 
         return $stmt->fetchAll();
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getDailyPlanItemForCompletion(int $userId, int $itemId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT dpi.id, dpi.title, dpi.start_index, dpi.end_index,
+                    cd.calendar_date,
+                    (SELECT ce.id FROM calendar_events ce
+                     WHERE ce.daily_plan_item_id = dpi.id
+                       AND ce.user_id = dp.user_id
+                       AND ce.deleted_at IS NULL
+                     LIMIT 1) AS linked_event_id
+             FROM daily_plan_items dpi
+             INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+             INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id
+             WHERE dpi.id = :id AND dp.user_id = :user_id AND dpi.deleted_at IS NULL
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $itemId, 'user_id' => $userId]);
+        $item = $stmt->fetch();
+
+        return $item !== false ? $item : null;
+    }
+
+    public function hasOverlappingActualEvent(int $userId, string $date, int $startIndex, int $endIndex): bool
+    {
+        $day = $this->findDay($userId, $date);
+
+        return $day !== null
+            && $this->hasOverlappingEvent($userId, (int) $day['id'], $startIndex, $endIndex);
     }
 
     /** @return array<int, int> */
@@ -708,7 +745,7 @@ final class CalendarRepository
             ]);
 
             $this->db->commit();
-            return $stmt->rowCount() > 0;
+            return true;
         } catch (Throwable $exception) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();

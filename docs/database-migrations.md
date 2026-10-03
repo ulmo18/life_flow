@@ -1,5 +1,13 @@
 # Database Migrations
 
+## Locale And Time Zone
+
+- New installations include `user_preferences.locale` (default `ko`) and `user_preferences.timezone` (default `Asia/Seoul`) in both schema files.
+- Existing MySQL installations apply `sql/migration.add_locale_timezone.mysql.sql`.
+- Existing SQLite installations apply `sql/migration.add_locale_timezone.sqlite.sql`.
+- The repository also adds missing preference columns defensively at runtime, matching the existing notification-preference compatibility behavior.
+- Locale and time zone are independent; changing one must never overwrite the other.
+
 ## Daily Plan Copies
 
 Apply after Goal, Plan, and Calendar base tables:
@@ -33,6 +41,9 @@ Back up the database, then apply these one-time migrations after their prerequis
 8. `sql/migration.daily_plan_untimed.mysql.sql` — requires `daily_plan_items` and `retrospect_report_plan_items`; allows both time indexes to be null for time-unspecified daily Plan items and their published snapshots.
 
 9. `sql/migration.plan_block_templates.mysql.sql` — requires `user` and `goals`; creates the reusable Plan-block template library.
+10. `sql/migration.add_retrospect_review.mysql.sql` — requires the Retrospect snapshot tables; adds connected-Goal labels and published Memo snapshots.
+11. `sql/migration.add_execution_energy.mysql.sql` — requires `user` and `calendar_events`; creates Execution Energy baseline, group, daily snapshot, event setting, and legacy correction/notice tables retained for migration compatibility.
+12. `sql/migration.add_execution_energy_feedback.mysql.sql` — apply only when migration 11 was deployed before `execution_energy_days.burden_feedback` was introduced; do not apply it after the current full migration.
 
 The Routine validation trigger migration depends on the lifecycle columns; the other feature migrations are independent. The order above is the recommended release order for repeatable deployments. Record each applied migration because the `ALTER TABLE` statements are not intended to be rerun.
 
@@ -50,6 +61,9 @@ MySQL application connections set the session timezone to `+00:00`. Before deplo
 - `app/Core/Database.php` adds `retrospect_report_actual_items.memo_snapshot` when it is missing.
 - `app/Core/Database.php` automatically applies `migration.daily_plan_untimed.sqlite.sql` and `migration.retrospect_plan_untimed.sqlite.sql` when existing Plan time columns are still non-nullable.
 - `app/Core/Database.php` automatically applies `migration.plan_block_templates.sqlite.sql` when the reusable Plan-block template table is missing.
+- `app/Core/Database.php` adds Retrospect Goal snapshot columns and reapplies the schema to create the Memo snapshot table; `sql/migration.add_retrospect_review.sqlite.sql` is available for controlled upgrades.
+- `app/Core/Database.php` creates the Execution Energy tables when `execution_energy_profiles` is missing; `sql/migration.add_execution_energy.sqlite.sql` is available for controlled manual migration.
+- Existing SQLite Execution Energy tables receive the missing `burden_feedback` column automatically; `sql/migration.add_execution_energy_feedback.sqlite.sql` is available for controlled manual migration.
 - Reapplying `sql/schema.sqlite.sql` creates `calendar_tag_preferences`; `sql/migration.calendar_tag_preferences.sqlite.sql` is available for controlled manual migration.
 - The matching `*.sqlite.sql` files remain available for controlled manual migrations.
 - Do not delete SQLite compatibility or fallback code even when production uses MySQL; it remains part of local and fallback support.

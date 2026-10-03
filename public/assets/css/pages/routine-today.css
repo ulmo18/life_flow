@@ -1,0 +1,7 @@
+.routine-today-page { display: grid; gap: var(--space-4); }
+.routine-today-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.routine-today-heading h1 { margin: 0; }
+.routine-today-heading p { margin: var(--space-1) 0 0; }
+.routine-today-list { list-style: none; display: grid; gap: var(--space-3); margin: 0; padding: 0; }
+.routine-today-list .card { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); }
+.routine-today-empty { display: grid; justify-items: start; gap: var(--space-3); padding: var(--space-5); }

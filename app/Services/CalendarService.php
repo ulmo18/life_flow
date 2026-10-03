@@ -15,6 +15,7 @@ final class CalendarService
     private GoalService $goalService;
     private CalendarTagService $calendarTagService;
     private PlanService $planService;
+    private ExecutionEnergyService $executionEnergyService;
 
     public function __construct()
     {
@@ -24,6 +25,7 @@ final class CalendarService
         $this->goalService = new GoalService();
         $this->calendarTagService = new CalendarTagService();
         $this->planService = new PlanService();
+        $this->executionEnergyService = new ExecutionEnergyService();
     }
 
     /** @return array<string, mixed> */
@@ -42,10 +44,12 @@ final class CalendarService
         $planSegments = $this->buildSegmentsFromBlocks($planBlocks, 'plan');
         $actualSegments = $this->buildSegmentsFromEvents($actualEvents);
 
+        $executionEnergy = $this->executionEnergyService->getDayData($userId, $date);
+
         return [
             'date' => $date,
             'todayDate' => date('Y-m-d'),
-            'canEditRoutines' => $date <= date('Y-m-d'),
+            'canEditRoutines' => $date === date('Y-m-d'),
             'dateTitle' => $this->formatDateTitle($date),
             'dateSubTitle' => $this->formatDateSubTitle($date, $dateMeta),
             'dateClass' => $this->dateClass($date, $dateMeta),
@@ -68,18 +72,19 @@ final class CalendarService
             'unscheduledEvents' => $this->buildUnscheduledEvents($actualEvents),
             'hasLinkedActualEvents' => $this->hasLinkedActualEvents($actualEvents),
             'routines' => $this->routineService->getCalendarRoutines($userId, $date),
-            'retrospectPreview' => $this->retrospectService->getLatestPublishedPreview($userId),
+            'retrospectPreview' => $this->retrospectService->getPublishedPreview($userId, $date),
             'headerGuidance' => $this->buildHeaderGuidance(
                 $date,
                 $planReminderItems,
                 $actualSegments,
                 $notificationSettings
             ),
+            'executionEnergy' => $executionEnergy,
         ];
     }
 
     /** @param array<string, mixed> $input */
-    public function validateEventInput(array $input): array
+    public function validateEventInput(int $userId, array $input): array
     {
         $date = $this->normalizeDate((string) ($input['date'] ?? ''));
         $title = trim((string) ($input['title'] ?? ''));
@@ -92,6 +97,7 @@ final class CalendarService
         $memo = trim((string) ($input['memo'] ?? ''));
         $routineIds = $this->normalizeRoutineIds($input['routine_ids'] ?? []);
         $sourceEventId = filter_var($input['source_event_id'] ?? null, FILTER_VALIDATE_INT);
+        $energyValidation = $this->executionEnergyService->validateEventSetting($userId, $input);
         $errors = [];
 
         if ($requestedScheduleType !== 'timed') {
@@ -113,6 +119,7 @@ final class CalendarService
         if (mb_strlen($memo) > 500) {
             $errors['memo'] = '메모는 500자 이내로 입력해주세요.';
         }
+        $errors += $energyValidation['errors'];
 
         return [
             'ok' => $errors === [],
@@ -130,12 +137,13 @@ final class CalendarService
                 'sourceEventId' => $scheduleType === 'timed' && $sourceEventId !== false && $sourceEventId > 0
                     ? (int) $sourceEventId
                     : null,
+                'energySetting' => $energyValidation['data'],
             ],
         ];
     }
 
     /** @param array<string, mixed> $input */
-    public function validateEventUpdateInput(array $input): array
+    public function validateEventUpdateInput(int $userId, array $input): array
     {
         $date = $this->normalizeDate((string) ($input['date'] ?? ''));
         $eventId = filter_var($input['event_id'] ?? null, FILTER_VALIDATE_INT);
@@ -144,6 +152,7 @@ final class CalendarService
         $dailyPlanItemId = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
         $calendarTagId = filter_var($input['calendar_tag_id'] ?? null, FILTER_VALIDATE_INT);
         $memo = trim((string) ($input['memo'] ?? ''));
+        $energyValidation = $this->executionEnergyService->validateEventSetting($userId, $input);
         $errors = [];
 
         if ($eventId === false || $eventId <= 0) {
@@ -159,6 +168,7 @@ final class CalendarService
         if (mb_strlen($memo) > 500) {
             $errors['memo'] = '메모는 500자 이내로 입력해주세요.';
         }
+        $errors += $energyValidation['errors'];
 
         return [
             'ok' => $errors === [],
@@ -171,6 +181,7 @@ final class CalendarService
                 'dailyPlanItemId' => $scheduleType === 'timed' && $dailyPlanItemId !== false && $dailyPlanItemId > 0 ? $dailyPlanItemId : null,
                 'calendarTagId' => $calendarTagId === false || $calendarTagId <= 0 ? null : $calendarTagId,
                 'memo' => $memo,
+                'energySetting' => $energyValidation['data'],
             ],
         ];
     }
@@ -203,6 +214,7 @@ final class CalendarService
             );
 
         if ($eventId !== null) {
+            $this->executionEnergyService->saveEventSetting($userId, $eventId, (array) ($data['energySetting'] ?? []));
             foreach (($data['routineIds'] ?? []) as $routineId) {
                 $this->routineService->markDoneForDate($userId, (int) $routineId, (string) $data['date']);
             }
@@ -214,7 +226,7 @@ final class CalendarService
     /** @param array<string, mixed> $data */
     public function updateActualEvent(int $userId, array $data): bool
     {
-        return $this->calendarRepository->updateActualEvent(
+        $updated = $this->calendarRepository->updateActualEvent(
             $userId,
             (int) $data['eventId'],
             (string) $data['date'],
@@ -223,6 +235,15 @@ final class CalendarService
             $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
             (string) $data['memo']
         );
+        if ($updated && empty($data['energySetting']['preserveExisting'])) {
+            $this->executionEnergyService->saveEventSetting(
+                $userId,
+                (int) $data['eventId'],
+                (array) ($data['energySetting'] ?? [])
+            );
+        }
+
+        return $updated;
     }
 
     public function deleteActualEvent(int $userId, int $eventId): bool
@@ -632,6 +653,10 @@ final class CalendarService
                     'startIndex' => (int) $event['start_index'],
                     'endIndex' => (int) $event['end_index'],
                     'scheduleType' => 'timed',
+                    'energyGroupId' => $event['execution_energy_group_id'] === null ? null : (int) $event['execution_energy_group_id'],
+                    'energyType' => $event['execution_energy_type'] ?? null,
+                    'energyValue' => $event['execution_energy_value'] === null ? null : (int) $event['execution_energy_value'],
+                    'energyIsOverride' => (int) ($event['execution_energy_is_override'] ?? 0) === 1,
                 ]);
             }
         }
@@ -658,6 +683,10 @@ final class CalendarService
                 'tagColor' => $tagColor,
                 'tagTextColor' => $this->contrastTextColor($tagColor),
                 'memo' => (string) ($event['memo'] ?? ''),
+                'energyGroupId' => $event['execution_energy_group_id'] === null ? null : (int) $event['execution_energy_group_id'],
+                'energyType' => $event['execution_energy_type'] ?? null,
+                'energyValue' => $event['execution_energy_value'] === null ? null : (int) $event['execution_energy_value'],
+                'energyIsOverride' => (int) ($event['execution_energy_is_override'] ?? 0) === 1,
             ];
         }
 

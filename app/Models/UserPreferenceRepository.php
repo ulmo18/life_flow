@@ -11,6 +11,8 @@ final class UserPreferenceRepository
 {
     private const DEFAULTS = [
         'theme' => 'light',
+        'locale' => 'ko',
+        'timezone' => 'Asia/Seoul',
         'notification_enabled' => 1,
         'retrospect_morning_enabled' => 1,
         'retrospect_morning_time' => '07:00',
@@ -38,6 +40,8 @@ final class UserPreferenceRepository
         $stmt = $this->db->prepare(
             'SELECT
                 theme,
+                locale,
+                timezone,
                 notification_enabled,
                 retrospect_morning_enabled,
                 retrospect_morning_time,
@@ -93,6 +97,38 @@ final class UserPreferenceRepository
         $stmt->execute([
             'user_id' => $userId,
             'theme' => $theme,
+        ]);
+    }
+
+    public function updateLocaleAndTimezone(int $userId, string $locale, string $timezone): void
+    {
+        if (Database::configuredDriver() === 'mysql') {
+            $sql = 'INSERT INTO user_preferences (
+                        user_id, locale, timezone, created_at, updated_at
+                    ) VALUES (
+                        :user_id, :locale, :timezone, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    ON DUPLICATE KEY UPDATE
+                        locale = VALUES(locale),
+                        timezone = VALUES(timezone),
+                        updated_at = CURRENT_TIMESTAMP';
+        } else {
+            $sql = 'INSERT INTO user_preferences (
+                        user_id, locale, timezone, created_at, updated_at
+                    ) VALUES (
+                        :user_id, :locale, :timezone, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        locale = excluded.locale,
+                        timezone = excluded.timezone,
+                        updated_at = CURRENT_TIMESTAMP';
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            'user_id' => $userId,
+            'locale' => $locale,
+            'timezone' => $timezone,
         ]);
     }
 
@@ -240,6 +276,8 @@ final class UserPreferenceRepository
 
         $definitions = Database::configuredDriver() === 'mysql'
             ? [
+                'locale' => "VARCHAR(10) NOT NULL DEFAULT 'ko'",
+                'timezone' => "VARCHAR(64) NOT NULL DEFAULT 'Asia/Seoul'",
                 'notification_enabled' => 'TINYINT(1) NOT NULL DEFAULT 1',
                 'retrospect_morning_enabled' => 'TINYINT(1) NOT NULL DEFAULT 1',
                 'retrospect_morning_time' => "TIME NOT NULL DEFAULT '07:00:00'",
@@ -253,6 +291,8 @@ final class UserPreferenceRepository
                 'goal_deadline_day_before_enabled' => 'TINYINT(1) NOT NULL DEFAULT 1',
             ]
             : [
+                'locale' => "TEXT NOT NULL DEFAULT 'ko'",
+                'timezone' => "TEXT NOT NULL DEFAULT 'Asia/Seoul'",
                 'notification_enabled' => 'INTEGER NOT NULL DEFAULT 1',
                 'retrospect_morning_enabled' => 'INTEGER NOT NULL DEFAULT 1',
                 'retrospect_morning_time' => "TEXT NOT NULL DEFAULT '07:00'",

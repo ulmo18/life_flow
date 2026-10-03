@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\I18n;
 use App\Models\GoalRepository;
 use App\Models\RoutineRepository;
 use App\Models\UserPreferenceRepository;
@@ -135,7 +136,7 @@ final class NotificationService
     /** @param array<string, mixed> $settings */
     private function basePayload(array $settings): array
     {
-        $timezone = new DateTimeZone('Asia/Seoul');
+        $timezone = $this->timezone($settings);
 
         return [
             'version' => 2,
@@ -159,7 +160,7 @@ final class NotificationService
                 'type' => 'retrospect',
                 'time' => (string) $settings['retrospect_morning_time'],
                 'title' => 'LifeFlow',
-                'message' => '회고 알림입니다',
+                'message' => $this->message('notification.review', $settings),
                 'repeat' => 'daily',
             ];
         }
@@ -170,7 +171,7 @@ final class NotificationService
                 'type' => 'retrospect',
                 'time' => (string) $settings['retrospect_evening_time'],
                 'title' => 'LifeFlow',
-                'message' => '회고 알림입니다',
+                'message' => $this->message('notification.review', $settings),
                 'repeat' => 'daily',
             ];
         }
@@ -198,8 +199,8 @@ final class NotificationService
                 'time' => (string) $settings['routine_reminder_time'],
                 'startDate' => $startDate,
                 'endDate' => $endDate,
-                'title' => '루틴 알림',
-                'message' => $name . ' 루틴을 확인할 시간입니다.',
+                'title' => $this->message('notification.routine_title', $settings),
+                'message' => $this->message('notification.routine', $settings, ['name' => $name]),
                 'repeat' => 'daily',
             ];
         }, $this->routineRepository->listNotificationEnabled($userId));
@@ -213,7 +214,7 @@ final class NotificationService
         }
 
         $date = (string) ($calendar['date'] ?? date('Y-m-d'));
-        $timezone = new DateTimeZone('Asia/Seoul');
+        $timezone = $this->timezone($settings);
         $now = new DateTimeImmutable('now', $timezone);
         $items = [];
         foreach (($calendar['planReminderItems'] ?? []) as $item) {
@@ -239,8 +240,8 @@ final class NotificationService
                 'templateId' => (int) ($item['templateId'] ?? 0),
                 'fireAt' => $fireAt->format(DATE_ATOM),
                 'startsAt' => $startsAt->format(DATE_ATOM),
-                'title' => '계획 알림',
-                'message' => $title . ' 시작 5분 전입니다.',
+                'title' => $this->message('notification.plan_title', $settings),
+                'message' => $this->message('notification.plan', $settings, ['title' => $title]),
             ];
         }
 
@@ -267,8 +268,8 @@ final class NotificationService
                         'type' => 'goal_deadline_d1',
                         'goalId' => $goalId,
                         'fireAt' => $dayBefore . 'T' . (string) $settings['goal_deadline_time'] . ':00',
-                        'title' => '목표 알림',
-                        'message' => '목표 마감일이 하루 남았습니다.',
+                        'title' => $this->message('notification.goal_title', $settings),
+                        'message' => $this->message('notification.goal_day_before', $settings),
                     ];
                 }
             }
@@ -278,12 +279,30 @@ final class NotificationService
                 'type' => 'goal_deadline',
                 'goalId' => $goalId,
                 'fireAt' => $endDate . 'T' . (string) $settings['goal_deadline_time'] . ':00',
-                'title' => '목표 알림',
-                'message' => '목표 마감일입니다 고생하셨습니다',
+                'title' => $this->message('notification.goal_title', $settings),
+                'message' => $this->message('notification.goal_deadline', $settings),
             ];
         }
 
         return $items;
+    }
+
+    /** @param array<string, mixed> $settings */
+    private function timezone(array $settings): DateTimeZone
+    {
+        $name = (string) ($settings['timezone'] ?? date_default_timezone_get());
+
+        try {
+            return new DateTimeZone($name);
+        } catch (\Exception) {
+            return new DateTimeZone('Asia/Seoul');
+        }
+    }
+
+    /** @param array<string, mixed> $settings @param array<string, scalar|null> $replace */
+    private function message(string $key, array $settings, array $replace = []): string
+    {
+        return I18n::translate($key, $replace, (string) ($settings['locale'] ?? 'ko'));
     }
 
     /** @param array<string, mixed> $settings */

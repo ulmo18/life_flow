@@ -1,141 +1,95 @@
-# Goal Feature Implementation
-
-When a Plan template is connected to Calendar, each block's `goal_id` is copied into the date-specific `daily_plan_items` row. Goal review uses that copied execution context, so later template edits do not rewrite historical daily evidence.
+# Goal Map Feature Implementation
 
 ## Purpose
-Goal helps users live intentionally by connecting long-term outcomes to smaller plans and routines.
 
-The feature supports both lightweight goals and hierarchical breakdowns:
-- Bucket list
-- Yearly goal
-- Half-year goal
-- Quarterly goal
-- Monthly goal
+Goal is the structural starting point from thought to execution. `/goal` prioritizes an automatically arranged Goal Map so users can understand what they want, how goals relate, and what they are focusing on without reading a card list.
 
-Users do not have to start from a bucket list. A single monthly goal is valid, and larger goals can optionally be split into smaller child goals.
+Existing Goal, Plan, To-do, Calendar, Routine, notification, and Retrospect relationships remain intact. Goal Map does not store canvas coordinates and is not a free-placement whiteboard.
 
-## Current Scope
-Implemented in this phase:
-- Goal list page at `/goal`
-- Goal create, update, and soft delete
-- Bottom-sheet create/edit UI
-- Optional parent goal connection
-- Goal type selection as radio chips
-- Status and period editing from the update sheet
-- Status filter chips on the list page for active, completed, archived, and paused goals
-- Goal-type filter chips for bucket, yearly, half-year, quarterly, and monthly goals
-- Card and tree view switch on the list page
-- Active-goal tree view that shows each goal type and title on one tappable line
-- Automatic period defaults for non-bucket goals
-- Period progress indicators for goals with start and end dates
-- Behavior reminder memo
-- Compact goal cards with one collapsible details area for behavior notes and linked data
-- Bottom floating Goal add button
-- Goal usage guide opened from an exclamation icon beside the page title
-- Goal selection inside Plan and Routine forms
-- MySQL and SQLite schema support
+## Main experience
 
-Not implemented yet:
-- Retrospect goal progress metrics
-- Calendar goal badges or filters
+- The first input asks only `무엇을 하고 싶나요?`. Enter submits the title immediately.
+- Quick-created goals are internally stored as active `bucket` goals with no period. Type, dates, status, parent, and behavior reminder can be refined later in the detail panel.
+- Every node exposes a compact `＋` action that opens an inline child-title input. Child creation never requires a page or modal transition.
+- The tree is automatically arranged. Root goals can form two columns on wider screens; mobile always uses a vertical indentation hierarchy without horizontal overflow.
+- Goal depth controls title emphasis. Root goals are strongest and level four or deeper is deliberately quiet.
+- Nodes with children support collapse/expand. Collapsed IDs are UI preferences stored in browser `localStorage`; layout state is not written to the database.
+- A collapsed node shows the total descendant count.
+- Node status uses a compact symbol: `◐` active, `✓` completed, and `○` paused/archived. Completed nodes are visually muted.
+- Selecting a node opens its details in a right panel on desktop and a bottom sheet on mobile.
+- The panel shows status, period, period progress, linked Plan count, linked daily To-do count, and linked Routine count. Existing detailed edit and soft-delete actions remain available inside an expandable section.
+
+## Map modes
+
+- `GET /goal?mode=all` shows every non-deleted goal and preserves its hierarchy. This is the default.
+- `GET /goal?mode=focus` shows active goals. If an active goal's parent is filtered out, the active goal becomes a visible map root for this view only; persistence is not changed.
+- Structure dragging is available only in `전체 목표`. It is disabled in the filtered focus view so a visually promoted child cannot accidentally lose its hidden parent.
+- “지금 집중” currently maps to the existing `active` status. A separate focus flag is intentionally not added in this phase.
+
+## Structure and ordering
+
+- `goals.parent_goal_id` stores hierarchy.
+- `goals.sort_order` stores sibling order under the same parent. New goals append to their parent's siblings.
+- Desktop drag handles support two operations:
+  - drop before a sibling to reorder;
+  - drop on another node to append as its child.
+- Dropping into an end target appends at that hierarchy level.
+- The server validates ownership and cycles before moving a goal and resequences the affected target siblings in a transaction.
+- Mobile hides the unreliable native HTML drag handle. Parent changes remain available in the detail sheet; the visual hierarchy itself stays vertical and touch-friendly.
+
+## Keyboard behavior
+
+- Enter submits root and inline child creation forms.
+- Escape closes the open inline child form or detail layer.
+- Tab and Shift+Tab retain normal browser focus navigation. They are not overridden for hierarchy changes because doing so would harm keyboard and assistive-technology navigation.
+- Delete and Backspace are not global shortcuts. Deletion remains a confirmed action in the detail panel.
 
 ## Routes
-- `GET /goal`: shows the goal list.
-- `GET /goal?view=tree`: shows the active-goal tree view.
-- `POST /goal`: creates a goal.
-- `POST /goal/update`: updates a goal.
-- `POST /goal/delete`: soft-deletes a goal.
 
-All POST routes require CSRF verification.
+- `GET /goal?mode=all|focus`: render Goal Map.
+- `POST /goal`: create a root or child goal. `Accept: application/json` returns a compact result for inline creation.
+- `POST /goal/update`: update title, type, parent, status, period, and behavior reminder.
+- `POST /goal/move`: reorder or reparent a goal; returns JSON.
+- `POST /goal/delete`: soft-delete a goal after confirmation.
 
-## MVC Structure
+All write routes require CSRF validation.
+
+## MVC structure
+
 - Controller: `app/Controllers/GoalController.php`
 - Service: `app/Services/GoalService.php`
 - Model: `app/Models/GoalRepository.php`
 - View: `app/Views/pages/goal/index.php`
 - CSS: `public/assets/css/pages/goal.css`
-- JS: `public/assets/js/pages/goal.js`
+- JavaScript: `public/assets/js/pages/goal.js`
 
-Controllers only handle request and response flow. Validation and formatting live in `GoalService`. All database queries live in `GoalRepository`.
+Controllers coordinate HTTP responses, the service owns validation/tree formatting/cycle policy, and the repository owns prepared SQL and movement transactions.
 
-## Database
-### `goals`
-Stores the primary goal records.
+## Data and compatibility
 
-Important columns:
-- `user_id`
+No migration is required for Goal Map. Existing MySQL and SQLite schemas already contain:
+
 - `parent_goal_id`
-- `goal_type`
-- `title`
-- `behavior_when`
-- `behavior_where`
-- `behavior_how`
-- `period_start_date`
-- `period_end_date`
-- `status`
 - `sort_order`
-- `completed_at`
-- `deleted_at`
+- `goal_type`
+- `status`
+- period and behavior-reminder fields
 
-Allowed `goal_type` values:
-- `bucket`
-- `yearly`
-- `half_year`
-- `quarterly`
-- `monthly`
+Allowed goal types and statuses remain unchanged for compatibility. Goal Map does not force them during quick creation but detailed editing retains the existing options.
 
-Allowed `status` values:
-- `active`
-- `completed`
-- `paused`
-- `archived`
+When a Plan template is copied into Calendar, its `goal_id` remains copied into `daily_plan_items`. Goal details count those daily items as connected To-dos. Plan and Routine selectors continue to offer active goals only.
 
-Bucket-list goals are stored without period dates. Non-bucket goals default to the creation date as `period_start_date`; `period_end_date` is calculated from the goal type when the user does not provide dates.
+Deleting a goal keeps the existing safety behavior: direct children become roots, and connected Plan/Routine source links are cleared rather than deleting execution records.
 
-Default period calculation:
-- `yearly`: start date + 1 year
-- `half_year`: start date + 6 months
-- `quarterly`: start date + 3 months
-- `monthly`: start date + 1 month
+## Verification scenarios
 
-`behavior_how` is currently used as the single behavior reminder memo. The older `behavior_when` and `behavior_where` columns are kept nullable for compatibility.
-
-### Goal Hierarchy
-Hierarchy is optional and uses `goals.parent_goal_id`.
-
-The service prevents direct self-linking and descendant-to-parent cycles. When a parent goal is deleted, child goals are not deleted; their `parent_goal_id` is cleared.
-
-### Plan Linkage
-`plan_templates.goal_id` connects plan blocks to active goals.
-
-Plan blocks connect through `plan_templates.goal_id`, not through `plan_groups` or `plan_blocks`. The Plan editor only offers active goals in the goal select.
-
-### Routine Linkage
-`routines.goal_id` connects routines to active goals.
-
-Routine creation/editing only offers active goals in the goal select.
-
-## SQLite Compatibility
-SQLite schema support is maintained in `sql/schema.sqlite.sql`.
-
-For existing SQLite databases, `app/Core/Database.php` ensures the nullable `routines.goal_id` column exists before running shared schema objects, so the new routine goal index can be created safely.
-
-## UX Notes
-- Goal creation/editing uses a bottom sheet to match existing Routine and Retrospect interaction patterns.
-- The title-side exclamation icon opens a guide bottom sheet explaining that users can start at any goal depth.
-- Goal creation intentionally keeps the form light: title, type, parent goal, and behavior reminder.
-- Goal editing exposes status and period controls.
-- The default card view keeps status and goal-type filters. Filter links preserve both selections.
-- The tree view always focuses on active goals only so users can scan the current hierarchy without completed, archived, or paused goals competing for attention.
-- Tapping a one-line tree node opens the existing edit sheet; period, progress, linkage counts, and edit labels are intentionally omitted from the tree card.
-- Retrospect owns goal execution feedback by aggregating linked Plan templates, matching actual Calendar events, and linked Routine completion records. It does not automatically mark the goal complete.
-- Goal cards show type, optional parent goal in an arrow path, status, period, and period progress in a compact mobile layout.
-- Behavior reminders and linked plans/routines are collapsed into one details area. Empty linked Plan or Routine sections are not rendered.
-- The usage-guide icon is visually smaller than the page title while retaining an expanded touch target.
-- The Goal add action is fixed near the bottom of the viewport to match the Plan list add interaction.
-- Bucket-list goals hide effective period data by storing null period dates.
-
-## Future Work
-- Add Retrospect goal feedback based on linked plan blocks, actual calendar events, and routine completion.
-- Consider goal-level progress views after plan/routine link data exists.
-- Goal deadline notification payloads are built by `NotificationService`; Settings owns the on/off and reminder time.
+1. Create `세계여행` with the root title input.
+2. Add `일본` from `세계여행`'s inline `＋` action.
+3. Add `오사카` below `일본` and verify three-level rendering.
+4. Collapse and expand `세계여행`; reload and verify the browser remembers the state.
+5. Drag sibling goals to reorder them and reload.
+6. Drag a goal onto a different parent and reload.
+7. Select a goal and verify the desktop right panel/mobile bottom sheet.
+8. Switch between all goals and current focus.
+9. Verify the mobile hierarchy has no horizontal page overflow and can create children.
+10. Verify hierarchy and order persist in both MySQL and SQLite.

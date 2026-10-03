@@ -47,18 +47,11 @@
   font-size: 13px;
 }
 
-.plan-block-template-form,
 .plan-block-template-card {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   padding: var(--space-4);
-}
-
-.plan-block-template-form.is-edit {
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  background: var(--color-surface-soft);
 }
 
 .plan-block-template-list {
@@ -68,11 +61,18 @@
 }
 
 .plan-block-template-card {
-  display: grid;
+  padding: var(--space-3) var(--space-4);
+}
+
+.plan-block-template-summary-row {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
 }
 
 .plan-block-template-summary {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -94,11 +94,87 @@
   color: var(--color-text-muted);
 }
 
-.plan-block-template-card summary {
+.plan-block-template-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plan-block-template-actions form {
+  margin: 0;
+}
+
+.plan-block-template-actions .btn {
+  min-width: 48px;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.plan-block-floating-add {
+  position: fixed;
+  left: 50%;
+  bottom: max(96px, calc(env(safe-area-inset-bottom) + 96px));
+  z-index: 860;
+  width: min(calc(100% - 32px), 430px);
+  transform: translateX(-50%);
+  box-shadow: 0 14px 30px rgba(53, 89, 224, 0.28);
+}
+
+.plan-block-local-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  align-items: end;
+  padding: var(--space-3);
+}
+
+.plan-block-local-layer[hidden] {
+  display: none;
+}
+
+.plan-block-local-overlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(26, 27, 58, 0.48);
   cursor: pointer;
-  color: var(--color-primary);
-  font-size: 13px;
-  font-weight: 800;
+}
+
+.plan-block-sheet {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-3);
+  width: min(100%, 560px);
+  max-height: min(82vh, 680px);
+  margin: 0 auto;
+  overflow: auto;
+  border: 1px solid rgba(216, 200, 179, 0.95);
+  border-radius: 22px 22px 18px 18px;
+  background: #fffaf2;
+  box-shadow: 0 -18px 42px rgba(26, 27, 58, 0.22);
+  padding: var(--space-4);
+  overscroll-behavior: contain;
+}
+
+body[data-theme='dark'] .plan-block-sheet {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(36, 37, 31, 0.98);
+  box-shadow: 0 -18px 42px rgba(0, 0, 0, 0.38);
+}
+
+.plan-block-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.plan-block-sheet-header strong {
+  font-size: var(--font-size-lg);
 }
 
 .plan-list-section {
@@ -142,22 +218,32 @@ body[data-theme='dark'] .plan-block-summary {
 
 .plan-list-item {
   display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.plan-list-heading {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4);
 }
 
-.plan-list-main {
-  display: grid;
-  gap: 2px;
-}
-
-.plan-list-main strong {
+.plan-list-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
   font-size: var(--font-size-base);
+  font-weight: 800;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.plan-list-main span {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+.plan-list-name:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .plan-goal-list {
@@ -187,30 +273,98 @@ body[data-theme='dark'] .plan-block-summary {
   white-space: nowrap;
 }
 
-.plan-list-actions {
+.plan-list-copy-form {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.plan-list-copy-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(216, 200, 179, 0.9);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-secondary);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.plan-list-copy-button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.plan-list-copy-button:focus-visible,
+.plan-list-name:focus-visible,
+.plan-list-blocks summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.plan-list-copy-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.plan-list-blocks {
+  border-top: 1px solid rgba(216, 200, 179, 0.68);
+  padding-top: var(--space-2);
+}
+
+.plan-list-blocks summary {
+  width: fit-content;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 800;
+}
+
+.plan-list-blocks .plan-blocks-open,
+.plan-list-blocks[open] .plan-blocks-closed {
+  display: none;
+}
+
+.plan-list-blocks[open] .plan-blocks-open {
+  display: inline;
+}
+
+.plan-list-blocks ul {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 7px;
+  gap: 4px;
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
 }
 
-.plan-list-actions form,
-.plan-list-actions a,
-.plan-list-actions .btn {
-  width: 100%;
-}
-
-.plan-list-actions a {
-  display: inline-flex;
+.plan-list-blocks li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: center;
-  text-decoration: none;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 0;
 }
 
-.plan-list-actions .btn {
-  min-height: 36px;
-  padding: 0 var(--space-3);
-  border-radius: 11px;
-  font-size: 13px;
+.plan-list-blocks strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-list-blocks time {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .plan-add-button {
@@ -338,6 +492,11 @@ body[data-theme='dark'] .plan-editor-event {
   text-decoration: none;
 }
 
+.plan-detail-actions form,
+.plan-detail-actions form .btn {
+  width: 100%;
+}
+
 .plan-block-summary {
   margin-top: var(--space-4);
   border: 1px solid rgba(216, 200, 179, 0.9);
@@ -399,13 +558,12 @@ body[data-theme='dark'] .plan-block-list li {
   box-shadow: 0 14px 30px rgba(53, 89, 224, 0.28);
 }
 
-@media (min-width: 640px) {
-  .plan-list-item {
-    grid-template-columns: 1fr auto;
-    align-items: center;
+@media (max-width: 359px) {
+  .plan-list-blocks li {
+    gap: 6px;
   }
 
-  .plan-list-actions {
-    width: 220px;
+  .plan-list-blocks time {
+    font-size: 11px;
   }
 }

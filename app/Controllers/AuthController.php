@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Csrf;
+use App\Core\I18n;
 use App\Core\Database;
 use App\Models\SocialAccount;
 use App\Models\User;
@@ -353,10 +354,14 @@ final class AuthController
     {
         $theme = $this->currentTheme();
         $userId = (int) ($_SESSION['user_id'] ?? 0);
+        $preferences = (new UserPreferenceRepository())->get($userId);
 
         $this->render('pages/settings', [
             'csrfToken' => Csrf::token(),
             'theme' => $theme,
+            'locale' => I18n::normalizeLocale((string) ($preferences['locale'] ?? 'ko')),
+            'timezone' => (string) ($preferences['timezone'] ?? 'Asia/Seoul'),
+            'timezoneOptions' => \DateTimeZone::listIdentifiers(),
             'notificationSettings' => $this->notificationService->settings($userId),
             'notificationSyncPayload' => !empty($_SESSION['notification_sync_settings'])
                 ? $this->notificationService->buildSettingsSyncPayload($userId)
@@ -397,6 +402,40 @@ final class AuthController
         }
 
         $_SESSION['flash_success'] = '화면 모드를 저장했습니다.';
+
+        $this->redirect('/settings');
+    }
+
+    public function updateLocalization(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/settings', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+        $locale = (string) ($_POST['locale'] ?? 'ko');
+        $timezone = (string) ($_POST['timezone'] ?? 'Asia/Seoul');
+        $errors = [];
+
+        if (!in_array($locale, I18n::supportedLocales(), true)) {
+            $errors['locale'] = t('settings.invalid_locale');
+        }
+        if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
+            $errors['timezone'] = t('settings.invalid_timezone');
+        }
+        if ($userId <= 0) {
+            $errors['general'] = '로그인이 필요합니다.';
+        }
+        if ($errors !== []) {
+            $this->redirectWithErrors('/settings', $errors);
+        }
+
+        (new UserPreferenceRepository())->updateLocaleAndTimezone($userId, $locale, $timezone);
+        $_SESSION['locale_preference'] = $locale;
+        $_SESSION['timezone_preference'] = $timezone;
+        date_default_timezone_set($timezone);
+        $_SESSION['notification_sync_settings'] = true;
+        $_SESSION['flash_success'] = t('settings.saved_preferences');
 
         $this->redirect('/settings');
     }
@@ -574,7 +613,13 @@ final class AuthController
         $_SESSION['user_id'] = (int) $user['id'];
         $_SESSION['user_nickname'] = (string) ($user['nickname'] ?? '');
         $_SESSION['user_email'] = (string) ($user['email'] ?? '');
-        $_SESSION['theme_preference'] = $this->loadTheme((int) $user['id']);
+        $preferences = (new UserPreferenceRepository())->get((int) $user['id']);
+        $_SESSION['theme_preference'] = (string) ($preferences['theme'] ?? 'light') === 'dark' ? 'dark' : 'light';
+        $_SESSION['locale_preference'] = I18n::normalizeLocale((string) ($preferences['locale'] ?? 'ko'));
+        $timezone = (string) ($preferences['timezone'] ?? 'Asia/Seoul');
+        $_SESSION['timezone_preference'] = in_array($timezone, \DateTimeZone::listIdentifiers(), true)
+            ? $timezone
+            : 'Asia/Seoul';
     }
 
     private function currentTheme(): string

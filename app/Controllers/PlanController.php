@@ -22,7 +22,7 @@ final class PlanController
         }
 
         $this->render('pages/plan/index', [
-            'title' => 'Plan',
+            'title' => t('nav.plan'),
             'plans' => $this->planService()->getPlanList($this->userId()),
             'blockTemplates' => $this->planService()->getBlockTemplates($this->userId()),
             'goalOptions' => $this->goalService()->activeGoalOptions($this->userId()),
@@ -30,10 +30,12 @@ final class PlanController
             'csrfToken' => Csrf::token(),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
+            'blockFormOld' => $_SESSION['block_form_old'] ?? [],
             'pageStyles' => [$this->versionedAsset('/assets/css/pages/plan.css')],
+            'pageScripts' => [$this->versionedAsset('/assets/js/pages/plan-actions.js')],
         ]);
 
-        unset($_SESSION['flash_success'], $_SESSION['errors']);
+        unset($_SESSION['flash_success'], $_SESSION['errors'], $_SESSION['block_form_old']);
     }
 
     public function show(): void
@@ -58,6 +60,7 @@ final class PlanController
                 $this->versionedAsset('/assets/css/pages/calendar.css'),
                 $this->versionedAsset('/assets/css/pages/plan.css'),
             ],
+            'pageScripts' => [$this->versionedAsset('/assets/js/pages/plan-actions.js')],
         ]);
     }
 
@@ -214,6 +217,7 @@ final class PlanController
 
         $validation = $this->planService()->validateBlockTemplateInput($this->userId(), $_POST);
         if (!$validation['ok'] || $this->planService()->createBlockTemplate($this->userId(), $validation['data']) === null) {
+            $_SESSION['block_form_old'] = $this->blockTemplateFormState('create', null, $_POST);
             $this->redirectWithErrors(
                 '/plan?view=blocks',
                 $validation['errors'] ?: ['general' => '계획 블록 템플릿을 저장하지 못했습니다.']
@@ -236,6 +240,11 @@ final class PlanController
             $templateId === false || $templateId <= 0 || !$validation['ok']
             || !$this->planService()->updateBlockTemplate($this->userId(), (int) $templateId, $validation['data'])
         ) {
+            $_SESSION['block_form_old'] = $this->blockTemplateFormState(
+                'edit',
+                $templateId === false ? null : (int) $templateId,
+                $_POST
+            );
             $this->redirectWithErrors(
                 '/plan?view=blocks',
                 $validation['errors'] ?: ['general' => '계획 블록 템플릿을 수정하지 못했습니다.']
@@ -322,7 +331,7 @@ final class PlanController
     {
         http_response_code(503);
         $this->render('pages/plan/unavailable', [
-            'title' => 'Plan',
+            'title' => t('nav.plan'),
             'pageStyles' => ['/assets/css/pages/plan.css'],
         ]);
     }
@@ -360,5 +369,18 @@ final class PlanController
         $version = is_file($filePath) ? filemtime($filePath) : false;
 
         return $version === false ? $publicPath : $publicPath . '?v=' . $version;
+    }
+
+    /** @param array<string, mixed> $input @return array<string, string> */
+    private function blockTemplateFormState(string $mode, ?int $templateId, array $input): array
+    {
+        return [
+            'mode' => $mode === 'edit' ? 'edit' : 'create',
+            'id' => $templateId !== null && $templateId > 0 ? (string) $templateId : '',
+            'title' => trim((string) ($input['title'] ?? '')),
+            'duration' => (string) ($input['duration_index'] ?? '6'),
+            'importance' => (string) ($input['importance'] ?? 'D'),
+            'goal' => (string) ($input['goal_id'] ?? ''),
+        ];
     }
 }

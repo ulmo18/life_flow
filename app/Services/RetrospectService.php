@@ -25,6 +25,7 @@ final class RetrospectService
         $date = $this->normalizeDate($requestedDate);
         $sort = $this->normalizeSort($requestedSort);
         $isToday = $date === date('Y-m-d');
+        $canEdit = $this->isEditableDate($date);
         $settings = $this->formatSettings($this->retrospectRepository->getSettings($userId));
 
         if ($isToday && $settings['autoPublishEnabled'] && $this->shouldAutoPublish($settings['autoPublishTime'])) {
@@ -36,7 +37,7 @@ final class RetrospectService
 
         $report = $this->retrospectRepository->findReport($userId, $date);
         $useSnapshots = $report !== null && (string) $report['status'] === 'submitted';
-        $isEmptyHistory = !$isToday && !$useSnapshots;
+        $isEmptyHistory = !$canEdit && !$useSnapshots;
 
         if ($useSnapshots) {
             $snapshot = $this->buildSnapshotFromReport($report, $sort);
@@ -46,6 +47,19 @@ final class RetrospectService
             $snapshot = $this->buildLiveSnapshot($userId, $date, $sort);
         }
 
+        $memoItems = $useSnapshots
+            ? $this->formatSnapshotMemoItems($this->retrospectRepository->listMemoItems((int) $report['id']))
+            : $this->formatMemoItems($this->memoRepository->listForDate($userId, $date));
+        $routineItems = $this->withRoutineDetails($userId, $snapshot['routineItems'], $date);
+        $scheduleItems = $this->buildScheduleItems($snapshot['planItems'], $snapshot['actualItems'], $sort);
+        $recordComposition = $this->buildRecordComposition(
+            count($routineItems),
+            count($snapshot['planItems']),
+            count($snapshot['actualItems']),
+            count($memoItems)
+        );
+        $isFuture = $date > date('Y-m-d');
+
         return [
             'date' => $date,
             'dateTitle' => $this->formatDateTitle($date),
@@ -54,7 +68,9 @@ final class RetrospectService
             'nextDate' => $this->shiftDate($date, '+1 day'),
             'todayDate' => date('Y-m-d'),
             'isToday' => $isToday,
-            'isFuture' => $date > date('Y-m-d'),
+            'canEdit' => $canEdit,
+            'isFuture' => $isFuture,
+            'futureMessageKey' => $isFuture ? 'retrospect.future_message_' . random_int(1, 4) : null,
             'isEmptyHistory' => $isEmptyHistory,
             'sort' => $sort,
             'report' => $report,
@@ -62,10 +78,46 @@ final class RetrospectService
             'summary' => $snapshot['summary'],
             'planItems' => $snapshot['planItems'],
             'actualItems' => $snapshot['actualItems'],
-            'routineItems' => $snapshot['routineItems'],
-            'memoItems' => $this->memoRepository->listForDate($userId, $date),
+            'scheduleItems' => $scheduleItems,
+            'routineItems' => $routineItems,
+            'memoItems' => $memoItems,
+            'recordComposition' => $recordComposition,
             'settings' => $settings,
-            'statusLabel' => $useSnapshots ? '발행됨' : ($isToday ? '작성중' : '회고 없음'),
+            'statusLabel' => $useSnapshots ? '발행됨' : ($canEdit ? '작성중' : '회고 없음'),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function getHistoryData(int $userId, int $requestedPage): array
+    {
+        $perPage = 20;
+        $page = max(1, $requestedPage);
+        $rows = $this->retrospectRepository->listPublishedReports($userId, $perPage + 1, ($page - 1) * $perPage);
+        $hasNext = count($rows) > $perPage;
+        if ($hasNext) {
+            array_pop($rows);
+        }
+
+        return [
+            'items' => array_map(function (array $row): array {
+                $texts = $this->textsFromReport($row);
+                $snippet = $texts['today_review'] !== ''
+                    ? $texts['today_review']
+                    : ($texts['today_thoughts'] !== '' ? $texts['today_thoughts'] : $texts['tomorrow_plan']);
+
+                return [
+                    'date' => (string) $row['report_date'],
+                    'dateTitle' => $this->formatDateTitle((string) $row['report_date']),
+                    'dateSubTitle' => $this->formatDateSubTitle((string) $row['report_date']),
+                    'snippet' => mb_strlen($snippet) > 90 ? mb_substr($snippet, 0, 90) . '…' : $snippet,
+                    'planAchievementRate' => (int) $row['plan_achievement_rate'],
+                    'routineAchievementRate' => (int) $row['routine_achievement_rate'],
+                    'submittedAt' => (string) ($row['submitted_at'] ?? ''),
+                ];
+            }, $rows),
+            'page' => $page,
+            'hasPrevious' => $page > 1,
+            'hasNext' => $hasNext,
         ];
     }
 
@@ -207,6 +259,7 @@ final class RetrospectService
         return [
             'date' => $date,
             'dateTitle' => $this->formatDateTitle($date),
+            'dateSubTitle' => $this->formatDateSubTitle($date),
             'planAchievementRate' => (int) $report['plan_achievement_rate'],
             'routineAchievementRate' => (int) $report['routine_achievement_rate'],
             'linkedActualTimeLabel' => $this->formatMinutes((int) $report['linked_actual_minutes']),
@@ -263,7 +316,7 @@ final class RetrospectService
     public function saveDraft(int $userId, string $date, array $texts): bool
     {
         $date = $this->normalizeDate($date);
-        if ($date !== date('Y-m-d')) {
+        if (!$this->isEditableDate($date)) {
             return false;
         }
 
@@ -276,18 +329,12 @@ final class RetrospectService
     public function publish(int $userId, string $date, array $texts): bool
     {
         $date = $this->normalizeDate($date);
-        if ($date > date('Y-m-d')) {
-            return false;
-        }
-
-        $existingReport = $this->retrospectRepository->findReport($userId, $date);
-        if ($existingReport !== null
-            && (string) ($existingReport['status'] ?? '') === 'submitted'
-            && $date !== date('Y-m-d')) {
+        if (!$this->isEditableDate($date)) {
             return false;
         }
 
         $snapshot = $this->buildLiveSnapshot($userId, $date, 'time');
+        $memoItems = $this->memoRepository->listForDate($userId, $date);
 
         return $this->retrospectRepository->publishReport(
             $userId,
@@ -296,6 +343,7 @@ final class RetrospectService
             $snapshot['planItems'],
             $snapshot['actualItems'],
             $snapshot['routineItems'],
+            $memoItems,
             $texts
         );
     }
@@ -303,7 +351,7 @@ final class RetrospectService
     public function republish(int $userId, string $date): bool
     {
         $date = $this->normalizeDate($date);
-        if ($date > date('Y-m-d')) {
+        if (!$this->isEditableDate($date)) {
             return false;
         }
 
@@ -356,7 +404,7 @@ final class RetrospectService
 
     private function normalizeSort(?string $sort): string
     {
-        return $sort === 'tag' ? 'tag' : 'time';
+        return $sort === 'time' ? 'time' : 'importance';
     }
 
     /** @return array<string, mixed> */
@@ -476,6 +524,7 @@ final class RetrospectService
                 'start_index' => $isTimed ? (int) $item['start_index'] : null,
                 'end_index' => $isTimed ? (int) $item['end_index'] : null,
                 'importance' => $this->normalizeImportance((string) ($item['importance'] ?? 'D')),
+                'goalTitle' => (string) ($item['goal_title'] ?? ''),
                 'is_linked' => false,
                 'sort_order' => (int) $item['sort_order'],
                 'timeRange' => $isTimed
@@ -523,6 +572,10 @@ final class RetrospectService
             $formatted[] = [
                 'id' => (int) $item['id'],
                 'name' => (string) $item['name'],
+                'goalTitle' => (string) ($item['goal_title'] ?? ''),
+                'startDate' => (string) ($item['start_date'] ?? ''),
+                'durationDays' => (int) ($item['duration_days'] ?? 0),
+                'endedAt' => $item['ended_at'] === null ? null : (string) $item['ended_at'],
                 'state' => $state,
                 'stateLabel' => $this->routineStateLabel($state),
                 'sort_order' => $index + 1,
@@ -538,10 +591,12 @@ final class RetrospectService
         return array_map(function (array $item): array {
             $isTimed = $item['start_index'] !== null && $item['end_index'] !== null;
             return [
+                'plan_template_id' => (int) ($item['plan_template_id'] ?? 0),
                 'title' => (string) $item['title_snapshot'],
                 'start_index' => $isTimed ? (int) $item['start_index'] : null,
                 'end_index' => $isTimed ? (int) $item['end_index'] : null,
                 'importance' => $this->normalizeImportance((string) ($item['importance_snapshot'] ?? 'D')),
+                'goalTitle' => (string) ($item['goal_title_snapshot'] ?? ''),
                 'is_linked' => (int) $item['is_linked'] === 1,
                 'timeRange' => $isTimed
                     ? $this->formatTimeRange((int) $item['start_index'], (int) $item['end_index'])
@@ -570,6 +625,7 @@ final class RetrospectService
                 'tag_color' => $tagColor,
                 'tag_text_color' => $this->contrastTextColor($tagColor),
                 'plan_importance' => $importance,
+                'plan_template_id' => $item['plan_template_id_snapshot'] === null ? null : (int) $item['plan_template_id_snapshot'],
                 'is_linked' => (int) $item['is_linked'] === 1,
                 'durationMinutes' => ($end - $start) * 10,
                 'durationLabel' => $this->formatMinutes(($end - $start) * 10),
@@ -587,10 +643,232 @@ final class RetrospectService
             return [
                 'id' => (int) $item['routine_id'],
                 'name' => (string) $item['routine_name_snapshot'],
+                'goalTitle' => (string) ($item['goal_title_snapshot'] ?? ''),
+                'startDate' => '',
+                'durationDays' => 0,
+                'endedAt' => null,
                 'state' => $state,
                 'stateLabel' => $this->routineStateLabel($state),
             ];
         }, $items);
+    }
+
+    /** @param array<int, array<string, mixed>> $items
+     *  @return array<int, array<string, mixed>>
+     */
+    private function withRoutineDetails(int $userId, array $items, string $date): array
+    {
+        foreach ($items as &$item) {
+            $detail = $this->retrospectRepository->findRoutineDetail($userId, (int) $item['id']);
+            if ($detail !== null) {
+                if ((string) ($item['goalTitle'] ?? '') === '') {
+                    $item['goalTitle'] = (string) ($detail['goal_title'] ?? '');
+                }
+                $item['startDate'] = (string) $detail['start_date'];
+                $item['durationDays'] = (int) $detail['duration_days'];
+                $item['endedAt'] = $detail['ended_at'] === null ? null : (string) $detail['ended_at'];
+            }
+
+            $startDate = (string) ($item['startDate'] ?? '');
+            $durationDays = (int) ($item['durationDays'] ?? 0);
+            if ($startDate === '' || $durationDays < 1) {
+                $item['periodGroups'] = [];
+                $item['streakCount'] = 0;
+                continue;
+            }
+
+            $plannedEnd = (new DateTimeImmutable($startDate))->modify('+' . ($durationDays - 1) . ' days')->format('Y-m-d');
+            $endDate = !empty($item['endedAt']) && (string) $item['endedAt'] < $plannedEnd
+                ? (string) $item['endedAt']
+                : $plannedEnd;
+            $states = $this->retrospectRepository->listRoutineLogStates($userId, (int) $item['id'], $startDate, $endDate);
+            $groups = [];
+            for ($cursor = new DateTimeImmutable($startDate); $cursor <= new DateTimeImmutable($endDate); $cursor = $cursor->modify('+1 day')) {
+                $key = $cursor->format('Y-m');
+                if (!isset($groups[$key])) {
+                    $groups[$key] = [
+                        'label' => $cursor->format('Y년 n월'),
+                        'leadingBlankCount' => (int) $cursor->modify('first day of this month')->format('N') - 1,
+                        'cells' => [],
+                    ];
+                }
+                $cellDate = $cursor->format('Y-m-d');
+                $state = $states[$cellDate] ?? null;
+                $groups[$key]['cells'][] = [
+                    'date' => $cellDate,
+                    'day' => $cursor->format('j'),
+                    'state' => $state === 1 ? 'O' : ($state === 0 ? 'X' : ''),
+                ];
+            }
+
+            $streak = 0;
+            if ($date >= $startDate && $date <= $endDate) {
+                for ($cursor = new DateTimeImmutable($date); $cursor >= new DateTimeImmutable($startDate); $cursor = $cursor->modify('-1 day')) {
+                    if (($states[$cursor->format('Y-m-d')] ?? null) !== 1) {
+                        break;
+                    }
+                    $streak++;
+                }
+            }
+
+            $item['endDate'] = $endDate;
+            $item['periodGroups'] = array_values($groups);
+            $item['streakCount'] = $streak;
+        }
+        unset($item);
+
+        return $items;
+    }
+
+    /** @param array<int, array<string, mixed>> $plans
+     *  @param array<int, array<string, mixed>> $actuals
+     *  @return array<int, array<string, mixed>>
+     */
+    private function buildScheduleItems(array $plans, array $actuals, string $sort): array
+    {
+        $planIds = [];
+        foreach ($plans as $plan) {
+            $planIds[(int) ($plan['plan_template_id'] ?? 0)] = true;
+        }
+        $actualByPlan = [];
+        $unplanned = [];
+        foreach ($actuals as $actual) {
+            $planId = $actual['plan_template_id'] ?? null;
+            if ($planId !== null && (int) $planId > 0 && isset($planIds[(int) $planId])) {
+                $actualByPlan[(int) $planId] = $actual;
+            } else {
+                $unplanned[] = $actual;
+            }
+        }
+
+        $rows = [];
+        foreach ($plans as $plan) {
+            $planId = (int) ($plan['plan_template_id'] ?? 0);
+            $actual = $actualByPlan[$planId] ?? null;
+            $planStart = $plan['start_index'] ?? null;
+            $planEnd = $plan['end_index'] ?? null;
+            $actualStart = is_array($actual) ? (int) $actual['start_index'] : null;
+            $actualEnd = is_array($actual) ? (int) $actual['end_index'] : null;
+            $planDuration = $planStart === null || $planEnd === null ? null : ((int) $planEnd - (int) $planStart) * 10;
+            $actualDuration = $actualStart === null || $actualEnd === null ? null : ($actualEnd - $actualStart) * 10;
+            $hasDifference = $actual !== null && ($planStart === null || $planEnd === null
+                || (int) $planStart !== $actualStart || (int) $planEnd !== $actualEnd);
+
+            $rows[] = [
+                'kind' => 'plan',
+                'title' => (string) $plan['title'],
+                'importance' => (string) $plan['importance'],
+                'goalTitle' => (string) ($plan['goalTitle'] ?? ''),
+                'planTimeRange' => (string) $plan['timeRange'],
+                'actualTitle' => $actual === null ? '' : (string) $actual['title'],
+                'actualTimeRange' => $actual === null ? '' : (string) $actual['timeRange'],
+                'actualMemo' => $actual === null ? '' : (string) ($actual['memo'] ?? ''),
+                'tagName' => $actual === null ? '' : (string) ($actual['tag_name'] ?? ''),
+                'tagColor' => $actual === null ? '' : (string) ($actual['tag_color'] ?? ''),
+                'isLinked' => $actual !== null,
+                'hasDifference' => $hasDifference,
+                'durationDifferenceLabel' => $actual === null || $planDuration === null
+                    ? ''
+                    : $this->formatDurationDifference($actualDuration - $planDuration),
+                'startDifferenceLabel' => $actual === null || $planStart === null
+                    ? ''
+                    : $this->formatPointDifference(($actualStart - (int) $planStart) * 10),
+                'endDifferenceLabel' => $actual === null || $planEnd === null
+                    ? ''
+                    : $this->formatPointDifference(($actualEnd - (int) $planEnd) * 10),
+                'sortTime' => $actualStart ?? ($planStart === null ? 1000 : (int) $planStart),
+            ];
+        }
+
+        foreach ($unplanned as $actual) {
+            $rows[] = [
+                'kind' => 'actual',
+                'title' => (string) $actual['title'],
+                'importance' => '',
+                'goalTitle' => '',
+                'planTimeRange' => '',
+                'actualTitle' => (string) $actual['title'],
+                'actualTimeRange' => (string) $actual['timeRange'],
+                'actualMemo' => (string) ($actual['memo'] ?? ''),
+                'tagName' => (string) ($actual['tag_name'] ?? ''),
+                'tagColor' => (string) ($actual['tag_color'] ?? ''),
+                'isLinked' => false,
+                'hasDifference' => false,
+                'durationDifferenceLabel' => '',
+                'startDifferenceLabel' => '',
+                'endDifferenceLabel' => '',
+                'sortTime' => (int) $actual['start_index'],
+            ];
+        }
+
+        usort($rows, static function (array $left, array $right) use ($sort): int {
+            if ($sort === 'time') {
+                return [$left['sortTime'], $left['kind'] === 'actual' ? 1 : 0]
+                    <=> [$right['sortTime'], $right['kind'] === 'actual' ? 1 : 0];
+            }
+            $leftRank = $left['kind'] === 'plan' ? ord((string) $left['importance']) - ord('A') : 10;
+            $rightRank = $right['kind'] === 'plan' ? ord((string) $right['importance']) - ord('A') : 10;
+            return [$leftRank, $left['sortTime']] <=> [$rightRank, $right['sortTime']];
+        });
+
+        return $rows;
+    }
+
+    /** @param array<int, array<string, mixed>> $items */
+    private function formatMemoItems(array $items): array
+    {
+        return array_map(fn (array $item): array => [
+            'content' => (string) $item['content'],
+            'createdAt' => (string) $item['created_at'],
+            'timeLabel' => $this->formatMemoTime((string) $item['created_at']),
+        ], $items);
+    }
+
+    /** @param array<int, array<string, mixed>> $items */
+    private function formatSnapshotMemoItems(array $items): array
+    {
+        return array_map(fn (array $item): array => [
+            'content' => (string) $item['content_snapshot'],
+            'createdAt' => (string) $item['created_at_snapshot'],
+            'timeLabel' => $this->formatMemoTime((string) $item['created_at_snapshot']),
+        ], $items);
+    }
+
+    private function formatMemoTime(string $createdAt): string
+    {
+        if ($createdAt === '') {
+            return '';
+        }
+
+        return (new DateTimeImmutable($createdAt, new \DateTimeZone('UTC')))
+            ->setTimezone(new \DateTimeZone(date_default_timezone_get()))
+            ->format('H:i');
+    }
+
+    private function formatDurationDifference(int $minutes): string
+    {
+        if ($minutes === 0) {
+            return '소요시간 동일';
+        }
+
+        return '계획보다 ' . abs($minutes) . '분 ' . ($minutes > 0 ? '길게' : '짧게');
+    }
+
+    private function formatPointDifference(int $minutes): string
+    {
+        if ($minutes === 0) {
+            return '같음';
+        }
+
+        return abs($minutes) . '분 ' . ($minutes > 0 ? '늦음' : '빠름');
+    }
+
+    private function isEditableDate(string $date): bool
+    {
+        $today = date('Y-m-d');
+        $yesterday = (new DateTimeImmutable($today))->modify('-1 day')->format('Y-m-d');
+
+        return $date === $today || $date === $yesterday;
     }
 
     /** @param array<string, mixed>|null $report */
@@ -624,6 +902,45 @@ final class RetrospectService
     private function percentage(int $count, int $total): int
     {
         return $total > 0 ? (int) round(($count / $total) * 100) : 0;
+    }
+
+    /** @return array{total: int, routine: int, plan: int, actual: int, memo: int} */
+    private function buildRecordComposition(
+        int $routineCount,
+        int $planCount,
+        int $actualCount,
+        int $memoCount
+    ): array
+    {
+        $counts = [
+            'routine' => max(0, $routineCount),
+            'plan' => max(0, $planCount),
+            'actual' => max(0, $actualCount),
+            'memo' => max(0, $memoCount),
+        ];
+        $total = array_sum($counts);
+        $percentages = ['routine' => 0, 'plan' => 0, 'actual' => 0, 'memo' => 0];
+
+        if ($total > 0) {
+            $remainders = [];
+            foreach ($counts as $key => $count) {
+                $exact = ($count / $total) * 100;
+                $percentages[$key] = (int) floor($exact);
+                $remainders[$key] = $exact - $percentages[$key];
+            }
+
+            arsort($remainders, SORT_NUMERIC);
+            $pointsToDistribute = 100 - array_sum($percentages);
+            foreach (array_keys($remainders) as $key) {
+                if ($pointsToDistribute <= 0) {
+                    break;
+                }
+                $percentages[$key]++;
+                $pointsToDistribute--;
+            }
+        }
+
+        return ['total' => $total] + $percentages;
     }
 
     private function formatMinutes(int $minutes): string

@@ -30,7 +30,7 @@ final class CalendarController
         );
 
         $this->render('pages/calendar/index', [
-            'title' => 'Calendar',
+            'title' => t('nav.today'),
             'calendar' => $calendar,
             'headerGuidance' => $calendar['headerGuidance'] ?? null,
             'csrfToken' => Csrf::token(),
@@ -54,7 +54,7 @@ final class CalendarController
             $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
-        $validation = $this->calendarService->validateEventInput($_POST);
+        $validation = $this->calendarService->validateEventInput($this->userId(), $_POST);
         if (!$validation['ok']) {
             $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null), $validation['errors']);
         }
@@ -91,7 +91,7 @@ final class CalendarController
             $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
-        $validation = $this->calendarService->validateEventUpdateInput($_POST);
+        $validation = $this->calendarService->validateEventUpdateInput($this->userId(), $_POST);
         if (!$validation['ok']) {
             $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null), $validation['errors']);
         }

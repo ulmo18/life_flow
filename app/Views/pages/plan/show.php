@@ -12,7 +12,17 @@
 
     <div class="plan-detail-actions">
         <a class="btn btn-secondary" href="/plan/edit?id=<?= e((string) $plan['id']) ?>">계획 수정</a>
-        <a class="btn btn-ghost" href="/plan">목록으로</a>
+        <form
+            method="post"
+            action="/plan/delete"
+            data-confirm-title="하루 템플릿 삭제"
+            data-confirm="‘<?= e((string) $plan['name']) ?>’ 하루 템플릿을 삭제할까요? 캘린더와 회고 기록에는 영향을 주지 않습니다."
+            data-confirm-text="삭제"
+        >
+            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="plan_group_id" value="<?= e((string) $plan['id']) ?>">
+            <button type="submit" class="btn btn-ghost">계획 삭제</button>
+        </form>
     </div>
 
     <section class="daygrid-wrap" aria-label="계획 상세 그리드">

@@ -3,6 +3,19 @@
 <?php
 $today = date('Y-m-d');
 $selectedDuration = (int) ($old['duration_days'] ?? $defaultDurationDays);
+$selectedDuration = max(1, min(60, $selectedDuration));
+$oldStartDate = (string) ($old['start_date'] ?? $today);
+$parsedStartDate = DateTimeImmutable::createFromFormat('!Y-m-d', $oldStartDate);
+$selectedStartDate = $parsedStartDate instanceof DateTimeImmutable && $parsedStartDate->format('Y-m-d') === $oldStartDate
+    ? $oldStartDate
+    : $today;
+$defaultEndDate = (new DateTimeImmutable($selectedStartDate))->modify('+' . ($selectedDuration - 1) . ' days')->format('Y-m-d');
+$oldEndDate = (string) ($old['end_date'] ?? '');
+$parsedEndDate = DateTimeImmutable::createFromFormat('!Y-m-d', $oldEndDate);
+$selectedEndDate = $parsedEndDate instanceof DateTimeImmutable && $parsedEndDate->format('Y-m-d') === $oldEndDate
+    ? $oldEndDate
+    : $defaultEndDate;
+$maximumInitialEndDate = (new DateTimeImmutable($selectedStartDate))->modify('+59 days')->format('Y-m-d');
 $selectedGoalId = (int) ($old['goal_id'] ?? 0);
 $routineSummary = $routineSummary ?? [
     'activeCount' => 0,
@@ -92,6 +105,7 @@ $routineSummary = $routineSummary ?? [
                                 <?php if (!empty($cell['isToday'])): ?>
                                     <form method="post" action="/routine/toggle" data-routine-toggle-form>
                                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                                        <input type="hidden" name="return_to" value="manage">
                                         <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                                         <input type="hidden" name="date" value="<?= e((string) $cell['date']) ?>">
                                         <button
@@ -149,14 +163,14 @@ $routineSummary = $routineSummary ?? [
                 <p class="field-error"><?= e((string) $errors['name']) ?></p>
             <?php endif; ?>
 
-            <div class="routine-form-grid">
+            <div class="routine-form-grid routine-period-inputs" data-routine-period-inputs>
                 <div>
                     <label class="form-label" for="routineStartDate">시작일</label>
-                    <input class="input" id="routineStartDate" name="start_date" type="date" value="<?= e((string) ($old['start_date'] ?? $today)) ?>" required>
+                    <input class="input" id="routineStartDate" name="start_date" type="date" value="<?= e($selectedStartDate) ?>" required data-routine-start-date>
                 </div>
                 <div>
                     <label class="form-label" for="routineDuration">기간</label>
-                    <select class="input" id="routineDuration" name="duration_days">
+                    <select class="input" id="routineDuration" name="duration_days" data-routine-duration>
                         <?php foreach ($durationOptions as $days): ?>
                             <option value="<?= e((string) $days) ?>" <?= $selectedDuration === (int) $days ? 'selected' : '' ?>>
                                 <?= e((string) $days) ?>일
@@ -164,9 +178,16 @@ $routineSummary = $routineSummary ?? [
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <div>
+                    <label class="form-label" for="routineEndDate">마감일</label>
+                    <input class="input" id="routineEndDate" name="end_date" type="date" value="<?= e($selectedEndDate) ?>" min="<?= e($selectedStartDate) ?>" max="<?= e($maximumInitialEndDate) ?>" required data-routine-end-date>
+                </div>
             </div>
             <?php if (!empty($errors['duration_days'])): ?>
                 <p class="field-error"><?= e((string) $errors['duration_days']) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($errors['end_date'])): ?>
+                <p class="field-error"><?= e((string) $errors['end_date']) ?></p>
             <?php endif; ?>
 
             <label class="form-label" for="routineGoal">목표</label>
@@ -220,6 +241,7 @@ $routineSummary = $routineSummary ?? [
                                 <?php if (!empty($cell['canEdit'])): ?>
                                     <form method="post" action="/routine/toggle" data-routine-toggle-form>
                                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                                        <input type="hidden" name="return_to" value="manage">
                                         <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                                         <input type="hidden" name="date" value="<?= e((string) $cell['date']) ?>">
                                         <button

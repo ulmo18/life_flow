@@ -6,23 +6,31 @@
         </footer>
     <?php endif; ?>
     <?php if ($showAppChrome ?? false): ?>
-        <nav class="bottom-navigator" aria-label="주요 기능">
+        <nav class="bottom-navigator" aria-label="<?= e(t('nav.primary')) ?>">
             <a class="bottom-nav-item" href="/retrospect" <?= ($currentPath ?? '') === '/retrospect' ? 'aria-current="page"' : '' ?>>
                 <span class="bottom-nav-icon" aria-hidden="true">▥</span>
-                <span>Retrospect</span>
-            </a>
-            <?php $isPlanNavActive = ($currentPath ?? '') === '/plan' || strpos((string) ($currentPath ?? ''), '/plan/') === 0; ?>
-            <a class="bottom-nav-item" href="/plan" <?= $isPlanNavActive ? 'aria-current="page"' : '' ?>>
-                <span class="bottom-nav-icon" aria-hidden="true">□</span>
-                <span>Plan</span>
+                <span><?= e(t('nav.retrospect')) ?></span>
             </a>
             <a class="bottom-nav-item" href="/routine" <?= ($currentPath ?? '') === '/routine' ? 'aria-current="page"' : '' ?>>
                 <span class="bottom-nav-icon" aria-hidden="true">✓</span>
-                <span>Routine</span>
+                <span><?= e(t('nav.routine')) ?></span>
+            </a>
+            <a class="bottom-nav-item bottom-nav-energy" href="/execution-energy" <?= ($currentPath ?? '') === '/execution-energy' ? 'aria-current="page"' : '' ?> data-energy-orb>
+                <span class="bottom-nav-energy-orb" aria-hidden="true">
+                    <span class="bottom-nav-energy-liquid"></span>
+                    <span class="bottom-nav-energy-bubbles"><i></i><i></i><i></i></span>
+                    <strong data-energy-orb-value>…</strong>
+                    <span class="bottom-nav-energy-glare"></span>
+                </span>
+                <span class="bottom-nav-energy-label"><?= e(t('nav.execution_energy')) ?></span>
+            </a>
+            <a class="bottom-nav-item" href="/todo" <?= ($currentPath ?? '') === '/todo' ? 'aria-current="page"' : '' ?>>
+                <span class="bottom-nav-icon" aria-hidden="true">□</span>
+                <span><?= e(t('nav.todo')) ?></span>
             </a>
             <a class="bottom-nav-item" href="/calendar" <?= ($currentPath ?? '') === '/calendar' ? 'aria-current="page"' : '' ?>>
                 <span class="bottom-nav-icon" aria-hidden="true">▦</span>
-                <span>Calendar</span>
+                <span><?= e(t('nav.today')) ?></span>
             </a>
         </nav>
     <?php endif; ?>
@@ -33,18 +41,18 @@
     <section class="ui-panel ui-modal" id="lifeFlowModal" aria-modal="true" role="dialog" hidden>
         <div class="ui-panel-header">
             <strong class="ui-panel-title" id="lifeFlowModalTitle"></strong>
-            <button type="button" class="ui-close-button" data-ui-close aria-label="닫기">×</button>
+            <button type="button" class="ui-close-button" data-ui-close aria-label="<?= e(t('common.close')) ?>">×</button>
         </div>
         <p class="ui-panel-body" id="lifeFlowModalBody"></p>
         <div class="ui-panel-actions">
-            <button type="button" class="btn btn-ghost" data-ui-cancel>취소</button>
-            <button type="button" class="btn btn-primary" data-ui-confirm>확인</button>
+            <button type="button" class="btn btn-ghost" data-ui-cancel><?= e(t('common.cancel')) ?></button>
+            <button type="button" class="btn btn-primary" data-ui-confirm><?= e(t('common.confirm')) ?></button>
         </div>
     </section>
     <section class="ui-panel ui-sheet" id="lifeFlowSheet" aria-modal="true" role="dialog" hidden>
         <div class="ui-panel-header">
             <strong class="ui-panel-title" id="lifeFlowSheetTitle"></strong>
-            <button type="button" class="ui-close-button" data-ui-close aria-label="닫기">×</button>
+            <button type="button" class="ui-close-button" data-ui-close aria-label="<?= e(t('common.close')) ?>">×</button>
         </div>
         <form class="ui-sheet-form" id="lifeFlowSheetForm">
             <div class="ui-field">
@@ -65,8 +73,8 @@
             </div>
             <p class="field-error" id="lifeFlowSheetError" hidden></p>
             <div class="ui-panel-actions">
-                <button type="button" class="btn btn-ghost" data-ui-cancel>취소</button>
-                <button type="submit" class="btn btn-primary" data-ui-sheet-submit>확인</button>
+                <button type="button" class="btn btn-ghost" data-ui-cancel><?= e(t('common.cancel')) ?></button>
+                <button type="submit" class="btn btn-primary" data-ui-sheet-submit><?= e(t('common.confirm')) ?></button>
             </div>
         </form>
     </section>
@@ -80,6 +88,7 @@ $uiJsVersion = is_file($uiJsPath) ? filemtime($uiJsPath) : false;
 <script src="/assets/js/components/android-bridge.js"></script>
 <?php if ($showAppChrome ?? false): ?>
     <script src="/assets/js/components/app-layout.js"></script>
+    <script src="/assets/js/components/execution-energy-orb.js"></script>
 <?php endif; ?>
 <?php foreach (($pageScripts ?? []) as $scriptPath): ?>
     <script src="<?= e((string) $scriptPath) ?>"></script>

@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\RememberToken;
 use App\Models\User;
 use App\Models\UserPreferenceRepository;
+use App\Core\I18n;
 use DateInterval;
 use DateTimeImmutable;
 
@@ -102,6 +103,11 @@ final class RememberMeService
         $_SESSION['user_email'] = (string) ($user['email'] ?? '');
         $preferences = (new UserPreferenceRepository())->get((int) $user['id']);
         $_SESSION['theme_preference'] = (string) ($preferences['theme'] ?? 'light') === 'dark' ? 'dark' : 'light';
+        $_SESSION['locale_preference'] = I18n::normalizeLocale((string) ($preferences['locale'] ?? 'ko'));
+        $timezone = (string) ($preferences['timezone'] ?? 'Asia/Seoul');
+        $_SESSION['timezone_preference'] = in_array($timezone, \DateTimeZone::listIdentifiers(), true)
+            ? $timezone
+            : 'Asia/Seoul';
 
         // Rotate token after successful auto-login to reduce replay window.
         $this->rememberTokenModel->deleteBySelector($selector);

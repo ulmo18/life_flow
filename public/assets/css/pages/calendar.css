@@ -1312,6 +1312,66 @@ body[data-theme='dark'] .routine-preview-list li {
   gap: 8px;
 }
 
+.calendar-condition-sheet form {
+  gap: 16px;
+}
+
+.calendar-condition-choice {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.calendar-condition-choice legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.calendar-condition-choice > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.calendar-condition-choice label {
+  position: relative;
+  min-height: 38px;
+}
+
+.calendar-condition-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.calendar-condition-choice span {
+  display: grid;
+  min-height: 38px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 5px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.calendar-condition-choice input:checked + span {
+  border-color: rgba(255, 94, 91, .58);
+  background: rgba(255, 94, 91, .12);
+  color: var(--color-primary);
+}
+
+.calendar-condition-choice input:focus-visible + span {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
 .calendar-plan-link {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1381,3 +1441,25 @@ body[data-theme='dark'] .calendar-routine-link {
 .routine-preview-list form {
   margin: 0;
 }
+.calendar-fab-daily-links {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.calendar-fab-daily-links > a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.calendar-energy-links { display: grid; gap: 9px; border: 0; margin: 0; padding: 0; }
+.calendar-energy-links legend { font-weight: 800; }
+.calendar-energy-override { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--color-text-muted); font-size: 12px; }
+.calendar-energy-override .input { width: 132px; min-height: 38px; }

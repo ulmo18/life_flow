@@ -106,14 +106,30 @@ final class PlanService
     /** @return array<int, array<string, mixed>> */
     public function getPlanList(int $userId): array
     {
-        return array_map(function (array $group): array {
+        $blocksByGroup = [];
+        foreach ($this->planRepository->listBlocksForVisibleGroups($userId) as $block) {
+            $groupId = (int) $block['plan_group_id'];
+            $importance = $this->normalizeImportance((string) ($block['importance'] ?? 'D'));
+            $importanceMeta = $this->importanceMeta($importance);
+            $blocksByGroup[$groupId][] = [
+                'id' => (int) $block['id'],
+                'title' => (string) $block['title'],
+                'importance' => $importance,
+                'importanceBadge' => $importanceMeta['badge'],
+                'startIndex' => (int) $block['start_index'],
+                'endIndex' => (int) $block['end_index'],
+                'timeRange' => $this->formatTimeRange($block['start_index'], $block['end_index']),
+            ];
+        }
+
+        return array_map(function (array $group) use ($blocksByGroup): array {
+            $groupId = (int) $group['id'];
+
             return [
-                'id' => (int) $group['id'],
+                'id' => $groupId,
                 'name' => (string) $group['name'],
                 'versionNo' => (int) ($group['version_no'] ?? 1),
-                'blockCount' => (int) $group['block_count'],
-                'timeRange' => $this->formatTimeRange($group['first_start_index'], $group['last_end_index']),
-                'goalTitles' => $this->splitGoalTitles($group['goal_titles'] ?? null),
+                'blocks' => $blocksByGroup[$groupId] ?? [],
             ];
         }, $this->planRepository->listGroups($userId));
     }

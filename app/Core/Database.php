@@ -33,7 +33,7 @@ final class Database
 
             if ($driver === 'mysql') {
                 // Keep DATETIME/CURRENT_TIMESTAMP values consistent across hosts.
-                // User-facing day boundaries are converted from Asia/Seoul in PHP.
+                // User-facing day boundaries use the signed-in user's IANA time zone in PHP.
                 self::$connection->exec("SET time_zone = '+00:00'");
             } elseif ($driver === 'sqlite') {
                 self::ensureSqliteSchemaReady(self::$connection);
@@ -90,8 +90,10 @@ final class Database
             self::ensureSqliteDailyPlans($connection);
             self::ensureSqliteUntimedDailyPlans($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
+            self::ensureSqliteRetrospectReviewColumns($connection);
             self::ensureSqliteUntimedRetrospectPlans($connection);
             self::ensureSqlitePlanBlockTemplates($connection);
+            self::ensureSqliteExecutionEnergy($connection);
             self::ensureSqliteSchemaObjects($connection);
             return;
         }
@@ -249,6 +251,23 @@ final class Database
         self::runSqliteMigration($connection, 'migration.plan_block_templates.sqlite.sql');
     }
 
+    private static function ensureSqliteExecutionEnergy(PDO $connection): void
+    {
+        $table = $connection->query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='execution_energy_profiles' LIMIT 1"
+        );
+        if ($table !== false && $table->fetchColumn() !== false) {
+            $columns = $connection->query('PRAGMA table_info(execution_energy_days)');
+            $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+            if (!in_array('burden_feedback', $columnNames, true)) {
+                $connection->exec('ALTER TABLE execution_energy_days ADD COLUMN burden_feedback TEXT NULL');
+            }
+            return;
+        }
+
+        self::runSqliteMigration($connection, 'migration.add_execution_energy.sqlite.sql');
+    }
+
     private static function ensureSqliteRoutineLifecycle(PDO $connection): void
     {
         $stmt = $connection->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='routines' LIMIT 1");
@@ -285,6 +304,25 @@ final class Database
         $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
         if (!in_array('memo_snapshot', $columnNames, true)) {
             $connection->exec('ALTER TABLE retrospect_report_actual_items ADD COLUMN memo_snapshot TEXT NULL');
+        }
+    }
+
+    private static function ensureSqliteRetrospectReviewColumns(PDO $connection): void
+    {
+        foreach ([
+            'retrospect_report_plan_items' => 'goal_title_snapshot',
+            'retrospect_report_routine_items' => 'goal_title_snapshot',
+        ] as $table => $column) {
+            $exists = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='" . $table . "' LIMIT 1");
+            if ($exists === false || $exists->fetchColumn() === false) {
+                continue;
+            }
+
+            $columns = $connection->query('PRAGMA table_info(' . $table . ')');
+            $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+            if (!in_array($column, $columnNames, true)) {
+                $connection->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' TEXT NULL');
+            }
         }
     }
 

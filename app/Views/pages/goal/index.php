@@ -1,393 +1,105 @@
 <?php require __DIR__ . '/../../layouts/header.php'; ?>
-
 <?php
-$selectedGoalType = (string) ($old['goal_type'] ?? 'monthly');
-$selectedParentId = (int) ($old['parent_goal_id'] ?? 0);
-$selectedStatus = (string) ($selectedStatus ?? 'active');
-$selectedView = (string) ($selectedView ?? 'cards');
-$selectedGoalTypeFilter = $selectedGoalTypeFilter ?? null;
+$selectedMode = (string) ($selectedMode ?? 'all');
 $today = date('Y-m-d');
+$statusSymbols = ['active' => '◐', 'completed' => '✓', 'paused' => '○', 'archived' => '○'];
 
-$statusClass = static function (string $status): string {
-    return match ($status) {
-        'completed' => 'is-completed',
-        'paused' => 'is-paused',
-        'archived' => 'is-archived',
-        default => 'is-active',
-    };
+$renderQuickForm = static function (?int $parentGoalId, string $placeholder, string $class = '') use ($csrfToken, $selectedMode): void {
+    ?><form class="goal-quick-form <?= e($class) ?>" method="post" action="/goal" data-goal-quick-form hidden>
+        <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+        <input type="hidden" name="goal_type" value="bucket">
+        <input type="hidden" name="status" value="active">
+        <input type="hidden" name="parent_goal_id" value="<?= $parentGoalId === null ? '' : e((string) $parentGoalId) ?>">
+        <input type="hidden" name="mode" value="<?= e($selectedMode) ?>">
+        <label><span class="sr-only">목표명</span><input class="input" name="title" type="text" maxlength="80" placeholder="<?= e($placeholder) ?>" autocomplete="off" required data-goal-quick-input></label>
+        <button class="btn btn-primary" type="submit">추가</button>
+        <button class="btn btn-ghost" type="button" data-goal-inline-cancel>취소</button>
+    </form><?php
 };
 
-$statusFilterOrder = ['active', 'completed', 'archived', 'paused'];
-
-$renderGoalTypeRadios = static function (
-    array $goalTypes,
-    string $selected,
-    string $namePrefix,
-    string $inputName = 'goal_type'
-): void {
-    ?>
-    <div class="goal-type-radio-group" data-goal-type-group>
-        <?php foreach ($goalTypes as $value => $label): ?>
-            <?php $id = $namePrefix . ucfirst((string) $value); ?>
-            <label class="goal-type-radio">
-                <input
-                    id="<?= e($id) ?>"
-                    type="radio"
-                    name="<?= e($inputName) ?>"
-                    value="<?= e((string) $value) ?>"
-                    <?= $selected === (string) $value ? 'checked' : '' ?>
-                    data-goal-type-radio
-                >
-                <span><?= e((string) $label) ?></span>
-            </label>
-        <?php endforeach; ?>
-    </div>
-    <?php
-};
-
-$renderGoalTree = static function (array $nodes, int $depth = 0) use (&$renderGoalTree): void {
-    ?>
-    <ol class="goal-tree" <?= $depth > 0 ? 'data-goal-tree-child' : '' ?>>
-        <?php foreach ($nodes as $node): ?>
-            <?php
-            $goalId = (int) $node['id'];
-            $children = $node['children'] ?? [];
-            ?>
-            <li class="goal-tree-item" style="--goal-tree-depth: <?= e((string) $depth) ?>;">
-                <button type="button" class="goal-tree-node" data-goal-open="edit-<?= e((string) $goalId) ?>" aria-label="<?= e((string) $node['title']) ?> 목표 수정">
-                    <span class="goal-type-badge"><?= e((string) $node['goalTypeLabel']) ?></span>
+$renderGoalBranch = static function (array $nodes, int $depth = 0, ?int $parentId = null) use (&$renderGoalBranch, $renderQuickForm, $statusSymbols, $selectedMode): void {
+    ?><ol class="goal-map-branch" data-goal-branch data-parent-id="<?= $parentId === null ? '' : e((string) $parentId) ?>"><?php
+    foreach ($nodes as $node):
+        $goalId = (int) $node['id'];
+        $children = $node['children'] ?? [];
+        $status = (string) $node['status'];
+        ?><li class="goal-map-item is-<?= e($status) ?>" data-goal-node data-goal-id="<?= e((string) $goalId) ?>" data-parent-id="<?= $parentId === null ? '' : e((string) $parentId) ?>" style="--goal-depth:<?= e((string) min($depth, 5)) ?>">
+            <div class="goal-drop-before" data-goal-drop-before="<?= e((string) $goalId) ?>" aria-hidden="true"></div>
+            <div class="goal-node-row">
+                <?php if (!empty($children)): ?><button class="goal-collapse" type="button" data-goal-collapse aria-expanded="true" aria-label="<?= e((string) $node['title']) ?> 하위 목표 접기">▾</button><?php else: ?><span class="goal-collapse-placeholder" aria-hidden="true"></span><?php endif; ?>
+                <button class="goal-node-main" type="button" data-goal-open="detail-<?= e((string) $goalId) ?>">
+                    <span class="goal-status-symbol" aria-hidden="true"><?= e($statusSymbols[$status] ?? '○') ?></span>
                     <strong><?= e((string) $node['title']) ?></strong>
+                    <?php if (!empty($node['descendantCount'])): ?><small><?= e((string) $node['descendantCount']) ?></small><?php endif; ?>
                 </button>
-                <?php if (!empty($children)): ?>
-                    <?php $renderGoalTree($children, $depth + 1); ?>
-                <?php endif; ?>
-            </li>
-        <?php endforeach; ?>
-    </ol>
-    <?php
+                <div class="goal-node-actions">
+                    <button type="button" data-goal-child-add="<?= e((string) $goalId) ?>" aria-label="<?= e((string) $node['title']) ?> 하위 목표 추가">＋</button>
+                    <?php if ($selectedMode === 'all'): ?><button type="button" class="goal-drag-handle" draggable="true" data-goal-drag="<?= e((string) $goalId) ?>" aria-label="<?= e((string) $node['title']) ?> 이동">⋮⋮</button><?php endif; ?>
+                </div>
+            </div>
+            <?php $renderQuickForm($goalId, '하위 목표를 입력하세요', 'goal-inline-form'); ?>
+            <?php if (!empty($children)): ?><div class="goal-children" data-goal-children><?php $renderGoalBranch($children, $depth + 1, $goalId); ?></div><?php endif; ?>
+        </li><?php
+    endforeach;
+    ?><li class="goal-drop-end" data-goal-drop-parent="<?= $parentId === null ? '' : e((string) $parentId) ?>">여기로 이동</li></ol><?php
 };
 ?>
 
-<main class="page goal-page">
-    <section class="goal-hero">
-        <div>
-            <p class="eyebrow">Goal</p>
-            <div class="goal-title-row">
-                <h1 class="page-title">목표</h1>
-                <button type="button" class="goal-info-button" data-goal-open="guide" aria-label="목표 사용 안내 열기">!</button>
-            </div>
-            <p class="muted">큰 생각부터 작은 실행까지, 지금 보고 싶은 목표만 가볍게 확인해요.</p>
-        </div>
-    </section>
+<main class="page goal-page" data-goal-page data-mode="<?= e($selectedMode) ?>">
+    <header class="goal-map-header">
+        <div><p class="eyebrow">Goal Map</p><h1 class="page-title">내가 향하는 방향</h1><p>큰 목표부터 오늘 떠오른 작은 바람까지, 연결하며 키워보세요.</p></div>
+    </header>
 
-    <?php if (!empty($flashSuccess)): ?>
-        <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
-    <?php endif; ?>
+    <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
+    <?php if (!empty($errors['general'])): ?><div class="msg msg-error"><?= e((string) $errors['general']) ?></div><?php endif; ?>
 
-    <?php if (!empty($errors['general'])): ?>
-        <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
-    <?php endif; ?>
+    <form class="goal-root-create" method="post" action="/goal" data-goal-quick-form>
+        <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+        <input type="hidden" name="goal_type" value="bucket"><input type="hidden" name="status" value="active">
+        <label for="goalQuickTitle">무엇을 하고 싶나요?</label>
+        <div><input class="input" id="goalQuickTitle" name="title" type="text" maxlength="80" placeholder="목표명을 입력하세요" autocomplete="off" required data-goal-quick-input><button class="btn btn-primary" type="submit">Enter ↵ 추가</button></div>
+        <small>기간이나 유형은 나중에 정해도 괜찮아요.</small>
+    </form>
 
-    <nav class="goal-view-switch" aria-label="목표 보기 방식">
-        <a href="/goal?status=<?= e($selectedStatus) ?>&type=<?= e((string) ($selectedGoalTypeFilter ?? '')) ?>&view=cards" <?= $selectedView === 'cards' ? 'aria-current="page"' : '' ?>>카드 보기</a>
-        <a href="/goal?view=tree" <?= $selectedView === 'tree' ? 'aria-current="page"' : '' ?>>트리 보기</a>
+    <nav class="goal-mode-switch" aria-label="목표 범위">
+        <a href="/goal?mode=all" <?= $selectedMode === 'all' ? 'aria-current="page"' : '' ?>>전체 목표</a>
+        <a href="/goal?mode=focus" <?= $selectedMode === 'focus' ? 'aria-current="page"' : '' ?>>지금 집중</a>
     </nav>
 
-    <?php if ($selectedView === 'cards'): ?>
-    <nav class="goal-status-filter" aria-label="목표 상태 필터">
-        <?php foreach ($statusFilterOrder as $statusValue): ?>
-            <?php if (!array_key_exists($statusValue, $statusOptions)) {
-                continue;
-            } ?>
-            <a
-                class="goal-status-filter-link"
-                href="/goal?status=<?= e($statusValue) ?>&type=<?= e((string) ($selectedGoalTypeFilter ?? '')) ?>&view=cards"
-                <?= $selectedStatus === $statusValue ? 'aria-current="page"' : '' ?>
-            >
-                <?= e((string) $statusOptions[$statusValue]) ?>
-            </a>
-        <?php endforeach; ?>
-    </nav>
-    <nav class="goal-status-filter goal-type-filter" aria-label="목표 구분 필터">
-        <a
-            class="goal-status-filter-link"
-            href="/goal?status=<?= e($selectedStatus) ?>&view=cards"
-            <?= $selectedGoalTypeFilter === null ? 'aria-current="page"' : '' ?>
-        >전체</a>
-        <?php foreach ($goalTypes as $typeValue => $typeLabel): ?>
-            <a
-                class="goal-status-filter-link"
-                href="/goal?status=<?= e($selectedStatus) ?>&type=<?= e((string) $typeValue) ?>&view=cards"
-                <?= $selectedGoalTypeFilter === (string) $typeValue ? 'aria-current="page"' : '' ?>
-            ><?= e((string) $typeLabel) ?></a>
-        <?php endforeach; ?>
-    </nav>
-    <?php endif; ?>
-
-    <?php if ($selectedView === 'tree'): ?>
-        <section class="goal-tree-section" aria-label="진행 중 목표 트리">
-            <div class="goal-tree-heading">
-                <strong>진행 중 목표 구조</strong>
-                <span>상위 목표부터 하위 실행 목표까지 한 번에 봅니다.</span>
-            </div>
-            <?php if (empty($activeGoalTree)): ?>
-                <div class="goal-empty">
-                    <strong>진행 중인 목표가 없습니다.</strong>
-                    <p class="muted">하단의 목표 추가 버튼으로 지금 이어갈 목표를 만들어보세요.</p>
-                </div>
-            <?php else: ?>
-                <?php $renderGoalTree($activeGoalTree); ?>
-            <?php endif; ?>
-        </section>
-    <?php else: ?>
-    <section class="goal-list-section" aria-label="목표 목록">
-        <?php if (empty($goals)): ?>
-            <div class="goal-empty">
-                <strong>이 상태의 목표가 없습니다.</strong>
-                <p class="muted">하단의 목표 추가 버튼으로 지금 떠오른 생각부터 적어보세요.</p>
-            </div>
+    <section class="goal-map" aria-label="목표 지도">
+        <?php if (empty($goalTree)): ?>
+            <div class="goal-map-empty"><strong>하고 싶은 일을 적어보세요.</strong><p>큰 목표가 아니어도 괜찮아요.<br>언젠가 해보고 싶은 일이나 지금 해결하고 싶은 것부터 시작해보세요.</p><button class="btn btn-primary" type="button" data-goal-focus-root>첫 목표 만들기</button></div>
         <?php else: ?>
-            <ul class="goal-list">
-                <?php foreach ($goals as $goal): ?>
-                    <?php
-                    $goalId = (int) $goal['id'];
-                    $linkedPlans = $goal['linkedPlans'] ?? [];
-                    $linkedRoutines = $goal['linkedRoutines'] ?? [];
-                    $progress = $goal['periodProgress'] ?? ['visible' => false, 'percent' => 0, 'label' => '', 'state' => 'none'];
-                    ?>
-                    <li class="goal-card">
-                        <div class="goal-card-top">
-                            <div class="goal-path">
-                                <span class="goal-type-badge"><?= e((string) $goal['goalTypeLabel']) ?></span>
-                                <?php if (!empty($goal['parentTitle'])): ?>
-                                    <span class="goal-path-arrow" aria-hidden="true">→</span>
-                                    <span class="goal-parent-chip">
-                                        <?= e((string) $goal['parentGoalTypeLabel']) ?> · <?= e((string) $goal['parentTitle']) ?>
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                            <span class="goal-status-badge <?= e($statusClass((string) $goal['status'])) ?>">
-                                <?= e((string) $goal['statusLabel']) ?>
-                            </span>
-                        </div>
-
-                        <div class="goal-card-title">
-                            <strong><?= e((string) $goal['title']) ?></strong>
-                            <span><?= e((string) $goal['periodLabel']) ?></span>
-                        </div>
-
-                        <?php if (!empty($progress['visible'])): ?>
-                            <div class="goal-progress is-<?= e((string) $progress['state']) ?>">
-                                <div class="goal-progress-meta">
-                                    <span><?= e((string) $progress['label']) ?></span>
-                                    <strong><?= e((string) $progress['percent']) ?>%</strong>
-                                </div>
-                                <div
-                                    class="goal-progress-track"
-                                    role="progressbar"
-                                    aria-label="<?= e((string) $progress['label']) ?>"
-                                    aria-valuemin="0"
-                                    aria-valuemax="100"
-                                    aria-valuenow="<?= e((string) $progress['percent']) ?>"
-                                >
-                                    <span style="width: <?= e((string) $progress['percent']) ?>%;"></span>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if ((string) ($goal['behaviorNote'] ?? '') !== '' || !empty($linkedPlans) || !empty($linkedRoutines)): ?>
-                        <details class="goal-linked-details">
-                            <summary>
-                                <span>상세 정보</span>
-                                <?php if (!empty($linkedPlans) || !empty($linkedRoutines)): ?>
-                                    <small>계획 <?= e((string) count($linkedPlans)) ?> · 루틴 <?= e((string) count($linkedRoutines)) ?></small>
-                                <?php endif; ?>
-                            </summary>
-                            <div class="goal-linked-wrap">
-                                <?php if ((string) ($goal['behaviorNote'] ?? '') !== ''): ?>
-                                    <p class="goal-action-note"><?= e((string) $goal['behaviorNote']) ?></p>
-                                <?php endif; ?>
-                                <?php if (!empty($linkedPlans)): ?>
-                                <div class="goal-linked-list">
-                                    <strong>연결된 계획</strong>
-                                        <ul>
-                                            <?php foreach ($linkedPlans as $plan): ?>
-                                                <li>
-                                                    <a href="/plan/show?id=<?= e((string) $plan['planGroupId']) ?>">
-                                                        <?= e((string) $plan['planName']) ?>
-                                                    </a>
-                                                    <span><?= e((string) $plan['blockTitle']) ?> · <?= e((string) $plan['timeRange']) ?></span>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                </div>
-                                <?php endif; ?>
-                                <?php if (!empty($linkedRoutines)): ?>
-                                <div class="goal-linked-list">
-                                    <strong>연결된 루틴</strong>
-                                        <ul>
-                                            <?php foreach ($linkedRoutines as $routine): ?>
-                                                <li>
-                                                    <span><?= e((string) $routine['name']) ?></span>
-                                                    <small><?= e((string) $routine['periodLabel']) ?></small>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                        </details>
-                        <?php endif; ?>
-
-                        <div class="goal-card-actions">
-                            <button type="button" class="btn btn-secondary" data-goal-open="edit-<?= e((string) $goalId) ?>">수정</button>
-                        </div>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
+            <p class="goal-map-help">목표를 눌러 자세히 보고, ＋로 하위 목표를 이어보세요.<?= $selectedMode === 'all' ? ' 이동 손잡이를 끌면 구조와 순서를 바꿀 수 있어요.' : '' ?></p>
+            <?php $renderGoalBranch($goalTree); ?>
         <?php endif; ?>
     </section>
-    <?php endif; ?>
-
-    <button type="button" class="btn btn-primary goal-floating-add" data-goal-open="create">목표 추가</button>
 </main>
 
 <div class="goal-local-layer" data-goal-layer hidden>
-    <button type="button" class="goal-local-overlay" data-goal-close aria-label="목표 창 닫기"></button>
-
-    <section class="goal-sheet" data-goal-sheet="guide" hidden aria-modal="true" role="dialog" aria-labelledby="goalGuideTitle">
-        <div class="goal-sheet-header">
-            <strong id="goalGuideTitle">목표 사용 안내</strong>
-            <button type="button" class="ui-close-button" data-goal-close aria-label="닫기">×</button>
-        </div>
-        <div class="goal-guide">
-            <p>목표는 꼭 위에서부터 채우지 않아도 괜찮아요.</p>
-            <p>지금 떠오른 월간 목표 하나만 적어도 충분하고, 나중에 연간 목표나 버킷리스트로 연결해도 됩니다.</p>
-            <p>생각이 꼬리를 물 때는 큰 목표를 먼저 완성하려 하기보다, 지금 할 수 있는 작은 실행을 목표로 남겨두세요.</p>
-        </div>
-    </section>
-
-    <section class="goal-sheet" data-goal-sheet="create" hidden aria-modal="true" role="dialog" aria-labelledby="goalCreateTitle">
-        <div class="goal-sheet-header">
-            <strong id="goalCreateTitle">목표 추가</strong>
-            <button type="button" class="ui-close-button" data-goal-close aria-label="닫기">×</button>
-        </div>
-
-        <form class="goal-form" method="post" action="/goal">
-            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-
-            <label class="form-label" for="goalTitle">목표명</label>
-            <input class="input" id="goalTitle" name="title" type="text" maxlength="80" value="<?= e((string) ($old['title'] ?? '')) ?>" required>
-            <?php if (!empty($errors['title'])): ?>
-                <p class="field-error"><?= e((string) $errors['title']) ?></p>
-            <?php endif; ?>
-
-            <div class="goal-field">
-                <span class="form-label">목표 구분</span>
-                <?php $renderGoalTypeRadios($goalTypes, $selectedGoalType, 'goalCreate'); ?>
+    <button type="button" class="goal-local-overlay" data-goal-close aria-label="목표 상세 닫기"></button>
+    <?php foreach ($goals as $goal): $goalId = (int) $goal['id']; $progress = $goal['periodProgress'] ?? []; ?>
+        <aside class="goal-detail-panel" data-goal-sheet="detail-<?= e((string) $goalId) ?>" hidden aria-modal="true" role="dialog" aria-labelledby="goalDetailTitle<?= e((string) $goalId) ?>">
+            <div class="goal-detail-header"><div><small><?= e((string) $goal['goalTypeLabel']) ?></small><strong id="goalDetailTitle<?= e((string) $goalId) ?>"><?= e((string) $goal['title']) ?></strong></div><button type="button" class="ui-close-button" data-goal-close aria-label="닫기">×</button></div>
+            <div class="goal-detail-summary">
+                <dl><div><dt>상태</dt><dd><?= e((string) $goal['statusLabel']) ?></dd></div><div><dt>기간</dt><dd><?= e((string) $goal['periodLabel']) ?></dd></div><div><dt>기간 진행</dt><dd><?= !empty($progress['visible']) ? e((string) $progress['percent']) . '%' : '설정 안 함' ?></dd></div></dl>
+                <div class="goal-link-counts"><span>연결된 계획 <b><?= e((string) count($goal['linkedPlans'] ?? [])) ?></b></span><span>연결된 할일 <b><?= e((string) ($goal['linkedTodoCount'] ?? 0)) ?></b></span><span>연결된 루틴 <b><?= e((string) count($goal['linkedRoutines'] ?? [])) ?></b></span></div>
             </div>
-
-            <label class="form-label" for="goalParent">상위 목표</label>
-            <select class="input" id="goalParent" name="parent_goal_id">
-                <option value="">연결하지 않음</option>
-                <?php foreach ($parentOptions as $parent): ?>
-                    <option value="<?= e((string) $parent['id']) ?>" <?= $selectedParentId === (int) $parent['id'] ? 'selected' : '' ?>>
-                        <?= e((string) $parent['goalTypeLabel']) ?> · <?= e((string) $parent['title']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <?php if (!empty($errors['parent_goal_id'])): ?>
-                <p class="field-error"><?= e((string) $errors['parent_goal_id']) ?></p>
-            <?php endif; ?>
-
-            <label class="form-label" for="goalBehaviorNote">행동 리마인드</label>
-            <textarea class="input" id="goalBehaviorNote" name="behavior_note" rows="3" maxlength="300" placeholder="생각을 행동으로 옮기기 위해 기억할 문장을 적어보세요."><?= e((string) ($old['behavior_note'] ?? ($old['behavior_how'] ?? ''))) ?></textarea>
-
-            <button type="submit" class="btn btn-primary">저장</button>
-        </form>
-    </section>
-
-    <?php foreach ($goals as $goal): ?>
-        <?php $goalId = (int) $goal['id']; ?>
-        <section class="goal-sheet" data-goal-sheet="edit-<?= e((string) $goalId) ?>" hidden aria-modal="true" role="dialog" aria-labelledby="goalEditTitle<?= e((string) $goalId) ?>">
-            <div class="goal-sheet-header">
-                <strong id="goalEditTitle<?= e((string) $goalId) ?>">목표 수정</strong>
-                <button type="button" class="ui-close-button" data-goal-close aria-label="닫기">×</button>
-            </div>
-
-            <form class="goal-form" method="post" action="/goal/update">
-                <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-                <input type="hidden" name="goal_id" value="<?= e((string) $goalId) ?>">
-
-                <label class="form-label" for="goalTitle<?= e((string) $goalId) ?>">목표명</label>
-                <input class="input" id="goalTitle<?= e((string) $goalId) ?>" name="title" type="text" maxlength="80" value="<?= e((string) $goal['title']) ?>" required>
-
-                <div class="goal-field">
-                    <span class="form-label">목표 구분</span>
-                    <?php $renderGoalTypeRadios($goalTypes, (string) $goal['goalType'], 'goalEdit' . $goalId); ?>
-                </div>
-
-                <div class="goal-form-grid">
-                    <div>
-                        <label class="form-label" for="goalStatus<?= e((string) $goalId) ?>">상태</label>
-                        <select class="input" id="goalStatus<?= e((string) $goalId) ?>" name="status">
-                            <?php foreach ($statusOptions as $value => $label): ?>
-                                <option value="<?= e((string) $value) ?>" <?= $goal['status'] === (string) $value ? 'selected' : '' ?>>
-                                    <?= e((string) $label) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="form-label" for="goalParent<?= e((string) $goalId) ?>">상위 목표</label>
-                        <select class="input" id="goalParent<?= e((string) $goalId) ?>" name="parent_goal_id">
-                            <option value="">연결하지 않음</option>
-                            <?php foreach ($parentOptions as $parent): ?>
-                                <?php if ((int) $parent['id'] === $goalId) {
-                                    continue;
-                                } ?>
-                                <option value="<?= e((string) $parent['id']) ?>" <?= (int) ($goal['parentGoalId'] ?? 0) === (int) $parent['id'] ? 'selected' : '' ?>>
-                                    <?= e((string) $parent['goalTypeLabel']) ?> · <?= e((string) $parent['title']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="goal-period-fields" data-goal-period-fields>
-                    <div class="goal-form-grid">
-                        <div>
-                            <label class="form-label" for="goalStartDate<?= e((string) $goalId) ?>">시작일</label>
-                            <input class="input" id="goalStartDate<?= e((string) $goalId) ?>" name="period_start_date" type="date" value="<?= e((string) ($goal['periodStartDate'] ?? $today)) ?>" data-goal-start-date>
-                        </div>
-                        <div>
-                            <label class="form-label" for="goalEndDate<?= e((string) $goalId) ?>">종료일</label>
-                            <input class="input" id="goalEndDate<?= e((string) $goalId) ?>" name="period_end_date" type="date" value="<?= e((string) ($goal['periodEndDate'] ?? $today)) ?>" data-goal-end-date>
-                        </div>
-                    </div>
-                </div>
-
-                <label class="form-label" for="goalBehaviorNote<?= e((string) $goalId) ?>">행동 리마인드</label>
-                <textarea class="input" id="goalBehaviorNote<?= e((string) $goalId) ?>" name="behavior_note" rows="3" maxlength="300"><?= e((string) $goal['behaviorNote']) ?></textarea>
-
-                <div class="goal-edit-actions">
-                    <button type="submit" class="btn btn-primary">저장</button>
-                    <button type="submit" class="btn btn-ghost" form="goalDelete<?= e((string) $goalId) ?>">삭제</button>
-                </div>
-            </form>
-
-            <form id="goalDelete<?= e((string) $goalId) ?>" method="post" action="/goal/delete" data-confirm="목표를 삭제할까요? 연결된 하위 목표와 계획, 루틴 연결은 해제됩니다.">
-                <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-                <input type="hidden" name="goal_id" value="<?= e((string) $goalId) ?>">
-            </form>
-        </section>
+            <details class="goal-detail-edit"><summary>상세 정보 수정</summary>
+                <form class="goal-form" method="post" action="/goal/update">
+                    <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="goal_id" value="<?= e((string) $goalId) ?>">
+                    <label>목표명<input class="input" name="title" maxlength="80" value="<?= e((string) $goal['title']) ?>" required></label>
+                    <div class="goal-form-grid"><label>상태<select class="input" name="status"><?php foreach ($statusOptions as $value => $label): ?><option value="<?= e((string) $value) ?>" <?= $goal['status'] === $value ? 'selected' : '' ?>><?= e((string) $label) ?></option><?php endforeach; ?></select></label><label>상위 목표<select class="input" name="parent_goal_id"><option value="">최상위 목표</option><?php foreach ($parentOptions as $parent): if ((int) $parent['id'] === $goalId) continue; ?><option value="<?= e((string) $parent['id']) ?>" <?= (int) ($goal['parentGoalId'] ?? 0) === (int) $parent['id'] ? 'selected' : '' ?>><?= e((string) $parent['title']) ?></option><?php endforeach; ?></select></label></div>
+                    <label>목표 구분<select class="input" name="goal_type"><?php foreach ($goalTypes as $value => $label): ?><option value="<?= e((string) $value) ?>" <?= $goal['goalType'] === $value ? 'selected' : '' ?>><?= e((string) $label) ?></option><?php endforeach; ?></select></label>
+                    <div class="goal-form-grid"><label>시작일<input class="input" name="period_start_date" type="date" value="<?= e((string) ($goal['periodStartDate'] ?? '')) ?>"></label><label>종료일<input class="input" name="period_end_date" type="date" value="<?= e((string) ($goal['periodEndDate'] ?? '')) ?>"></label></div>
+                    <label>행동 리마인드<textarea class="input" name="behavior_note" rows="3" maxlength="300"><?= e((string) $goal['behaviorNote']) ?></textarea></label>
+                    <div class="goal-edit-actions"><button class="btn btn-primary" type="submit">저장</button><button class="btn btn-ghost" type="submit" form="goalDelete<?= e((string) $goalId) ?>">삭제</button></div>
+                </form>
+                <form id="goalDelete<?= e((string) $goalId) ?>" method="post" action="/goal/delete" data-confirm="목표를 삭제할까요? 하위 목표는 최상위 목표로 이동합니다."><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="goal_id" value="<?= e((string) $goalId) ?>"></form>
+            </details>
+        </aside>
     <?php endforeach; ?>
 </div>
 
-<?php if (!empty($notificationSyncPayload)): ?>
-    <script type="application/json" data-notification-sync>
-        <?= json_encode($notificationSyncPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}' ?>
-    </script>
-<?php endif; ?>
-
+<?php if (!empty($notificationSyncPayload)): ?><script type="application/json" data-notification-sync><?= json_encode($notificationSyncPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}' ?></script><?php endif; ?>
 <?php require __DIR__ . '/../../layouts/footer.php'; ?>

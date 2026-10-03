@@ -24,6 +24,9 @@ The Settings page also exposes app-only actions for notification permission requ
 
 ## Scheduling Payloads
 
+- `timeZone` is the signed-in user's stored IANA time zone, independent from display language.
+- App-owned notification titles and messages use the user's stored `ko`, `en`, or `ja` display language. User-authored routine, plan, and goal titles remain unchanged.
+
 `App\Services\NotificationService` builds the payloads consumed by `public/assets/js/components/android-bridge.js`.
 
 Payload groups:
@@ -68,7 +71,7 @@ Notification preferences are stored in `user_preferences` for both MySQL and SQL
 
 - Calendar page entry is a synchronization event, not a delivery event.
 - `fireAt` and `startsAt` are ISO 8601 timestamps with the `+09:00` offset.
-- The server includes a Calendar Plan item only when `fireAt` is later than the current `Asia/Seoul` time.
+- The server includes a Calendar Plan item only when `fireAt` is later than the current time in the signed-in user's configured IANA time zone.
 - Android must parse `fireAt` into an absolute instant and persist it with AlarmManager, WorkManager, or an equivalent local scheduler.
 - Android must discard any item whose parsed trigger time is not in the future. It must never convert a past trigger into an immediate notification.
 - Stable `key` values make repeated Calendar entry idempotent. A scoped replace cancels obsolete `calendar_plan_{date}_*` alarms and reschedules only the supplied future set.

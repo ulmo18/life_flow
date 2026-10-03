@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL UNIQUE,
   theme TEXT NOT NULL DEFAULT 'light',
+  locale TEXT NOT NULL DEFAULT 'ko',
+  timezone TEXT NOT NULL DEFAULT 'Asia/Seoul',
   notification_enabled INTEGER NOT NULL DEFAULT 1,
   retrospect_morning_enabled INTEGER NOT NULL DEFAULT 1,
   retrospect_morning_time TEXT NOT NULL DEFAULT '07:00',
@@ -483,6 +485,7 @@ CREATE TABLE IF NOT EXISTS retrospect_report_plan_items (
   start_index INTEGER NULL,
   end_index INTEGER NULL,
   importance_snapshot TEXT NOT NULL DEFAULT 'D',
+  goal_title_snapshot TEXT NULL,
   is_linked INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -518,6 +521,7 @@ CREATE TABLE IF NOT EXISTS retrospect_report_routine_items (
   report_id INTEGER NOT NULL,
   routine_id INTEGER NULL,
   routine_name_snapshot TEXT NOT NULL,
+  goal_title_snapshot TEXT NULL,
   state_snapshot TEXT NOT NULL DEFAULT 'blank',
   was_active INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 1,
@@ -527,6 +531,19 @@ CREATE TABLE IF NOT EXISTS retrospect_report_routine_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_retrospect_routine_items_report ON retrospect_report_routine_items(report_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS retrospect_report_memo_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL,
+  note_id INTEGER NULL,
+  content_snapshot TEXT NOT NULL,
+  created_at_snapshot TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (report_id) REFERENCES retrospect_reports(id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_retrospect_memo_items_report ON retrospect_report_memo_items(report_id, sort_order);
 
 CREATE TABLE IF NOT EXISTS notes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -540,3 +557,106 @@ CREATE TABLE IF NOT EXISTS notes (
 
 CREATE INDEX IF NOT EXISTS idx_notes_user_active_updated ON notes(user_id, deleted_at, updated_at);
 CREATE INDEX IF NOT EXISTS idx_notes_user_deleted ON notes(user_id, deleted_at);
+
+-- 실행력 관리: 실제 일정의 소모/회복 기록과 일일 기준값 스냅샷
+CREATE TABLE IF NOT EXISTS execution_energy_profiles (
+  user_id INTEGER PRIMARY KEY,
+  base_capacity INTEGER NOT NULL DEFAULT 500,
+  effective_from TEXT NOT NULL,
+  body_state_note TEXT NULL,
+  mood_state_note TEXT NULL,
+  stress_state_note TEXT NULL,
+  injury_note TEXT NULL,
+  injury_until TEXT NULL,
+  inbody_note TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (base_capacity BETWEEN 0 AND 1000)
+);
+
+CREATE TABLE IF NOT EXISTS execution_energy_groups (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  effect_type TEXT NOT NULL,
+  energy_value INTEGER NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (effect_type IN ('consume', 'recover')),
+  CHECK (energy_value BETWEEN 5 AND 1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_energy_groups_user
+  ON execution_energy_groups(user_id, is_active);
+
+CREATE TABLE IF NOT EXISTS execution_energy_days (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  energy_date TEXT NOT NULL,
+  base_capacity_snapshot INTEGER NOT NULL,
+  sleep_state INTEGER NULL,
+  fatigue_state INTEGER NULL,
+  mood_state INTEGER NULL,
+  stress_state INTEGER NULL,
+  burden_feedback TEXT NULL,
+  morning_adjustment INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, energy_date),
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (base_capacity_snapshot BETWEEN 0 AND 1000),
+  CHECK (sleep_state IS NULL OR sleep_state BETWEEN 1 AND 5),
+  CHECK (fatigue_state IS NULL OR fatigue_state BETWEEN 1 AND 5),
+  CHECK (mood_state IS NULL OR mood_state BETWEEN 1 AND 5),
+  CHECK (stress_state IS NULL OR stress_state BETWEEN 1 AND 5),
+  CHECK (burden_feedback IS NULL OR burden_feedback IN ('lower', 'similar', 'higher'))
+);
+
+CREATE TABLE IF NOT EXISTS execution_energy_event_settings (
+  calendar_event_id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  group_id_snapshot INTEGER NULL,
+  group_name_snapshot TEXT NULL,
+  effect_type TEXT NOT NULL,
+  energy_value INTEGER NOT NULL,
+  is_override INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (calendar_event_id) REFERENCES calendar_events(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (effect_type IN ('consume', 'recover')),
+  CHECK (energy_value BETWEEN 5 AND 1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_energy_event_settings_user
+  ON execution_energy_event_settings(user_id);
+
+CREATE TABLE IF NOT EXISTS execution_energy_adjustments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  energy_date TEXT NOT NULL,
+  time_index INTEGER NOT NULL DEFAULT 144,
+  target_capacity INTEGER NOT NULL,
+  reason TEXT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (time_index BETWEEN 0 AND 144),
+  CHECK (target_capacity BETWEEN 0 AND 1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_execution_energy_adjustments_user_date
+  ON execution_energy_adjustments(user_id, energy_date, time_index);
+
+CREATE TABLE IF NOT EXISTS execution_energy_notices (
+  user_id INTEGER NOT NULL,
+  energy_date TEXT NOT NULL,
+  notice_level INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(user_id, energy_date, notice_level),
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (notice_level IN (25, 50))
+);

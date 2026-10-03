@@ -8,6 +8,7 @@
   const planItemEditSheet = document.querySelector('[data-plan-item-edit-sheet]');
   const planSettingsSheet = document.querySelector('[data-plan-settings-sheet]');
   const quickMemoSheet = document.querySelector('[data-quick-memo-sheet]');
+  const conditionSheet = document.querySelector('[data-condition-sheet]');
   const retrospectPreview = document.querySelector('[data-retrospect-preview]');
   const eventForm = document.getElementById('calendarEventForm');
   const titleInput = document.getElementById('calendarEventTitle');
@@ -22,6 +23,11 @@
   const deleteEventId = document.getElementById('calendarDeleteEventId');
   const editTitleInput = document.getElementById('calendarEditEventTitle');
   const editMemoInput = document.getElementById('calendarEditMemo');
+  const createEnergyGroup = document.getElementById('calendarEnergyGroup');
+  const createEnergyValue = eventForm?.querySelector('input[name="execution_energy_value"]');
+  const editEnergyGroup = document.getElementById('calendarEditEnergyGroup');
+  const editEnergyValue = document.getElementById('calendarEditEnergyValue');
+  const editEnergyPreserve = document.getElementById('calendarEditEnergyPreserve');
   const planPicker = document.querySelector('.calendar-plan-picker');
   const createPlanGroup = document.querySelector('[data-create-plan-group]');
   const createRoutineGroup = document.querySelector('[data-create-routine-group]');
@@ -57,8 +63,8 @@
   const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
   const routineState = window.LifeFlowRoutineState;
-  const seoulTimeFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul',
+  const userTimeFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: page?.dataset.timezone || 'Asia/Seoul',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -67,7 +73,7 @@
     hourCycle: 'h23',
   });
 
-  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !timeFields || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !planLayer || !actualLayer || !planScheduleType || !planTimeToggle || !planCreateTimeFields || !planStartInput || !planEndInput || !planEditScheduleType || !planEditTimeFields || !planEditStart || !planEditEnd || !timeGrid) {
+  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !conditionSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !timeFields || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !planLayer || !actualLayer || !planScheduleType || !planTimeToggle || !planCreateTimeFields || !planStartInput || !planEndInput || !planEditScheduleType || !planEditTimeFields || !planEditStart || !planEditEnd || !timeGrid) {
     return;
   }
 
@@ -99,9 +105,9 @@
     window.LifeFlowToast?.show?.(message);
   }
 
-  function getSeoulCurrentTime() {
+  function getUserCurrentTime() {
     const values = {};
-    seoulTimeFormatter.formatToParts(new Date()).forEach(part => {
+    userTimeFormatter.formatToParts(new Date()).forEach(part => {
       if (part.type !== 'literal') {
         values[part.type] = part.value;
       }
@@ -114,7 +120,7 @@
   }
 
   function updateCurrentTimeCell() {
-    const currentTime = getSeoulCurrentTime();
+    const currentTime = getUserCurrentTime();
     const currentCell = daygrid.querySelector('.cell.current-cell');
     if (currentCell) {
       currentCell.classList.remove('current-cell');
@@ -161,6 +167,7 @@
     planItemEditSheet.hidden = panel !== planItemEditSheet;
     planSettingsSheet.hidden = panel !== planSettingsSheet;
     quickMemoSheet.hidden = panel !== quickMemoSheet;
+    conditionSheet.hidden = panel !== conditionSheet;
     retrospectPreview.hidden = panel !== retrospectPreview;
     document.body.classList.add('is-ui-open');
     closeFab();
@@ -195,6 +202,7 @@
     planItemEditSheet.hidden = true;
     planSettingsSheet.hidden = true;
     quickMemoSheet.hidden = true;
+    conditionSheet.hidden = true;
     retrospectPreview.hidden = true;
     document.querySelectorAll('[data-quick-tag-create]').forEach(editor => closeQuickTagEditor(editor));
     document.body.classList.remove('is-ui-open');
@@ -259,6 +267,11 @@
     eventForm.querySelectorAll('input[name="routine_ids[]"]:not(:disabled)').forEach(input => {
       input.checked = false;
     });
+    if (createEnergyGroup) {
+      createEnergyGroup.value = createEnergyGroup.querySelector('option[selected]')?.value || createEnergyGroup.options[0]?.value || '';
+    }
+    checkRadio(eventForm, 'execution_energy_type', '');
+    if (createEnergyValue) createEnergyValue.value = '';
 
     openPanel(eventSheet);
     focusSheetInput(focusTime && !isUnscheduled ? startInput : titleInput);
@@ -294,6 +307,18 @@
     checkRadio(form, 'calendar_tag_id', button.dataset.eventTagId || '');
     checkRadio(form, 'daily_plan_item_id', button.dataset.eventDailyPlanItemId || '');
     form.dataset.originalPlanId = button.dataset.eventDailyPlanItemId || '';
+    if (editEnergyGroup) {
+      const savedGroupId = button.dataset.eventEnergyGroupId || '';
+      editEnergyGroup.value = Array.from(editEnergyGroup.options).some(option => option.value === savedGroupId)
+        ? savedGroupId
+        : (editEnergyGroup.querySelector('option[selected]')?.value || editEnergyGroup.options[0]?.value || '');
+    }
+    const isEnergyOverride = button.dataset.eventEnergyOverride === '1';
+    if (editEnergyPreserve) editEnergyPreserve.value = button.dataset.eventEnergyValue ? '1' : '0';
+    checkRadio(form, 'execution_energy_type', isEnergyOverride ? (button.dataset.eventEnergyType || 'consume') : '');
+    if (editEnergyValue) {
+      editEnergyValue.value = isEnergyOverride ? (button.dataset.eventEnergyValue || '') : '';
+    }
 
     const currentTagId = button.dataset.eventTagId || '';
     form.querySelectorAll('[data-tag-option]').forEach(label => {
@@ -571,6 +596,13 @@
       }
     });
   });
+  document.getElementById('calendarEventEditForm')?.querySelectorAll(
+    'select[name="execution_energy_group_id"], input[name="execution_energy_type"], input[name="execution_energy_value"]'
+  ).forEach(input => {
+    input.addEventListener('change', () => {
+      if (editEnergyPreserve) editEnergyPreserve.value = '0';
+    });
+  });
   setCalendarMode('actual');
 
   document.getElementById('calendarPlanItemDeleteForm')?.addEventListener('submit', async event => {
@@ -632,9 +664,7 @@
 
   document.querySelectorAll('[data-retrospect-preview-open]').forEach(button => {
     button.addEventListener('click', () => {
-      if (!button.disabled) {
-        openPanel(retrospectPreview);
-      }
+      openPanel(retrospectPreview);
     });
   });
 
@@ -643,7 +673,12 @@
   });
 
   document.querySelectorAll('[data-actual-event-open]').forEach(button => {
-    button.addEventListener('click', () => openEventSheet(null, null, 'timed', true));
+    button.addEventListener('click', () => {
+      openEventSheet(null, null, 'timed', true);
+      if (createEnergyGroup && button.dataset.energyRecoveryGroupId) {
+        createEnergyGroup.value = button.dataset.energyRecoveryGroupId;
+      }
+    });
   });
 
   document.querySelectorAll('[data-calendar-header-action]').forEach(button => {
@@ -673,6 +708,13 @@
       if (quickMemoInput) quickMemoInput.value = '';
       openPanel(quickMemoSheet);
       if (quickMemoInput) focusSheetInput(quickMemoInput);
+    });
+  });
+
+  document.querySelectorAll('[data-condition-open]').forEach(button => {
+    button.addEventListener('click', () => {
+      openPanel(conditionSheet);
+      focusSheetInput(conditionSheet.querySelector('input[type="radio"]'));
     });
   });
 

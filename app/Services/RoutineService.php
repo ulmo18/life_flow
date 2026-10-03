@@ -65,7 +65,7 @@ final class RoutineService
     public function markDoneForDate(int $userId, int $routineId, string $date): bool
     {
         $date = $this->normalizeDate($date);
-        if ($date > date('Y-m-d')) {
+        if ($date !== date('Y-m-d')) {
             return false;
         }
 
@@ -78,6 +78,7 @@ final class RoutineService
         $name = trim((string) ($input['name'] ?? ''));
         $startDate = $this->normalizeDate((string) ($input['start_date'] ?? ''));
         $durationDays = filter_var($input['duration_days'] ?? null, FILTER_VALIDATE_INT);
+        $endDateInput = trim((string) ($input['end_date'] ?? ''));
         $goalId = filter_var($input['goal_id'] ?? null, FILTER_VALIDATE_INT);
         $reminderEnabled = isset($input['reminder_enabled']) && (string) $input['reminder_enabled'] === '1';
         $reminderTime = trim((string) ($input['reminder_time'] ?? self::DEFAULT_REMINDER_TIME));
@@ -89,11 +90,34 @@ final class RoutineService
             $errors['name'] = '루틴명은 60자 이내로 입력해주세요.';
         }
 
+        if (!$allowExtendedDuration && $endDateInput !== '') {
+            $parsedEndDate = DateTimeImmutable::createFromFormat('!Y-m-d', $endDateInput);
+            if (!$parsedEndDate instanceof DateTimeImmutable || $parsedEndDate->format('Y-m-d') !== $endDateInput) {
+                $errors['end_date'] = '마감일자를 확인해주세요.';
+            } else {
+                $parsedStartDate = new DateTimeImmutable($startDate);
+                if ($parsedEndDate < $parsedStartDate) {
+                    $errors['end_date'] = '마감일자는 시작일보다 빠를 수 없습니다.';
+                } else {
+                    $selectedDuration = (int) $parsedStartDate->diff($parsedEndDate)->format('%a') + 1;
+                    if ($selectedDuration > self::MAX_INITIAL_DURATION_DAYS) {
+                        $errors['end_date'] = '최초 루틴의 마감일자는 시작일부터 60일 이내로 선택해주세요.';
+                    } else {
+                        $durationDays = $selectedDuration;
+                    }
+                }
+            }
+        }
+
         $maxDuration = $allowExtendedDuration ? self::MAX_DURATION_DAYS : self::MAX_INITIAL_DURATION_DAYS;
         if ($durationDays === false || $durationDays < self::MIN_DURATION_DAYS || $durationDays > $maxDuration) {
             $errors['duration_days'] = '기간을 확인해주세요.';
             $durationDays = self::DEFAULT_DURATION_DAYS;
         }
+
+        $calculatedEndDate = (new DateTimeImmutable($startDate))
+            ->modify('+' . ((int) $durationDays - 1) . ' days')
+            ->format('Y-m-d');
 
         if ($reminderEnabled && !$this->isValidTime($reminderTime)) {
             $errors['reminder_time'] = '리마인드 시간은 HH:MM 형식으로 입력해주세요.';
@@ -115,6 +139,7 @@ final class RoutineService
                 'name' => $name,
                 'goalId' => $goalId === null ? null : (int) $goalId,
                 'startDate' => $startDate,
+                'endDate' => $calculatedEndDate,
                 'durationDays' => (int) $durationDays,
                 'reminderEnabled' => $reminderEnabled,
                 'reminderTime' => $reminderEnabled ? $reminderTime : null,

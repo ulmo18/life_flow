@@ -1,155 +1,174 @@
 (function () {
   const settingsLayer = document.querySelector('[data-retrospect-settings-layer]');
   const dateLayer = document.querySelector('[data-retrospect-date-layer]');
-  const openSettingsButton = document.querySelector('[data-retrospect-open-settings]');
-  const openDateButton = document.querySelector('[data-retrospect-open-date]');
+  const detailLayers = {
+    routine: document.querySelector('[data-routine-detail-layer]'),
+    schedule: document.querySelector('[data-schedule-detail-layer]'),
+    memo: document.querySelector('[data-memo-detail-layer]'),
+  };
+  const retrospectPage = document.querySelector('[data-retrospect-page]');
+  const kptSheet = document.querySelector('[data-kpt-sheet]');
+  const kptForm = document.querySelector('[data-kpt-form]');
   const routineState = window.LifeFlowRoutineState;
 
-  function openLayer(layer) {
+  function openModal(layer) {
     if (!layer) return;
-
     layer.hidden = false;
     document.body.classList.add('is-ui-open');
   }
 
-  function closeLayer(layer, event) {
-    if (event) {
-      event.preventDefault();
-    }
-
+  function closeModal(layer) {
     if (!layer) return;
-
     layer.hidden = true;
-    if ((!settingsLayer || settingsLayer.hidden) && (!dateLayer || dateLayer.hidden)) {
+    if ([settingsLayer, dateLayer, ...Object.values(detailLayers)].every(item => !item || item.hidden)) {
       document.body.classList.remove('is-ui-open');
     }
   }
 
-  openSettingsButton?.addEventListener('click', () => openLayer(settingsLayer));
-  openDateButton?.addEventListener('click', () => openLayer(dateLayer));
+  document.querySelector('[data-retrospect-open-settings]')?.addEventListener('click', () => openModal(settingsLayer));
+  document.querySelector('[data-retrospect-open-date]')?.addEventListener('click', () => openModal(dateLayer));
+  document.querySelectorAll('[data-retrospect-close-settings]').forEach(button => button.addEventListener('click', () => closeModal(settingsLayer)));
+  document.querySelectorAll('[data-retrospect-close-date]').forEach(button => button.addEventListener('click', () => closeModal(dateLayer)));
+  document.querySelectorAll('[data-detail-close]').forEach(button => button.addEventListener('click', () => {
+    closeModal(button.closest('.retrospect-local-layer'));
+  }));
 
-  document.querySelectorAll('[data-retrospect-close-settings]').forEach(button => {
-    button.addEventListener('click', event => closeLayer(settingsLayer, event));
-  });
-
-  document.querySelectorAll('[data-retrospect-close-date]').forEach(button => {
-    button.addEventListener('click', event => closeLayer(dateLayer, event));
-  });
-
-  function updateRoutineScore() {
-    const buttons = Array.from(document.querySelectorAll('[data-retrospect-routine-state]'));
-    const done = buttons.filter(button => button.dataset.state === 'O').length;
-    const score = document.querySelector('[data-routine-score]');
-    const rate = document.querySelector('[data-routine-rate]');
-    if (score) {
-      score.textContent = `${done}/${buttons.length}`;
-    }
-    if (rate) {
-      rate.textContent = `${buttons.length > 0 ? Math.round((done / buttons.length) * 100) : 0}%`;
-    }
+  function selectRecordTab(name) {
+    document.querySelectorAll('[data-record-tab]').forEach(button => {
+      button.setAttribute('aria-selected', button.dataset.recordTab === name ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-record-panel]').forEach(panel => {
+      panel.hidden = panel.dataset.recordPanel !== name;
+    });
   }
 
-  document.querySelectorAll('[data-retrospect-autosize]').forEach(textarea => {
-    const resize = () => {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 280)}px`;
-    };
-
-    textarea.addEventListener('input', resize);
-    resize();
+  document.querySelectorAll('[data-record-tab]').forEach(button => {
+    button.addEventListener('click', () => selectRecordTab(button.dataset.recordTab || 'routine'));
   });
+  if (window.location.hash === '#schedule') selectRecordTab('schedule');
+  if (window.location.hash === '#memo') selectRecordTab('memo');
 
-  document.querySelectorAll('[data-retrospect-more]').forEach(button => {
+  document.querySelectorAll('[data-detail-open]').forEach(button => {
     button.addEventListener('click', () => {
-      const list = button.previousElementSibling;
-      if (!list?.matches('[data-retrospect-record-list]')) {
-        return;
-      }
-
-      const isCollapsed = list.classList.toggle('is-collapsed');
-      button.textContent = isCollapsed ? '전체 보기' : '접기';
-      button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      const target = button.dataset.detailOpen || '';
+      const detailKind = target.split('-detail-')[0];
+      const detailLayer = detailLayers[detailKind];
+      detailLayer?.querySelectorAll('[data-detail-panel]').forEach(panel => {
+        panel.hidden = panel.dataset.detailPanel !== target;
+      });
+      openModal(detailLayer);
     });
-    button.previousElementSibling?.classList.add('is-collapsed');
-    button.classList.add('is-ready');
-    button.setAttribute('aria-expanded', 'false');
   });
 
   document.querySelectorAll('[data-retrospect-routine-toggle-form]').forEach(form => {
     form.addEventListener('submit', async event => {
       event.preventDefault();
-
       try {
         const response = await fetch(form.action, {
           method: 'POST',
           body: new FormData(form),
-          headers: {
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-          },
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         });
         const payload = await response.json();
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.message || '루틴 상태를 변경할 수 없습니다.');
-        }
-
+        if (!response.ok || !payload.ok) throw new Error(payload.message || '루틴 상태를 변경할 수 없습니다.');
         const button = form.querySelector('[data-routine-toggle-control]');
-        const state = payload.state || '';
-        if (routineState) {
-          routineState.apply(button, state);
-        }
-        if (button?.matches('[data-retrospect-routine-state]')) {
-          updateRoutineScore();
-        }
-        if (payload.routine?.id) {
-          document.querySelectorAll(`[data-retrospect-history-done="${payload.routine.id}"]`).forEach(element => {
-            element.textContent = String(payload.routine.doneCount ?? 0);
-          });
-          document.querySelectorAll(`[data-retrospect-history-rate="${payload.routine.id}"]`).forEach(element => {
-            element.textContent = String(payload.routine.progressPercent ?? 0);
-          });
-        }
-
+        if (routineState) routineState.apply(button, payload.state || '');
         window.LifeFlowToast?.show(payload.message || '루틴 상태를 변경했습니다.');
       } catch (error) {
-        form.submit();
+        window.LifeFlowToast?.show(error.message || '루틴 상태를 변경할 수 없습니다.');
       }
     });
   });
 
-  document.querySelectorAll('form[data-confirm]').forEach(form => {
-    form.addEventListener('submit', async event => {
-      if (form.dataset.confirmed === '1') {
-        form.dataset.confirmed = '0';
-        return;
-      }
+  if (kptSheet && kptForm) {
+    const steps = Array.from(kptForm.querySelectorAll('[data-kpt-step]'));
+    const progress = kptForm.querySelector('[data-kpt-progress]');
+    const previous = kptForm.querySelector('[data-kpt-previous]');
+    const next = kptForm.querySelector('[data-kpt-next]');
+    const publish = kptForm.querySelector('[data-kpt-publish]');
+    const collapse = kptForm.querySelector('[data-kpt-collapse]');
+    const close = kptForm.querySelector('[data-kpt-close]');
+    const body = kptForm.querySelector('.retrospect-kpt-body');
+    const saveStatus = kptForm.querySelector('[data-kpt-save-status]');
+    let currentStep = 0;
+    let saveTimer = 0;
 
-      event.preventDefault();
-
-      const accepted = window.LifeFlowUI?.confirm
-        ? await window.LifeFlowUI.confirm({
-            title: '회고 재발행',
-            message: form.dataset.confirm || '계속 진행할까요?',
-            confirmText: '재발행',
-            cancelText: '취소',
-          })
-        : confirm(form.dataset.confirm || '계속 진행할까요?');
-
-      if (!accepted) {
-        return;
-      }
-
-      form.dataset.confirmed = '1';
-      form.requestSubmit();
-    });
-  });
-
-  document.addEventListener('keydown', event => {
-    if (event.key !== 'Escape') {
-      return;
+    function renderStep() {
+      steps.forEach((step, index) => { step.hidden = index !== currentStep; });
+      if (progress) progress.textContent = `${currentStep + 1} / ${steps.length}`;
+      if (previous) previous.hidden = currentStep === 0;
+      if (next) next.hidden = currentStep === steps.length - 1;
+      if (publish) publish.hidden = currentStep !== steps.length - 1;
     }
 
-    closeLayer(settingsLayer, event);
-    closeLayer(dateLayer, event);
+    async function saveDraft() {
+      if (saveStatus) saveStatus.textContent = '저장 중…';
+      try {
+        const response = await fetch(kptForm.action, {
+          method: 'POST',
+          body: new FormData(kptForm),
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error(payload.message || '임시 저장에 실패했습니다.');
+        if (saveStatus) saveStatus.textContent = '저장됨';
+      } catch (error) {
+        if (saveStatus) saveStatus.textContent = '저장 실패';
+      }
+    }
+
+    kptForm.querySelectorAll('textarea').forEach(textarea => {
+      textarea.addEventListener('input', () => {
+        if (saveStatus) saveStatus.textContent = '수정됨';
+        window.clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(saveDraft, 700);
+      });
+    });
+    document.querySelector('[data-kpt-open]')?.addEventListener('click', () => {
+      kptSheet.hidden = false;
+      body.hidden = false;
+      kptSheet.classList.remove('is-collapsed');
+      retrospectPage?.classList.add('is-kpt-open');
+      collapse.textContent = '접기';
+      steps[currentStep]?.querySelector('textarea')?.focus();
+    });
+    collapse?.addEventListener('click', () => {
+      body.hidden = !body.hidden;
+      kptSheet.classList.toggle('is-collapsed', body.hidden);
+      retrospectPage?.classList.toggle('is-kpt-open', !body.hidden);
+      collapse.textContent = body.hidden ? '펼치기' : '접기';
+    });
+    close?.addEventListener('click', () => {
+      window.clearTimeout(saveTimer);
+      saveDraft();
+      kptSheet.hidden = true;
+      body.hidden = false;
+      kptSheet.classList.remove('is-collapsed');
+      retrospectPage?.classList.remove('is-kpt-open');
+      collapse.textContent = '접기';
+    });
+    previous?.addEventListener('click', () => { currentStep = Math.max(0, currentStep - 1); renderStep(); saveDraft(); });
+    next?.addEventListener('click', () => { currentStep = Math.min(steps.length - 1, currentStep + 1); renderStep(); saveDraft(); });
+    kptForm.addEventListener('submit', async event => {
+      if (event.submitter !== publish || kptForm.dataset.publishConfirmed === '1') return;
+      const hasBlank = Array.from(kptForm.querySelectorAll('textarea')).some(textarea => !textarea.value.trim());
+      if (!hasBlank) return;
+      event.preventDefault();
+      const accepted = window.LifeFlowUI?.confirm
+        ? await window.LifeFlowUI.confirm({ title: '회고 발행', message: '비어 있는 KPT 항목이 있습니다. 그대로 발행할까요?', confirmText: '발행', cancelText: '계속 작성' })
+        : window.confirm('비어 있는 KPT 항목이 있습니다. 그대로 발행할까요?');
+      if (accepted) {
+        kptForm.dataset.publishConfirmed = '1';
+        kptForm.requestSubmit(publish);
+      }
+    });
+    renderStep();
+  }
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    closeModal(settingsLayer);
+    closeModal(dateLayer);
+    Object.values(detailLayers).forEach(closeModal);
   });
 })();

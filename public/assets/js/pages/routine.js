@@ -9,6 +9,71 @@
     return;
   }
 
+  const routinePeriodInputs = document.querySelector('[data-routine-period-inputs]');
+  const routineStartDate = routinePeriodInputs?.querySelector('[data-routine-start-date]');
+  const routineDuration = routinePeriodInputs?.querySelector('[data-routine-duration]');
+  const routineEndDate = routinePeriodInputs?.querySelector('[data-routine-end-date]');
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+  function isoDateToUtc(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const timestamp = Date.UTC(year, month - 1, day);
+    const parsed = new Date(timestamp);
+    if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+      return null;
+    }
+    return timestamp;
+  }
+
+  function utcToIsoDate(timestamp) {
+    const date = new Date(timestamp);
+    const year = String(date.getUTCFullYear());
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function updateRoutineEndBounds() {
+    if (!(routineStartDate instanceof HTMLInputElement) || !(routineEndDate instanceof HTMLInputElement)) return null;
+    const start = isoDateToUtc(routineStartDate.value);
+    if (start === null) return null;
+    routineEndDate.min = utcToIsoDate(start);
+    routineEndDate.max = utcToIsoDate(start + (59 * millisecondsPerDay));
+    return start;
+  }
+
+  function syncRoutineEndFromDuration() {
+    if (!(routineDuration instanceof HTMLSelectElement) || !(routineEndDate instanceof HTMLInputElement)) return;
+    const start = updateRoutineEndBounds();
+    const duration = Number.parseInt(routineDuration.value, 10);
+    if (start === null || !Number.isInteger(duration) || duration < 1 || duration > 60) return;
+    routineEndDate.value = utcToIsoDate(start + ((duration - 1) * millisecondsPerDay));
+    routineEndDate.setCustomValidity('');
+  }
+
+  function syncRoutineDurationFromEnd() {
+    if (!(routineDuration instanceof HTMLSelectElement) || !(routineEndDate instanceof HTMLInputElement)) return;
+    const start = updateRoutineEndBounds();
+    const end = isoDateToUtc(routineEndDate.value);
+    if (start === null || end === null) return;
+    const duration = Math.floor((end - start) / millisecondsPerDay) + 1;
+    if (duration < 1 || duration > 60) {
+      routineEndDate.setCustomValidity('마감일은 시작일부터 60일 이내로 선택해주세요.');
+      return;
+    }
+    routineEndDate.setCustomValidity('');
+    routineDuration.value = String(duration);
+  }
+
+  routineStartDate?.addEventListener('change', syncRoutineEndFromDuration);
+  routineDuration?.addEventListener('change', syncRoutineEndFromDuration);
+  routineEndDate?.addEventListener('change', syncRoutineDurationFromEnd);
+  if (routinePeriodInputs) syncRoutineDurationFromEnd();
+
   function openSheet(name) {
     layer.hidden = false;
     sheets.forEach(sheet => {

@@ -104,6 +104,6 @@ final class MemoService
             return $value;
         }
 
-        return $utcDate->setTimezone(new DateTimeZone('Asia/Seoul'))->format('Y.m.d H:i');
+        return $utcDate->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('Y.m.d H:i');
     }
 }

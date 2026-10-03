@@ -55,6 +55,31 @@ final class PlanRepository
         return $stmt->fetchAll();
     }
 
+    /** @return array<int, array<string, mixed>> */
+    public function listBlocksForVisibleGroups(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT
+                pb.id,
+                pb.plan_group_id,
+                pb.start_index,
+                pb.end_index,
+                pt.title,
+                pt.importance
+             FROM plan_groups pg
+             INNER JOIN plan_blocks pb ON pb.plan_group_id = pg.id
+             INNER JOIN plan_templates pt ON pt.id = pb.plan_template_id
+                AND pt.user_id = pg.user_id
+                AND pt.deleted_at IS NULL
+             WHERE pg.user_id = :user_id
+                AND pg.deleted_at IS NULL
+             ORDER BY pb.plan_group_id ASC, pb.start_index ASC, pb.end_index ASC, pb.id ASC'
+        );
+        $stmt->execute(['user_id' => $userId]);
+
+        return $stmt->fetchAll();
+    }
+
     /** @return array<string, mixed>|null */
     public function findGroupWithBlocks(int $userId, int $groupId, bool $visibleOnly = true): ?array
     {

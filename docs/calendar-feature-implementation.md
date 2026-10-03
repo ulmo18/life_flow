@@ -15,8 +15,8 @@ The current implementation supports:
 - default calendar tags and user-created tags backed by a shared organic 15-color palette
 - soft deletion of actual events
 - current-time cell highlighting when the selected date is today
-- active Routine list in the floating bottom sheet, backed by routine definitions and daily logs
-- Retrospect preview entry point for the latest submitted report on or before the selected date
+- links from the floating bottom sheet to dedicated To-do and Routine execution pages
+- Retrospect preview entry point for the exact selected date
 - date metadata table for holiday/substitute holiday coloring
 
 ## Tables
@@ -180,8 +180,8 @@ All POST routes require CSRF verification.
 - Pointer drag tracking does not call `setPointerCapture` on the whole date header, so its child date picker, navigation links, and latest-published-Retrospect button receive normal clicks.
 - Fixed tag management shows the tag identity and per-user enabled switch without exposing its fixed color. Disabled fixed tags are hidden from new event registration, while existing event tags and colors remain intact.
 - Per-user fixed-tag visibility is stored in `calendar_tag_preferences`; existing deployments must apply `sql/migration.calendar_tag_preferences.mysql.sql` or its SQLite counterpart first.
-- The Retrospect button opens a local preview popup with the user's latest submitted report regardless of the selected calendar date.
-- The Retrospect button is disabled when there is no submitted report yet.
+- The Retrospect button opens the submitted report for the selected date.
+- When no submitted report exists, the popup links to the selected date's Retrospect page instead of disabling the button.
 - The Plan schedule and Actual schedule tabs share the time grid. Range selection opens the editor for the active tab.
 - The grid no longer shows long-press/drag instruction text or the `시간 미정 추가` button. Existing range selection remains unchanged.
 - The bottom-right `+` opens a bottom sheet containing Actual-event creation, unified Plan creation, Memo, and Plan-link actions, three Plan items, and three Routine items. `실제 일정 추가` opens the existing event sheet with required editable 10-minute start/end selectors; today defaults near the current time and other dates default to 09:00–10:00. More items expand in the same scrollable sheet.
@@ -226,7 +226,7 @@ All POST routes require CSRF verification.
 - Routine items are displayed and toggled directly inside the `+` bottom sheet.
 - Routine state changes submit to `POST /routine/toggle` and persist to `routine_logs`.
 - If a routine duration change moves the selected date outside the routine's active period, that routine is excluded from the Calendar floating sheet for that date. Existing routine logs are preserved but ignored outside the active period.
-- If the selected date is today, the current 10-minute cell is highlighted using the app timezone (`Asia/Seoul`) and moves in place at each 10-minute boundary without reloading the page. Returning to a backgrounded Calendar page refreshes the highlight immediately.
+- If the selected date is today, the current 10-minute cell is highlighted using the signed-in user's configured IANA time zone and moves in place at each 10-minute boundary without reloading the page. Returning to a backgrounded Calendar page refreshes the highlight immediately.
 - Calendar success and validation flash messages are rendered as hidden `data-toast-message` triggers and shown only through the shared Toast UI, preventing error rows from shifting the grid.
 - Calendar page-specific CSS and JavaScript URLs include their current file modification time. This cache-busting value keeps browser and Android WebView clients aligned with deployed Calendar behavior without disabling caching for unrelated assets.
 - Calendar notification synchronization includes only Plan reminders whose five-minute-prior fire time is still in the future. Entering Calendar replaces that date's local Android reservations and is not itself a notification trigger.
@@ -234,7 +234,7 @@ All POST routes require CSRF verification.
 
 ## Retrospect Integration
 
-Retrospect persistence is handled by the Retrospect feature. Calendar remains the source of actual events and selected plan data, while `/retrospect` owns report snapshots, draft text, publishing, and history. Calendar reads the latest submitted report preview on or before the selected date and does not edit retrospect data.
+Retrospect persistence is handled by the Retrospect feature. Calendar remains the source of actual events and selected plan data, while `/retrospect` owns report snapshots, draft text, publishing, and history. Calendar reads only the selected date's submitted report and does not edit retrospect data.
 
 ## Existing Database Migration
 

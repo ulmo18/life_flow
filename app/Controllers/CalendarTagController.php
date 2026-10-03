@@ -19,7 +19,7 @@ final class CalendarTagController
     public function index(): void
     {
         $this->render('pages/tags/index', [
-            'title' => 'Tags',
+            'title' => t('nav.tags'),
             'tagData' => $this->tagService->getTagPageData($this->userId()),
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],

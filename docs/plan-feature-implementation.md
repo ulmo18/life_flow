@@ -138,10 +138,13 @@ All POST routes require CSRF verification.
 ## Current UI Behavior
 
 - The Plan list keeps its page heading available to screen readers but removes the large visible menu-name header so the first plan card or empty state begins near the top of the content area.
-- The list page shows each visible plan group with its name, time range, block count, detail button, edit button, copy button, and delete button.
+- The daily-template list shows only the linked template name and a right-aligned copy icon in each card header. It intentionally omits the template-wide start/end range, block count, and goal badges.
+- Copying from the list always asks for confirmation and explains that the copy can be edited independently.
+- Each daily-template card has a collapsed `블록 목록 보기 · n개` section. Expanded rows are ordered by start time and show importance, block name, and `시작시간 ~ 마감시간` on one line; long names truncate before the time range.
+- Daily-template edit and delete actions live on the detail page rather than in the list. Delete keeps the warning that Calendar copies and Retrospect history are unaffected.
 - Legacy Plan version fields are not shown in user-facing Plan or Calendar labels.
 - The list page uses a floating `계획 추가` submit button with the same visual treatment as the editor's floating `계획 저장` button.
-- Plan list action buttons are intentionally compact so repeated plan cards do not become dominated by controls.
+- The copy icon keeps a 36px visual control with an accessible label and tooltip so repeated cards are not dominated by actions.
 - The detail page shows the saved day grid and a block summary list with block title, time range, importance badge, and template id.
 - The detail page does not show an `Add plan` button.
 - The add/edit page uses the same 24-row, 6-column day-grid shape as Calendar.
@@ -156,6 +159,8 @@ All POST routes require CSRF verification.
 - Copying a plan group redirects back to the plan list, not to the copied plan detail page.
 - Plan block backgrounds stay neutral in an organic gray tone. Eisenhower importance colors are applied only inside the circular `A/B/C/D` badge so future tag colors can own the block background.
 - The Plan list separates `하루 템플릿` and `계획 블록` tabs. The Plan-block tab manages the reusable library without mixing library rows into daily-template cards.
+- The Plan-block tab uses a fixed bottom `계획 블록 추가` action instead of an always-visible form. Create and edit reuse one bottom sheet.
+- Plan-block rows place compact edit and delete buttons on the right. Edit opens the populated bottom sheet, while delete keeps the shared confirmation popup.
 - Plan-block create/edit forms expose A through D as four horizontal radio-style buttons.
 - The daily-template editor offers `직접 입력` plus saved Plan-block templates. Selecting a library item copies its title, importance, goal, and default duration at the selected start time.
 - If the default duration exceeds today's range, the editor asks whether to discard the later portion and end the placed copy at `23:50`; cancellation leaves the template unchanged and no block is added.
@@ -199,3 +204,7 @@ The shared UI layer also provides hover tooltips for elements with `data-ui-tool
 - Edit a library item after placing it and confirm the already placed copy remains unchanged.
 - Select a saved block near midnight; confirm cancellation adds nothing and confirmation shortens only the placed copy to `23:50`.
 - In Calendar Plan entry, confirm a saved block copies its title, importance, goal, and duration while direct entry remains available.
+- On the daily-template list, confirm the card header contains only the linked template name and copy icon, with no overall time range or block count.
+- Confirm `블록 목록 보기 · n개` matches the actual block count, then expand it and verify rows stay in start-time order and display importance, name, and time range on one line; verify long names truncate on a narrow screen.
+- Cancel and confirm a template copy from the icon, then open the detail page and cancel and confirm deletion from there.
+- On the Plan-block tab, open the fixed add action, create a block from the bottom sheet, reopen the same sheet from the right-side edit button, and cancel and confirm the right-side delete action.

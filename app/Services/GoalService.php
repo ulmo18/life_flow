@@ -34,7 +34,7 @@ final class GoalService
     /** @return array<int, array<string, mixed>> */
     public function getGoalList(int $userId, ?string $status = 'active', mixed $goalType = null): array
     {
-        $statusFilter = $this->normalizeStatusFilter($status);
+        $statusFilter = $status === null ? null : $this->normalizeStatusFilter($status);
         $goalTypeFilter = $this->normalizeGoalTypeFilter($goalType);
         $goals = array_map(
             fn (array $goal): array => $this->formatGoal($goal),
@@ -43,8 +43,9 @@ final class GoalService
         $goalIds = array_map(static fn (array $goal): int => (int) $goal['id'], $goals);
         $linkedPlans = $this->goalRepository->listLinkedPlansByGoalIds($userId, $goalIds);
         $linkedRoutines = $this->goalRepository->listLinkedRoutinesByGoalIds($userId, $goalIds);
+        $linkedTodos = $this->goalRepository->countLinkedDailyPlanItemsByGoalIds($userId, $goalIds);
 
-        return array_map(function (array $goal) use ($linkedPlans, $linkedRoutines): array {
+        return array_map(function (array $goal) use ($linkedPlans, $linkedRoutines, $linkedTodos): array {
             $goalId = (int) $goal['id'];
             $goal['linkedPlans'] = array_map(
                 fn (array $plan): array => $this->formatLinkedPlan($plan),
@@ -54,6 +55,7 @@ final class GoalService
                 fn (array $routine): array => $this->formatLinkedRoutine($routine),
                 $linkedRoutines[$goalId] ?? []
             );
+            $goal['linkedTodoCount'] = (int) ($linkedTodos[$goalId] ?? 0);
 
             return $goal;
         }, $goals);
@@ -81,6 +83,11 @@ final class GoalService
     public function normalizeViewMode(mixed $viewMode): string
     {
         return trim((string) $viewMode) === 'tree' ? 'tree' : 'cards';
+    }
+
+    public function normalizeMapMode(mixed $mode): string
+    {
+        return trim((string) $mode) === 'focus' ? 'focus' : 'all';
     }
 
     public function normalizeGoalTypeFilter(mixed $goalType): ?string
@@ -114,6 +121,11 @@ final class GoalService
             $branch = [];
             foreach ($childrenByParentId[$parentGoalId] ?? [] as $goal) {
                 $goal['children'] = $buildBranch((int) $goal['id']);
+                $goal['descendantCount'] = array_reduce(
+                    $goal['children'],
+                    static fn (int $count, array $child): int => $count + 1 + (int) ($child['descendantCount'] ?? 0),
+                    0
+                );
                 $branch[] = $goal;
             }
 
@@ -249,6 +261,15 @@ final class GoalService
     public function deleteGoal(int $userId, int $goalId): bool
     {
         return $this->goalRepository->softDelete($userId, $goalId);
+    }
+
+    public function moveGoal(int $userId, int $goalId, ?int $parentGoalId, ?int $beforeGoalId): bool
+    {
+        if ($parentGoalId !== null && $this->goalRepository->wouldCreateCycle($userId, $goalId, $parentGoalId)) {
+            return false;
+        }
+
+        return $this->goalRepository->move($userId, $goalId, $parentGoalId, $beforeGoalId);
     }
 
     private function normalizeNullableText(string $value, int $maxLength): ?string

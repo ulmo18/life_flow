@@ -6,7 +6,7 @@ Routine is the habit tracker area. It stores habits a user wants to build, track
 
 The current implementation supports:
 
-- creating routines with a name, start date, and duration
+- creating routines with a name, start date, duration, and synchronized inclusive end date
 - initial duration selection from 1 to 60 days in 1-day steps
 - default duration of 60 days
 - listing routines active today with a weekly summary and cumulative progress
@@ -45,6 +45,8 @@ Important columns:
 Rules:
 
 - Initial `duration_days` must be between 1 and 60. Extension may increase it up to 365.
+- The creation form's end date is inclusive. A 1-day routine ends on its start date, and the latest 60-day initial end date is `start_date + 59 days`.
+- When an initial end date is submitted, `RoutineService` recalculates `duration_days` from the date range and validates the same 1-to-60-day limit. No separate end-date column is stored.
 - `status` is `active`, `completed`, or `stopped`; `ended_at` records manual completion or stopping.
 - An `active` row whose planned end date has passed is treated as a natural period completion in Retrospect even before a background lifecycle job exists.
 - Once created, the start date and duration cannot be shortened. Metadata such as name, goal, and reminder remains editable.
@@ -86,7 +88,8 @@ Rules:
 
 ## Routes
 
-- `GET /routine`: render routine list and creation form.
+- `GET /routine`: render today's execution-only routine list.
+- `GET /manage/routines`: render routine management, period history, and creation/editing forms.
 - `POST /routine`: create a routine.
 - `POST /routine/update`: update a routine.
 - `POST /routine/extend`: extend an active routine by a positive number of days.
@@ -97,6 +100,10 @@ Rules:
 All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect fallback behavior for non-JavaScript requests and returns JSON for `Accept: application/json` or `X-Requested-With: XMLHttpRequest`.
 
 ## UI Behavior
+
+- `GET /routine` is the bottom-navigation daily execution view for the current date in the user's configured time zone.
+- `GET /manage/routines` is the aside Management view and retains routine creation, editing, extension, lifecycle actions, detail, and historical tracking.
+- Both views write daily states through `POST /routine/toggle`; Calendar and Retrospect continue using the same endpoint and `routine_logs` rows.
 
 - The Routine page starts with one three-column weekly summary card: active routines, weekly achievement, and the longest current streak.
 - Each card shows the routine name, current streak label, optional upper-right linked goal, cumulative count and percentage, progress bar, a compact habit-tracker grid, and compact detail/edit actions.
@@ -109,6 +116,7 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - Routines are shown in the Routine list only while today is inside their active period. If a duration change moves today outside the active period, the routine no longer appears in today's Routine list and today's toggle is not offered.
 - The add and edit forms use bottom sheets to keep the list focused.
 - The add action is fixed near the bottom of the viewport to match the Plan and Goal add interactions.
+- The create sheet shows start date, duration, and end date together. Changing duration recalculates the end date, and selecting an end date recalculates duration; server validation repeats this calculation.
 - The add and edit forms include an optional goal select that only lists active goals.
 - Routine cards place the optional connected-goal label in the upper-right header context, constrain its width, and truncate long goal names so the routine name remains primary.
 - The detail bottom sheet groups every date from the routine start through its planned end under `YYYY년 M월` headings and places only those dates sequentially into seven columns. It does not add weekday headers, leading calendar blanks, or dates outside the routine period.
@@ -117,11 +125,21 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - Detail and edit actions are compact secondary buttons while retaining at least a 44px mobile touch target; today's tracker cell remains the card's primary action.
 - The detail sheet title is the routine name itself. Its title row and 44px close control remain sticky while the period record scrolls.
 - Routine, Calendar, and daily Retrospect load `components/routine-state.css` and `components/routine-state.js` so blank, completed, and missed states share the same marker, color, accessible label, and in-place update behavior.
+- Routine Management is the only surface that may correct past Routine dates. The bottom Routine page, Calendar, and Retrospect may mutate only the signed-in user's current date; the controller and service enforce this rule server-side.
 - The Calendar routine popup shows only routines active on the selected date.
 - Calendar routine toggles update in place when JavaScript is available and redirect back to the selected calendar date as a fallback.
 - Future Calendar dates do not expose Routine completion controls.
 - Completed and stopped routines leave the active Routine and Calendar views; Retrospect owns their historical feedback.
 - A new Calendar event can include active routines for that date. One event save writes the event and marks those routines complete in the same request flow, avoiding a second completion action in the Routine menu.
+
+## Manual Test Checklist
+
+- Change the creation duration from 60 days to 1 day and confirm the end date becomes the start date.
+- Change the start date and confirm the end date keeps the selected duration.
+- Select an end date and confirm the duration changes to the inclusive number of days.
+- Confirm the end-date picker cannot select before the start date or after `start date + 59 days`.
+- Submit a forged end date outside the 60-day range and confirm server validation rejects it.
+- Create a routine by end date and confirm its list progress and detail period use the calculated duration without a schema change.
 
 ## Reminder Direction
 

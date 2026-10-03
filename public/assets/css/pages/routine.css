@@ -523,6 +523,10 @@ body[data-theme='dark'] .routine-sheet-header.is-sticky {
   gap: var(--space-2);
 }
 
+.routine-period-inputs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .routine-reminder-option {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) 112px;
@@ -578,6 +582,12 @@ body[data-theme='dark'] .routine-log-row {
   width: min(calc(100% - 32px), 430px);
   transform: translateX(-50%);
   box-shadow: 0 14px 30px rgba(200, 95, 90, 0.26);
+}
+
+@media (max-width: 479px) {
+  .routine-period-inputs {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 379px) {
