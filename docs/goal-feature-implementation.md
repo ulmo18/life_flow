@@ -8,7 +8,7 @@ Existing Goal, Plan, To-do, Calendar, Routine, notification, and Retrospect rela
 
 ## Main experience
 
-- The first input asks only `무엇을 하고 싶나요?`. Enter submits the title immediately.
+- A `목표 추가` floating action above the bottom navigator opens a title-only bottom sheet. The created root goal is active but is not automatically focused.
 - Quick-created goals are internally stored as active `bucket` goals with no period. Type, dates, status, parent, and behavior reminder can be refined later in the detail panel.
 - Every node exposes a compact `＋` action that opens an inline child-title input. Child creation never requires a page or modal transition.
 - The tree is automatically arranged. Root goals can form two columns on wider screens; mobile always uses a vertical indentation hierarchy without horizontal overflow.
@@ -16,15 +16,17 @@ Existing Goal, Plan, To-do, Calendar, Routine, notification, and Retrospect rela
 - Nodes with children support collapse/expand. Collapsed IDs are UI preferences stored in browser `localStorage`; layout state is not written to the database.
 - A collapsed node shows the total descendant count.
 - Node status uses a compact symbol: `◐` active, `✓` completed, and `○` paused/archived. Completed nodes are visually muted.
-- Selecting a node opens its details in a right panel on desktop and a bottom sheet on mobile.
+- Selecting a node opens its details in a right panel on desktop and a bottom sheet on mobile. Desktop content starts at the top and the panel scrolls internally when it exceeds the viewport.
 - The panel shows status, period, period progress, linked Plan count, linked daily To-do count, and linked Routine count. Existing detailed edit and soft-delete actions remain available inside an expandable section.
 
 ## Map modes
 
-- `GET /goal?mode=all` shows every non-deleted goal and preserves its hierarchy. This is the default.
-- `GET /goal?mode=focus` shows active goals. If an active goal's parent is filtered out, the active goal becomes a visible map root for this view only; persistence is not changed.
+- `GET /goal` or `GET /goal?mode=focus` is the default and shows only goals explicitly selected for `지금 집중`.
+- `GET /goal?mode=all` shows every non-deleted goal and preserves its hierarchy.
+- A user can focus at most five active goals. Paused, completed, archived, deleted goals are excluded; changing an active focused goal to another status clears its focus flag.
+- The detail panel owns `지금 집중에 추가/해제`. A focused child whose parent is not focused is promoted to a visual root only in this filtered view.
 - Structure dragging is available only in `전체 목표`. It is disabled in the filtered focus view so a visually promoted child cannot accidentally lose its hidden parent.
-- “지금 집중” currently maps to the existing `active` status. A separate focus flag is intentionally not added in this phase.
+- Focus persistence uses `goals.is_focused` and `goals.focused_at`; the service enforces the five-goal limit for both database drivers.
 
 ## Structure and ordering
 
@@ -50,6 +52,7 @@ Existing Goal, Plan, To-do, Calendar, Routine, notification, and Retrospect rela
 - `POST /goal`: create a root or child goal. `Accept: application/json` returns a compact result for inline creation.
 - `POST /goal/update`: update title, type, parent, status, period, and behavior reminder.
 - `POST /goal/move`: reorder or reparent a goal; returns JSON.
+- `POST /goal/focus`: add or remove one active goal from the focused set.
 - `POST /goal/delete`: soft-delete a goal after confirmation.
 
 All write routes require CSRF validation.
@@ -67,12 +70,13 @@ Controllers coordinate HTTP responses, the service owns validation/tree formatti
 
 ## Data and compatibility
 
-No migration is required for Goal Map. Existing MySQL and SQLite schemas already contain:
+Existing MySQL databases apply `sql/migration.goal_focus.mysql.sql`. SQLite fallback adds missing focus columns during connection startup; `sql/migration.goal_focus.sqlite.sql` remains available for controlled upgrades. The schemas contain:
 
 - `parent_goal_id`
 - `sort_order`
 - `goal_type`
 - `status`
+- `is_focused` and `focused_at`
 - period and behavior-reminder fields
 
 Allowed goal types and statuses remain unchanged for compatibility. Goal Map does not force them during quick creation but detailed editing retains the existing options.

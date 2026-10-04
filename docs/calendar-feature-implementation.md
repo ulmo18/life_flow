@@ -15,6 +15,7 @@ The current implementation supports:
 - default calendar tags and user-created tags backed by a shared organic 15-color palette
 - soft deletion of actual events
 - current-time cell highlighting when the selected date is today
+- dark-theme current-time highlighting uses the high-contrast secondary accent, inset outline, and glow
 - links from the floating bottom sheet to dedicated To-do and Routine execution pages
 - Retrospect preview entry point for the exact selected date
 - date metadata table for holiday/substitute holiday coloring
@@ -184,7 +185,7 @@ All POST routes require CSRF verification.
 - When no submitted report exists, the popup links to the selected date's Retrospect page instead of disabling the button.
 - The Plan schedule and Actual schedule tabs share the time grid. Range selection opens the editor for the active tab.
 - The grid no longer shows long-press/drag instruction text or the `시간 미정 추가` button. Existing range selection remains unchanged.
-- The bottom-right `+` opens a bottom sheet containing Actual-event creation, unified Plan creation, Memo, and Plan-link actions, three Plan items, and three Routine items. `실제 일정 추가` opens the existing event sheet with required editable 10-minute start/end selectors; today defaults near the current time and other dates default to 09:00–10:00. More items expand in the same scrollable sheet.
+- The bottom-right `+` opens a bottom sheet containing condition, Plan-template connection, Memo, unified Plan creation, and Actual-event creation actions. `실제 일정 추가` opens the existing event sheet with required editable 10-minute start/end selectors; today defaults near the current time and other dates default to 09:00–10:00.
 - `계획 추가` opens one Plan form with `시간 정하기` initially off. Enabling it reveals required start/end selectors. Selecting a range in the Plan tab opens the same form with the toggle on and the selected range prefilled, while the empty-state and `+` entry points start as time-unspecified.
 - The same form can copy a saved Plan-block template. It fills title, importance, goal, and—when time is enabled—calculates the end from the selected start and default duration. An overflow beyond today's range requires explicit confirmation before the later portion is discarded and that date's copy ends at `23:50`.
 - Plan create and edit forms expose Eisenhower A/B/C/D importance as four horizontal radio-style buttons.
@@ -192,8 +193,7 @@ All POST routes require CSRF verification.
 - Plan picker labels show user-facing plan names only. Internal plan version numbers are not shown.
 - The former collapsed Plan summary below the date header is removed so the Calendar grid retains visual priority.
 - A tab with no blocks shows a compact first-action card. The Plan card opens direct Plan entry and offers template connection only when a template exists; the Actual card opens timed event entry. Existing data suppresses the corresponding card.
-- Plan importance and time ranges appear in the floating bottom sheet rather than a header reminder panel.
-- Time-unspecified Plan items display `시간 미정` only in the floating Today Plan list. Selecting a row opens Plan edit; changing `시간 설정` to `시간 지정` and choosing start/end values turns it into a normal grid block. No auxiliary Plan list is rendered around the grid.
+- Time-unspecified Plan items display in a compact list above the Plan-mode grid. The first sorted item stays visible; when more exist, `나머지 N개 보기` expands them and `접기` returns to one row. Selecting `시간 설정` opens Plan edit; changing `시간 설정` to `시간 지정` and choosing start/end values turns the item into a normal grid block. This does not create or complete an Actual event.
 - Planned blocks already linked to actual events are rendered with muted gray treatment and sorted below unlinked blocks. Strikethrough is intentionally not used.
 - Planned block titles are highlighted by duration: 30 minutes or less gets a blue marker style, and 60 minutes or more gets a red marker style.
 - The selected date's `daily_plan_items` are shown and edited in Plan schedule mode. Calendar always initializes in Actual schedule mode on page entry; the previous tab is not restored from browser storage.
@@ -217,13 +217,14 @@ All POST routes require CSRF verification.
 - New untimed-entry creation is no longer exposed from the Calendar grid. Existing untimed entries remain available from the timed event sheet and can still be placed into a selected time range.
 - After selecting a time range, the event sheet offers `새 일정 입력` and, when available, `시간 미정 일정 (n)` tabs. Selecting an untimed entry converts the same record to a timed event instead of copying it.
 - Calendar bottom sheets keep their header and close button reachable while long content scrolls internally. Grid range selection focuses the event title, while `실제 일정 추가` focuses the start-time selector; visual viewport changes keep the focused control visible.
+- The `+` action follows the shared primary floating-action color. Its menu is ordered from day setup to recording: condition, Plan template connection, Memo, Plan item, Actual event. Bottom-navigation To-do/Routine links are not duplicated.
 - Actual event blocks use the selected tag's `color_hex` as the block background color.
 - On desktop hover, an actual-event tooltip includes the event title and a memo preview limited to 80 characters. Touch interaction continues to open the edit sheet without showing the hover tooltip.
 - The Calendar page does not show a global status legend. Actual event colors represent tag categories, not execution status, and the current time is indicated directly in the grid cell.
 - The event edit bottom sheet supports title, tag, plan link, memo, and delete actions.
 - Already linked daily Plan items are disabled in the actual-event bottom sheet.
 - Clicking an actual event asks for confirmation and then soft-deletes it.
-- Routine items are displayed and toggled directly inside the `+` bottom sheet.
+- Routine execution remains in the bottom Routine menu and may also be selected while saving an Actual event; the `+` action list does not duplicate a Routine-page shortcut.
 - Routine state changes submit to `POST /routine/toggle` and persist to `routine_logs`.
 - If a routine duration change moves the selected date outside the routine's active period, that routine is excluded from the Calendar floating sheet for that date. Existing routine logs are preserved but ignored outside the active period.
 - If the selected date is today, the current 10-minute cell is highlighted using the signed-in user's configured IANA time zone and moves in place at each 10-minute boundary without reloading the page. Returning to a backgrounded Calendar page refreshes the highlight immediately.
@@ -256,8 +257,9 @@ Retrospect persistence is handled by the Retrospect feature. Calendar remains th
 - Edit and delete a daily Plan item. With JavaScript enabled, confirm the deletion request returns JSON before the detail sheet closes and Calendar reloads; for a linked item, verify the actual event remains and its Plan link is cleared. Repeat without JavaScript to verify the POST redirect fallback.
 - Leave Calendar while the Plan tab is selected, enter Calendar again, and confirm the Actual tab is selected by default.
 - Switch between Plan schedule and Actual schedule and confirm the date and scroll context remain. In Actual mode, verify Plan blocks stay visible as a non-interactive background reference while actual events remain clickable above them.
-- Open `+` and confirm Actual-event, Memo, and Plan-link actions, three Plan rows, and three Routine rows appear. Expand longer lists inside the same scrollable bottom sheet.
-- Open `계획 추가` from `+` and confirm the form starts with `시간 정하기` off. Save it and confirm it appears only in Today Plan with the `시간 미정` label. Open the same action again, enable time, save a non-overlapping range, and confirm it becomes a Plan block and Actual-tab background block. Drag a Plan-grid range and confirm the same form opens with time enabled and the range prefilled.
+- Open `+` and confirm its action order is condition, Plan-template connection when available, Memo, Plan item, and Actual event; To-do and Routine shortcuts must not appear.
+- Open `계획 추가` from `+` and confirm the form starts with `시간 정하기` off. Save it, switch to Plan mode, and confirm it appears in the time-unspecified list. Select `시간 설정`, save a non-overlapping range, and confirm it becomes a Plan block and Actual-tab background block. Drag a Plan-grid range and confirm the same form opens with time enabled and the range prefilled.
+- Add at least three time-unspecified Plans and confirm only the first row is initially visible, the remaining-count button expands the others, and `접기` hides only the additional rows.
 - Select a Plan-block template in Calendar and confirm its title, importance, goal, and duration are copied. Place it near midnight, cancel the overflow prompt once, then confirm `오늘까지만 등록` produces an end time of `23:50` without changing the library duration.
 - Publish or republish Retrospect and confirm copied Plan items, linked/unlinked actual events, Routine state, standalone Memos, and KPT remain available as the submitted snapshot.
 

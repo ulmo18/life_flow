@@ -31,8 +31,8 @@ final class MemoController
             'old' => $_SESSION['old'] ?? [],
             'editMemoId' => $_SESSION['memo_edit_id'] ?? null,
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'pageStyles' => ['/assets/css/pages/memo.css'],
-            'pageScripts' => ['/assets/js/pages/memo.js'],
+            'pageStyles' => [$this->versionedAsset('/assets/css/pages/memo.css')],
+            'pageScripts' => [$this->versionedAsset('/assets/js/pages/memo.js')],
         ]);
 
         unset($_SESSION['errors'], $_SESSION['old'], $_SESSION['memo_edit_id'], $_SESSION['flash_success']);
@@ -152,6 +152,12 @@ final class MemoController
     private function userId(): int
     {
         return (int) ($_SESSION['user_id'] ?? 0);
+    }
+
+    private function versionedAsset(string $path): string
+    {
+        $file = dirname(__DIR__, 2) . '/public' . $path;
+        return is_file($file) ? $path . '?v=' . filemtime($file) : $path;
     }
 
     private function render(string $viewPath, array $data = []): void

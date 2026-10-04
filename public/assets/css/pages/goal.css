@@ -23,7 +23,7 @@
 .goal-map-item { position: relative; display: grid; min-width: 0; }
 .goal-children { position: relative; margin: 4px 0 1px 19px; padding-left: 16px; }
 .goal-children::before { position: absolute; top: 0; bottom: 12px; left: 0; width: 2px; border-radius: 999px; background: rgba(142,164,162,.26); content: ''; }
-.goal-children[hidden], .goal-quick-form[hidden], .goal-detail-panel[hidden], .goal-local-layer[hidden] { display: none; }
+.goal-children[hidden], .goal-quick-form[hidden], .goal-detail-panel[hidden], .goal-local-layer[hidden], .goal-create-layer[hidden] { display: none; }
 
 .goal-node-row { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; min-height: 48px; border: 1px solid var(--border); border-radius: 14px; background: var(--color-surface); box-shadow: 0 5px 14px rgba(26,27,58,.05); }
 .goal-map > .goal-map-branch > .goal-map-item > .goal-node-row { min-height: 56px; border-color: rgba(255,94,91,.24); }
@@ -61,7 +61,7 @@ body.is-goal-dragging .goal-drop-end, .goal-drop-end.is-drop-target { display: g
 
 .goal-local-layer { position: fixed; inset: 0; z-index: 1400; }
 .goal-local-overlay { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(26,27,58,.44); backdrop-filter: blur(4px); }
-.goal-detail-panel { position: absolute; right: 0; bottom: 0; left: 0; z-index: 1; display: grid; gap: 16px; max-height: 88dvh; overflow-y: auto; border: 1px solid var(--border); border-radius: 24px 24px 0 0; background: var(--color-surface); padding: 18px; box-shadow: 0 -20px 50px rgba(26,27,58,.2); }
+.goal-detail-panel { position: absolute; right: 0; bottom: 0; left: 0; z-index: 1; display: grid; align-content: start; gap: 16px; max-height: 88dvh; overflow-y: auto; border: 1px solid var(--border); border-radius: 24px 24px 0 0; background: var(--color-surface); padding: 18px; box-shadow: 0 -20px 50px rgba(26,27,58,.2); }
 .goal-detail-header { position: sticky; top: -18px; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: -18px -18px 0; padding: 18px; background: var(--color-surface); }
 .goal-detail-header > div { display: grid; gap: 3px; }
 .goal-detail-header small { color: var(--color-text-muted); font-weight: 800; }
@@ -81,6 +81,12 @@ body.is-goal-dragging .goal-drop-end, .goal-drop-end.is-drop-target { display: g
 .goal-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .goal-form textarea { resize: vertical; }
 .goal-edit-actions { display: flex; justify-content: space-between; gap: 8px; }
+.goal-focus-form { display: grid; justify-items: start; gap: 6px; }
+.goal-focus-form small { color: var(--color-text-muted); }
+.goal-create-layer { position: fixed; inset: 0; z-index: 1450; display: grid; align-items: end; }
+.goal-create-sheet { position: relative; z-index: 1; display: grid; gap: 14px; width: min(100%, 620px); max-height: 80dvh; margin: 0 auto; overflow-y: auto; border-radius: 24px 24px 0 0; background: var(--color-surface); padding: 18px; box-shadow: 0 -20px 50px rgba(26,27,58,.22); }
+.goal-create-sheet form { display: grid; gap: 12px; }
+.goal-create-sheet .goal-detail-header { top: -18px; }
 
 body[data-theme='dark'] .goal-node-row, body[data-theme='dark'] .goal-root-create, body[data-theme='dark'] .goal-map-empty, body[data-theme='dark'] .goal-detail-panel, body[data-theme='dark'] .goal-detail-header { border-color: rgba(255,255,255,.12); background: var(--color-surface); }
 

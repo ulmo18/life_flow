@@ -25,6 +25,21 @@
   const addInput = document.getElementById('memoAddContent');
   const editInput = document.getElementById('memoEditContent');
   const editId = document.getElementById('memoEditId');
+  const autoGrowInputs = Array.from(layer.querySelectorAll('[data-memo-autogrow]'));
+
+  function resizeTextarea(input) {
+    if (!input || input.hidden) return;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const maxHeight = Math.max(132, Math.floor((viewportHeight * 0.8) - 176));
+    input.style.height = 'auto';
+    const nextHeight = Math.min(input.scrollHeight, maxHeight);
+    input.style.height = `${Math.max(132, nextHeight)}px`;
+    input.classList.toggle('is-scrollable', input.scrollHeight > maxHeight);
+  }
+
+  autoGrowInputs.forEach(input => {
+    input.addEventListener('input', () => resizeTextarea(input));
+  });
 
   function focusInput(input) {
     if (!input) return;
@@ -37,6 +52,7 @@
     addSheet.hidden = sheet !== addSheet;
     editSheet.hidden = sheet !== editSheet;
     document.body.classList.add('is-ui-open');
+    resizeTextarea(input);
     focusInput(input);
   }
 
@@ -83,6 +99,15 @@
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && !layer.hidden) closeSheets();
   });
+
+  const resizeOpenTextarea = () => {
+    if (layer.hidden) return;
+    autoGrowInputs.forEach(input => {
+      if (!input.closest('.memo-sheet')?.hidden) resizeTextarea(input);
+    });
+  };
+  window.addEventListener('resize', resizeOpenTextarea);
+  window.visualViewport?.addEventListener('resize', resizeOpenTextarea);
 
   const editError = document.querySelector('[data-memo-edit-error]');
   if (editError) {

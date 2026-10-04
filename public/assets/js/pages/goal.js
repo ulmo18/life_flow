@@ -3,6 +3,7 @@
   const layer = document.querySelector('[data-goal-layer]');
   const panels = Array.from(document.querySelectorAll('[data-goal-sheet]'));
   const csrfToken = document.querySelector('[data-goal-quick-form] input[name="_csrf_token"]')?.value || '';
+  const createLayer = document.querySelector('[data-goal-create-layer]');
   const collapsedKey = 'lifeflow.goal-map.collapsed';
   let draggedGoalId = null;
 
@@ -82,9 +83,17 @@
     });
   });
 
-  document.querySelector('[data-goal-focus-root]')?.addEventListener('click', () => {
-    document.getElementById('goalQuickTitle')?.focus();
-  });
+  document.querySelectorAll('[data-goal-create-open]').forEach(button => button.addEventListener('click', () => {
+    if (!createLayer) return;
+    createLayer.hidden = false;
+    document.body.classList.add('is-ui-open');
+    window.setTimeout(() => document.getElementById('goalQuickTitle')?.focus(), 0);
+  }));
+  document.querySelectorAll('[data-goal-create-close]').forEach(button => button.addEventListener('click', () => {
+    if (!createLayer) return;
+    createLayer.hidden = true;
+    document.body.classList.remove('is-ui-open');
+  }));
 
   document.querySelectorAll('[data-goal-quick-form]').forEach(form => {
     form.addEventListener('submit', async event => {
@@ -107,7 +116,7 @@
           const firstError = payload.errors ? Object.values(payload.errors)[0] : payload.message;
           throw new Error(firstError || '목표를 추가하지 못했습니다.');
         }
-        window.location.reload();
+        window.location.assign(form.querySelector('input[name="mode"]')?.value === 'all' ? '/goal?mode=all' : '/goal');
       } catch (error) {
         toast(error.message || '목표를 추가하지 못했습니다.');
         if (submit) submit.disabled = false;
@@ -193,6 +202,11 @@
 
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+    if (createLayer && !createLayer.hidden) {
+      createLayer.hidden = true;
+      document.body.classList.remove('is-ui-open');
+      return;
+    }
     const openInline = document.querySelector('.goal-inline-form:not([hidden])');
     if (openInline) {
       openInline.hidden = true;

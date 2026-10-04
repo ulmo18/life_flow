@@ -8,7 +8,7 @@ The current implementation supports:
 
 - creating routines with a name, start date, duration, and synchronized inclusive end date
 - initial duration selection from 1 to 60 days in 1-day steps
-- default duration of 60 days
+- default duration of 7 days; users can start with the shortest practical weekly cycle and extend it later
 - listing routines active today with a weekly summary and cumulative progress
 - showing an always-visible compact habit-tracker grid on every routine card
 - creating and editing routines from mobile bottom sheets
@@ -91,6 +91,7 @@ Rules:
 - `GET /routine`: render today's execution-only routine list.
 - `GET /manage/routines`: render routine management, period history, and creation/editing forms.
 - `POST /routine`: create a routine.
+- `POST /routine/quick`: create a title-only routine from the daily Routine page.
 - `POST /routine/update`: update a routine.
 - `POST /routine/extend`: extend an active routine by a positive number of days.
 - `POST /routine/finish`: complete or stop an active routine early.
@@ -102,6 +103,7 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 ## UI Behavior
 
 - `GET /routine` is the bottom-navigation daily execution view for the current date in the user's configured time zone.
+- The daily Routine list shows `🔥 N일 연속 완료` below a routine name from three consecutive completed days onward. It reuses the management-page streak calculation and updates the message immediately after today's state toggle.
 - `GET /manage/routines` is the aside Management view and retains routine creation, editing, extension, lifecycle actions, detail, and historical tracking.
 - Both views write daily states through `POST /routine/toggle`; Calendar and Retrospect continue using the same endpoint and `routine_logs` rows.
 
@@ -116,6 +118,8 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - Routines are shown in the Routine list only while today is inside their active period. If a duration change moves today outside the active period, the routine no longer appears in today's Routine list and today's toggle is not offered.
 - The add and edit forms use bottom sheets to keep the list focused.
 - The add action is fixed near the bottom of the viewport to match the Plan and Goal add interactions.
+- The daily Routine page also has a centered `루틴 추가` floating action matching Retrospect and To-do. Its bottom sheet asks only for a name; the server supplies today as the start date, 7 days as the duration, no Goal, and no reminder. After creation the user stays on the daily Routine page, while detailed settings remain in Routine Management.
+- On Routine Management, the bottom navigator and its overflowing Execution Energy orb stack above the centered Routine-add action so the orb remains readable where the controls meet.
 - The create sheet shows start date, duration, and end date together. Changing duration recalculates the end date, and selecting an end date recalculates duration; server validation repeats this calculation.
 - The add and edit forms include an optional goal select that only lists active goals.
 - Routine cards place the optional connected-goal label in the upper-right header context, constrain its width, and truncate long goal names so the routine name remains primary.
@@ -134,7 +138,10 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 
 ## Manual Test Checklist
 
-- Change the creation duration from 60 days to 1 day and confirm the end date becomes the start date.
+- From the daily Routine page, open the centered `루틴 추가` action, enter only a name, and confirm the new routine appears for today with a 7-day duration, no Goal, and no reminder.
+- Complete the third consecutive day from the daily Routine page and confirm `🔥 3일 연속 완료` appears without reloading; cycle away from completion and confirm it disappears when the streak falls below three.
+- Submit an empty or over-60-character quick name and confirm the daily page shows a validation message without creating a routine.
+- Confirm a detailed creation form initially selects 7 days, then change it to 1 day and confirm the end date becomes the start date.
 - Change the start date and confirm the end date keeps the selected duration.
 - Select an end date and confirm the duration changes to the inclusive number of days.
 - Confirm the end-date picker cannot select before the start date or after `start date + 59 days`.

@@ -13,7 +13,7 @@ final class RoutineService
     private const MIN_DURATION_DAYS = 1;
     private const MAX_INITIAL_DURATION_DAYS = 60;
     private const MAX_DURATION_DAYS = 365;
-    private const DEFAULT_DURATION_DAYS = 60;
+    private const DEFAULT_DURATION_DAYS = 7;
     private const DEFAULT_REMINDER_TIME = '14:00';
     private const CARD_TRACKER_DAYS = 14;
     private const CARD_TRACKER_PAST_DAYS = 10;
@@ -48,6 +48,17 @@ final class RoutineService
     public function getRoutinePageSummary(int $userId): array
     {
         return $this->summarizeRoutines($this->getRoutineList($userId));
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function getTodayRoutineList(int $userId): array
+    {
+        return array_map(static fn(array $routine): array => [
+            'id' => (int) $routine['id'],
+            'name' => (string) $routine['name'],
+            'state' => (string) ($routine['todayState'] ?? ''),
+            'streakCount' => (int) ($routine['streakCount'] ?? 0),
+        ], $this->getRoutineList($userId));
     }
 
     /** @return array<int, array<string, mixed>> */

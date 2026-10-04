@@ -119,7 +119,7 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
     <?php endif; ?>
 
     <?php if (!$isTrash): ?>
-        <button type="button" class="memo-add-fab" data-memo-add-open aria-label="메모 추가">+</button>
+        <button type="button" class="btn btn-primary daily-floating-action memo-add-fab" data-memo-add-open>메모 추가</button>
     <?php endif; ?>
 </main>
 
@@ -134,7 +134,7 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
                 <button type="button" class="ui-close-button" data-memo-close aria-label="닫기">×</button>
             </div>
             <label class="form-label" for="memoAddContent">메모</label>
-            <textarea class="input" id="memoAddContent" name="content" maxlength="10000" rows="10" required><?= e((string) ($old['content'] ?? '')) ?></textarea>
+            <textarea class="input" id="memoAddContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow><?= e((string) ($old['content'] ?? '')) ?></textarea>
             <?php if (!empty($errors['content'])): ?><p class="field-error"><?= e((string) $errors['content']) ?></p><?php endif; ?>
             <button type="submit" class="btn btn-primary">저장</button>
         </form>
@@ -149,7 +149,7 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
                 <button type="button" class="ui-close-button" data-memo-close aria-label="닫기">×</button>
             </div>
             <label class="form-label" for="memoEditContent">메모</label>
-            <textarea class="input" id="memoEditContent" name="content" maxlength="10000" rows="10" required></textarea>
+            <textarea class="input" id="memoEditContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow></textarea>
             <button type="submit" class="btn btn-primary">수정 저장</button>
         </form>
     </section>

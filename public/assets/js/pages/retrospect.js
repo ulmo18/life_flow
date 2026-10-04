@@ -90,8 +90,48 @@
     const close = kptForm.querySelector('[data-kpt-close]');
     const body = kptForm.querySelector('.retrospect-kpt-body');
     const saveStatus = kptForm.querySelector('[data-kpt-save-status]');
+    const reviewTimer = kptForm.querySelector('[data-kpt-timer]');
+    const reviewTimerMessage = kptForm.querySelector('[data-kpt-timer-message]');
     let currentStep = 0;
     let saveTimer = 0;
+    let reviewTimerId = 0;
+    let reviewDeadline = 0;
+
+    function renderReviewTimer() {
+      if (!reviewTimer || reviewDeadline === 0) return;
+      const remainingSeconds = Math.max(0, Math.ceil((reviewDeadline - Date.now()) / 1000));
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+      reviewTimer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      reviewTimer.setAttribute('aria-label', `회고 남은 시간 ${minutes}분 ${seconds}초`);
+
+      if (remainingSeconds > 0) return;
+      window.clearInterval(reviewTimerId);
+      reviewTimerId = 0;
+      reviewTimer.classList.add('is-expired');
+      if (reviewTimerMessage) reviewTimerMessage.textContent = '10분이 지났어요. 지금까지 적은 내용으로 마무리해도 충분해요.';
+    }
+
+    function startReviewTimer() {
+      window.clearInterval(reviewTimerId);
+      reviewDeadline = Date.now() + (10 * 60 * 1000);
+      reviewTimer?.classList.remove('is-expired');
+      if (reviewTimerMessage) reviewTimerMessage.textContent = '';
+      renderReviewTimer();
+      reviewTimerId = window.setInterval(renderReviewTimer, 1000);
+    }
+
+    function stopReviewTimer() {
+      window.clearInterval(reviewTimerId);
+      reviewTimerId = 0;
+      reviewDeadline = 0;
+      if (reviewTimer) {
+        reviewTimer.textContent = '10:00';
+        reviewTimer.classList.remove('is-expired');
+        reviewTimer.setAttribute('aria-label', '회고 남은 시간 10분');
+      }
+      if (reviewTimerMessage) reviewTimerMessage.textContent = '';
+    }
 
     function renderStep() {
       steps.forEach((step, index) => { step.hidden = index !== currentStep; });
@@ -130,6 +170,7 @@
       kptSheet.classList.remove('is-collapsed');
       retrospectPage?.classList.add('is-kpt-open');
       collapse.textContent = '접기';
+      startReviewTimer();
       steps[currentStep]?.querySelector('textarea')?.focus();
     });
     collapse?.addEventListener('click', () => {
@@ -146,6 +187,7 @@
       kptSheet.classList.remove('is-collapsed');
       retrospectPage?.classList.remove('is-kpt-open');
       collapse.textContent = '접기';
+      stopReviewTimer();
     });
     previous?.addEventListener('click', () => { currentStep = Math.max(0, currentStep - 1); renderStep(); saveDraft(); });
     next?.addEventListener('click', () => { currentStep = Math.min(steps.length - 1, currentStep + 1); renderStep(); saveDraft(); });

@@ -6,6 +6,17 @@
   const startInput = timeForm?.querySelector('select[name="start_index"]');
   const endInput = timeForm?.querySelector('select[name="end_index"]');
   const message = document.querySelector('[data-todo-time-message]');
+  const createLayer = document.querySelector('[data-todo-create-layer]');
+  const editLayer = document.querySelector('[data-todo-edit-layer]');
+  const editForm = document.querySelector('[data-todo-edit-form]');
+  const editId = editForm?.querySelector('[data-todo-edit-id]');
+  const editTitle = document.getElementById('todoEditTitleInput');
+  const editGoal = document.getElementById('todoEditGoal');
+  const editScheduleTypes = Array.from(document.querySelectorAll('[data-todo-edit-schedule-type]'));
+  const editTimeFields = document.querySelector('[data-todo-edit-time-fields]');
+  const editStart = document.getElementById('todoEditStartIndex');
+  const editEnd = document.getElementById('todoEditEndIndex');
+  const editLinkAction = document.querySelector('[data-todo-link-action]');
   if (!page || !layer || !timeForm || !itemIdInput || !startInput || !endInput) return;
 
   function close() {
@@ -22,6 +33,64 @@
     document.body.classList.add('is-menu-open');
     startInput.focus();
   }
+
+  function closeEdit() {
+    if (!editLayer) return;
+    editLayer.hidden = true;
+    document.body.classList.remove('is-menu-open');
+  }
+
+  function setEditScheduleType(type) {
+    if (editScheduleTypes.length === 0 || !editTimeFields || !editStart || !editEnd) return;
+    const isTimed = type === 'timed';
+    editScheduleTypes.forEach(input => { input.checked = input.value === (isTimed ? 'timed' : 'unscheduled'); });
+    editTimeFields.hidden = !isTimed;
+    editStart.disabled = !isTimed;
+    editEnd.disabled = !isTimed;
+    editStart.required = isTimed;
+    editEnd.required = isTimed;
+  }
+
+  document.querySelectorAll('[data-todo-create-open]').forEach(button => button.addEventListener('click', () => {
+    if (!createLayer) return;
+    createLayer.hidden = false;
+    document.body.classList.add('is-menu-open');
+    window.setTimeout(() => document.getElementById('todoCreateTitleInput')?.focus(), 0);
+  }));
+  document.querySelectorAll('[data-todo-create-close]').forEach(button => button.addEventListener('click', () => {
+    if (!createLayer) return;
+    createLayer.hidden = true;
+    document.body.classList.remove('is-menu-open');
+  }));
+
+  document.querySelectorAll('[data-todo-edit-open]').forEach(button => button.addEventListener('click', () => {
+    if (!editLayer || !editForm || !editId || !editTitle || !editGoal || !editStart || !editEnd || !editLinkAction) return;
+    editId.value = button.dataset.itemId || '';
+    editTitle.value = button.dataset.title || '';
+    editGoal.value = button.dataset.goalId || '';
+    editForm.querySelectorAll('input[name="importance"]').forEach(input => {
+      input.checked = input.value === (button.dataset.importance || 'D');
+    });
+    editStart.value = button.dataset.startIndex || '54';
+    editEnd.value = button.dataset.endIndex || '60';
+    setEditScheduleType(button.dataset.scheduleType || 'unscheduled');
+    editLinkAction.hidden = button.dataset.linked !== '1';
+    editForm.querySelector('select[name="link_action"]').value = 'keep';
+    editLayer.hidden = false;
+    document.body.classList.add('is-menu-open');
+    window.setTimeout(() => editTitle.focus(), 0);
+  }));
+  document.querySelectorAll('[data-todo-edit-close]').forEach(button => button.addEventListener('click', closeEdit));
+  editScheduleTypes.forEach(input => input.addEventListener('change', () => setEditScheduleType(input.value)));
+  editForm?.addEventListener('submit', event => {
+    if (editScheduleTypes.find(input => input.checked)?.value !== 'timed') return;
+    const start = Number.parseInt(editStart?.value || '', 10);
+    const end = Number.parseInt(editEnd?.value || '', 10);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start >= end) {
+      event.preventDefault();
+      window.LifeFlowToast?.show?.('종료시간은 시작시간보다 늦어야 합니다.');
+    }
+  });
 
   async function submit(body) {
     const response = await fetch('/todo/complete', {
@@ -65,5 +134,13 @@
   });
 
   document.querySelectorAll('[data-todo-close]').forEach(button => button.addEventListener('click', close));
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && !layer.hidden) close(); });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (!layer.hidden) close();
+    if (createLayer && !createLayer.hidden) {
+      createLayer.hidden = true;
+      document.body.classList.remove('is-menu-open');
+    }
+    if (editLayer && !editLayer.hidden) closeEdit();
+  });
 })();

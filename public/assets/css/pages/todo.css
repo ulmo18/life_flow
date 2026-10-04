@@ -1,8 +1,14 @@
-.todo-page { display: grid; gap: var(--space-4); }
+.todo-page { display: grid; gap: var(--space-5); padding-bottom: 92px; }
 .todo-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .todo-heading h1 { margin: 0; }
 .todo-heading p { margin: var(--space-1) 0 0; }
 .todo-list { list-style: none; display: grid; gap: var(--space-3); margin: 0; padding: 0; }
+.todo-group { display: grid; gap: var(--space-3); }
+.todo-group-heading { display: flex; align-items: center; gap: 8px; }
+.todo-group-heading h2 { margin: 0; font-size: 16px; }
+.todo-group-heading span { display: inline-grid; min-width: 24px; height: 24px; place-items: center; border-radius: 999px; background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 12px; font-weight: 900; }
+.todo-group-empty { display: grid; justify-items: start; gap: 10px; margin: 0; padding: var(--space-4); color: var(--color-text-muted); }
+.todo-group-empty p { margin: 0; }
 .todo-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); }
 .todo-item-copy { min-width: 0; display: grid; gap: var(--space-1); }
 .todo-item-title { min-width: 0; display: flex; align-items: center; gap: var(--space-2); }
@@ -12,12 +18,30 @@
 .todo-item.is-completed .todo-item-copy { opacity: .62; }
 .todo-item.is-completed .todo-item-title strong { text-decoration: line-through; }
 .todo-completed-label { flex: 0 0 auto; color: var(--color-primary); font-size: 13px; font-weight: 800; }
+.todo-item-actions { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.todo-item-actions .btn { min-height: 38px; padding: 0 12px; }
+.todo-edit-button { white-space: nowrap; }
 .todo-empty { display: grid; justify-items: start; gap: var(--space-3); padding: var(--space-5); }
 .todo-layer { position: fixed; inset: 0; z-index: 1100; display: grid; align-items: end; }
 .todo-layer[hidden] { display: none; }
 .todo-overlay { position: absolute; inset: 0; border: 0; background: rgba(26, 27, 58, .42); }
-.todo-sheet { position: relative; z-index: 1; width: min(100%, 680px); margin: 0 auto; padding: var(--space-5); border-radius: 24px 24px 0 0; background: var(--color-surface); box-shadow: var(--shadow-lg); }
+.todo-sheet { position: relative; z-index: 1; width: min(100%, 680px); max-height: min(82vh, 720px); margin: 0 auto; padding: var(--space-5); overflow-y: auto; border-radius: 24px 24px 0 0; background: var(--color-surface); box-shadow: var(--shadow-lg); }
 .todo-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .todo-time-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin: var(--space-4) 0; }
 .todo-time-fields label { display: grid; gap: var(--space-2); }
+.todo-create-form { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.todo-edit-form { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.todo-schedule-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
+.todo-schedule-choice legend { grid-column: 1 / -1; margin-bottom: 2px; font-size: var(--font-size-sm); font-weight: 800; }
+.todo-schedule-choice label { position: relative; cursor: pointer; }
+.todo-schedule-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.todo-schedule-choice span { min-height: 42px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 13px; font-weight: 900; }
+.todo-schedule-choice input:checked + span { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface)); color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); }
+.todo-schedule-choice input:focus-visible + span { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.todo-create-form p { margin: 0; }
 body[data-theme='dark'] .todo-sheet { background: var(--color-surface); }
+
+@media (max-width: 639px) {
+  .todo-item { align-items: flex-start; }
+  .todo-item-actions { flex-direction: column; align-items: stretch; }
+}

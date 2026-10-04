@@ -21,11 +21,10 @@ final class GoalController
 
     public function index(): void
     {
-        $selectedMode = $this->goalService->normalizeMapMode($_GET['mode'] ?? 'all');
-        $goals = $this->goalService->getGoalList(
-            $this->userId(),
-            $selectedMode === 'focus' ? 'active' : null
-        );
+        $selectedMode = $this->goalService->normalizeMapMode($_GET['mode'] ?? 'focus');
+        $goals = $selectedMode === 'focus'
+            ? $this->goalService->getFocusedGoalList($this->userId())
+            : $this->goalService->getGoalList($this->userId(), null);
 
         $this->render('pages/goal/index', [
             'title' => t('nav.goal'),
@@ -79,7 +78,7 @@ final class GoalController
         if ($this->wantsJson()) {
             $this->json(['ok' => true, 'goalId' => $goalId]);
         }
-        $this->redirect('/goal');
+        $this->redirect((string) ($_POST['mode'] ?? '') === 'all' ? '/goal?mode=all' : '/goal');
     }
 
     public function move(): void
@@ -98,6 +97,24 @@ final class GoalController
         }
 
         $this->json(['ok' => true]);
+    }
+
+    public function focus(): void
+    {
+        $goalId = filter_var($_POST['goal_id'] ?? null, FILTER_VALIDATE_INT);
+        $focused = (string) ($_POST['focused'] ?? '') === '1';
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null) || $goalId === false || $goalId <= 0) {
+            $this->redirectWithErrors('/goal?mode=all', ['general' => '집중 목표 요청을 다시 확인해주세요.']);
+        }
+        $result = $this->goalService->setFocused($this->userId(), (int) $goalId, $focused);
+        if ($result === 'limit') {
+            $this->redirectWithErrors('/goal?mode=all', ['general' => '집중 목표는 최대 5개까지 선택할 수 있습니다.']);
+        }
+        if ($result !== 'updated') {
+            $this->redirectWithErrors('/goal?mode=all', ['general' => '진행 중인 목표만 집중 목표로 선택할 수 있습니다.']);
+        }
+        $_SESSION['flash_success'] = $focused ? '지금 집중할 목표에 추가했습니다.' : '집중 목표에서 제외했습니다.';
+        $this->redirect($focused ? '/goal' : '/goal?mode=all');
     }
 
     public function update(): void

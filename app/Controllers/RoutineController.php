@@ -28,10 +28,13 @@ final class RoutineController
         $this->render('pages/routine/today', [
             'title' => t('routine.today_title'),
             'date' => $date,
-            'routines' => $this->routineService->getCalendarRoutines($this->userId(), $date),
+            'routines' => $this->routineService->getTodayRoutineList($this->userId()),
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
+            'notificationSyncPayload' => !empty($_SESSION['notification_sync_routine'])
+                ? $this->notificationService->buildRoutineSyncPayload($this->userId())
+                : [],
             'pageStyles' => [
                 '/assets/css/components/routine-state.css',
                 $this->versionedAsset('/assets/css/pages/routine-today.css'),
@@ -42,7 +45,7 @@ final class RoutineController
             ],
         ]);
 
-        unset($_SESSION['errors'], $_SESSION['flash_success']);
+        unset($_SESSION['errors'], $_SESSION['flash_success'], $_SESSION['notification_sync_routine']);
     }
 
     public function manage(): void
@@ -94,6 +97,31 @@ final class RoutineController
         $_SESSION['flash_success'] = '루틴을 추가했습니다.';
         $_SESSION['notification_sync_routine'] = true;
         $this->redirect('/manage/routines');
+    }
+
+    public function quickStore(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/routine', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $validation = $this->routineService->validateInput([
+            'name' => $_POST['name'] ?? '',
+            'start_date' => date('Y-m-d'),
+            'duration_days' => $this->routineService->defaultDurationDays(),
+        ], $this->userId());
+        if (!$validation['ok']) {
+            $message = (string) (reset($validation['errors']) ?: '루틴명을 확인해주세요.');
+            $this->redirectWithErrors('/routine', ['general' => $message]);
+        }
+
+        if ($this->routineService->createRoutine($this->userId(), $validation['data']) === null) {
+            $this->redirectWithErrors('/routine', ['general' => '루틴을 추가하지 못했습니다. 다시 시도해주세요.']);
+        }
+
+        $_SESSION['flash_success'] = '루틴을 추가했습니다.';
+        $_SESSION['notification_sync_routine'] = true;
+        $this->redirect('/routine');
     }
 
     public function update(): void
@@ -199,15 +227,16 @@ final class RoutineController
         }
 
         if ($this->isJsonRequest()) {
-            $isRoutinePageToggle = (string) ($_POST['return_to'] ?? '') === '';
+            $toggleReturnTo = (string) ($_POST['return_to'] ?? '');
+            $includeRoutineDailyData = in_array($toggleReturnTo, ['', 'routine'], true);
             $this->respondJson([
                 'ok' => true,
                 'message' => $this->stateMessage($nextState),
                 'routineId' => $routineId,
                 'date' => $date,
                 'state' => $nextState,
-                'routine' => $this->routineService->getRoutineSummary($this->userId(), $routineId, $isRoutinePageToggle),
-                'pageSummary' => $isRoutinePageToggle
+                'routine' => $this->routineService->getRoutineSummary($this->userId(), $routineId, $includeRoutineDailyData),
+                'pageSummary' => $toggleReturnTo === ''
                     ? $this->routineService->getRoutinePageSummary($this->userId())
                     : null,
             ]);

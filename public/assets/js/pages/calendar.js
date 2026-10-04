@@ -500,6 +500,13 @@
   document.querySelectorAll('[data-plan-item-open]').forEach(button => {
     button.addEventListener('click', () => openPlanItemEditSheet(button));
   });
+  document.querySelector('[data-untimed-plan-toggle]')?.addEventListener('click', event => {
+    const button = event.currentTarget;
+    const expanded = button.getAttribute('aria-expanded') === 'true';
+    document.querySelectorAll('[data-untimed-plan-extra]').forEach(item => { item.hidden = expanded; });
+    button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    button.textContent = expanded ? `나머지 ${button.dataset.hiddenCount || '0'}개 보기` : '접기';
+  });
   document.querySelectorAll('[data-plan-add-open]').forEach(button => {
     button.addEventListener('click', () => openPlanItemSheet());
   });

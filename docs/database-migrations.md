@@ -44,6 +44,7 @@ Back up the database, then apply these one-time migrations after their prerequis
 10. `sql/migration.add_retrospect_review.mysql.sql` — requires the Retrospect snapshot tables; adds connected-Goal labels and published Memo snapshots.
 11. `sql/migration.add_execution_energy.mysql.sql` — requires `user` and `calendar_events`; creates Execution Energy baseline, group, daily snapshot, event setting, and legacy correction/notice tables retained for migration compatibility.
 12. `sql/migration.add_execution_energy_feedback.mysql.sql` — apply only when migration 11 was deployed before `execution_energy_days.burden_feedback` was introduced; do not apply it after the current full migration.
+13. `sql/migration.retrospect_execution_energy.mysql.sql` — requires `retrospect_report_actual_items`; adds the Actual-event Execution Energy snapshot columns required by Retrospect publish and republish.
 
 The Routine validation trigger migration depends on the lifecycle columns; the other feature migrations are independent. The order above is the recommended release order for repeatable deployments. Record each applied migration because the `ALTER TABLE` statements are not intended to be rerun.
 
@@ -64,6 +65,7 @@ MySQL application connections set the session timezone to `+00:00`. Before deplo
 - `app/Core/Database.php` adds Retrospect Goal snapshot columns and reapplies the schema to create the Memo snapshot table; `sql/migration.add_retrospect_review.sqlite.sql` is available for controlled upgrades.
 - `app/Core/Database.php` creates the Execution Energy tables when `execution_energy_profiles` is missing; `sql/migration.add_execution_energy.sqlite.sql` is available for controlled manual migration.
 - Existing SQLite Execution Energy tables receive the missing `burden_feedback` column automatically; `sql/migration.add_execution_energy_feedback.sqlite.sql` is available for controlled manual migration.
+- Existing SQLite Retrospect Actual snapshots receive missing Execution Energy columns automatically; `sql/migration.retrospect_execution_energy.sqlite.sql` remains available for controlled manual migration.
 - Reapplying `sql/schema.sqlite.sql` creates `calendar_tag_preferences`; `sql/migration.calendar_tag_preferences.sqlite.sql` is available for controlled manual migration.
 - The matching `*.sqlite.sql` files remain available for controlled manual migrations.
 - Do not delete SQLite compatibility or fallback code even when production uses MySQL; it remains part of local and fallback support.

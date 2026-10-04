@@ -10,11 +10,15 @@ final class TodoService
 {
     private CalendarRepository $calendarRepository;
     private ExecutionEnergyService $executionEnergyService;
+    private CalendarService $calendarService;
+    private GoalService $goalService;
 
     public function __construct()
     {
         $this->calendarRepository = new CalendarRepository();
         $this->executionEnergyService = new ExecutionEnergyService();
+        $this->calendarService = new CalendarService();
+        $this->goalService = new GoalService();
     }
 
     /** @return array{date: string, items: array<int, array<string, mixed>>} */
@@ -29,6 +33,7 @@ final class TodoService
                 'id' => (int) $item['daily_plan_item_id'],
                 'title' => (string) $item['title'],
                 'importance' => (string) ($item['importance'] ?? 'D'),
+                'goalId' => $item['goal_id'] === null ? null : (int) $item['goal_id'],
                 'goalTitle' => $item['goal_title'] === null ? null : (string) $item['goal_title'],
                 'startIndex' => $isTimed ? (int) $item['start_index'] : null,
                 'endIndex' => $isTimed ? (int) $item['end_index'] : null,
@@ -39,7 +44,30 @@ final class TodoService
             ];
         }, $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']));
 
-        return ['date' => $date, 'items' => $items];
+        $importanceRank = ['A' => 0, 'B' => 1, 'C' => 2, 'D' => 3];
+        usort($items, static function (array $left, array $right) use ($importanceRank): int {
+            if ($left['isCompleted'] !== $right['isCompleted']) {
+                return $left['isCompleted'] ? 1 : -1;
+            }
+
+            $importanceComparison = ($importanceRank[$left['importance']] ?? 4)
+                <=> ($importanceRank[$right['importance']] ?? 4);
+            if ($importanceComparison !== 0) {
+                return $importanceComparison;
+            }
+
+            $timeComparison = ($left['startIndex'] ?? 145) <=> ($right['startIndex'] ?? 145);
+
+            return $timeComparison !== 0 ? $timeComparison : $left['id'] <=> $right['id'];
+        });
+
+        return [
+            'date' => $date,
+            'items' => $items,
+            'pendingItems' => array_values(array_filter($items, static fn(array $item): bool => !$item['isCompleted'])),
+            'completedItems' => array_values(array_filter($items, static fn(array $item): bool => $item['isCompleted'])),
+            'goalOptions' => $this->goalService->activeGoalOptions($userId),
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -98,6 +126,52 @@ final class TodoService
         $this->executionEnergyService->saveDefaultEventSetting($userId, $eventId);
 
         return ['ok' => true, 'eventId' => $eventId, 'message' => t('todo.completed_message')];
+    }
+
+    /** @return array{ok: bool, message: string} */
+    public function createToday(int $userId, mixed $title): array
+    {
+        $validation = $this->calendarService->validateDailyPlanItemInput([
+            'date' => date('Y-m-d'),
+            'title' => $title,
+            'importance' => 'D',
+            'goal_id' => '',
+            'schedule_type' => 'unscheduled',
+        ]);
+        if (!$validation['ok']) {
+            return ['ok' => false, 'message' => (string) (reset($validation['errors']) ?: '할 일 이름을 확인해주세요.')];
+        }
+        if ($this->calendarService->createDailyPlanItem($userId, $validation['data']) === null) {
+            return ['ok' => false, 'message' => '할 일을 추가하지 못했습니다.'];
+        }
+
+        return ['ok' => true, 'message' => '오늘의 할 일을 추가했습니다.'];
+    }
+
+    /** @return array{ok: bool, message: string} */
+    public function updateToday(int $userId, array $input): array
+    {
+        $itemId = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $item = $itemId === false || $itemId <= 0
+            ? null
+            : $this->calendarRepository->getDailyPlanItemForCompletion($userId, (int) $itemId);
+
+        if ($item === null || (string) $item['calendar_date'] !== date('Y-m-d')) {
+            return ['ok' => false, 'message' => '수정할 오늘의 할 일을 찾을 수 없습니다.'];
+        }
+
+        $input['date'] = date('Y-m-d');
+        $input['daily_plan_item_id'] = (int) $itemId;
+        $validation = $this->calendarService->validateDailyPlanItemInput($input, true);
+        if (!$validation['ok']) {
+            return ['ok' => false, 'message' => (string) (reset($validation['errors']) ?: '할 일 내용을 확인해주세요.')];
+        }
+
+        if (!$this->calendarService->updateDailyPlanItem($userId, $validation['data'])) {
+            return ['ok' => false, 'message' => '할 일을 수정하지 못했습니다. 계획 시간이 겹치는지 확인해주세요.'];
+        }
+
+        return ['ok' => true, 'message' => '할 일을 수정했습니다.'];
     }
 
     /** @return array<string, mixed> */

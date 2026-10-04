@@ -40,6 +40,23 @@ final class GoalService
             fn (array $goal): array => $this->formatGoal($goal),
             $this->goalRepository->listActive($userId, $statusFilter, $goalTypeFilter)
         );
+        return $this->withLinkedData($userId, $goals);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function getFocusedGoalList(int $userId): array
+    {
+        $goals = array_map(
+            fn (array $goal): array => $this->formatGoal($goal),
+            $this->goalRepository->listFocused($userId)
+        );
+
+        return $this->withLinkedData($userId, $goals);
+    }
+
+    /** @param array<int, array<string, mixed>> $goals @return array<int, array<string, mixed>> */
+    private function withLinkedData(int $userId, array $goals): array
+    {
         $goalIds = array_map(static fn (array $goal): int => (int) $goal['id'], $goals);
         $linkedPlans = $this->goalRepository->listLinkedPlansByGoalIds($userId, $goalIds);
         $linkedRoutines = $this->goalRepository->listLinkedRoutinesByGoalIds($userId, $goalIds);
@@ -87,7 +104,7 @@ final class GoalService
 
     public function normalizeMapMode(mixed $mode): string
     {
-        return trim((string) $mode) === 'focus' ? 'focus' : 'all';
+        return trim((string) $mode) === 'all' ? 'all' : 'focus';
     }
 
     public function normalizeGoalTypeFilter(mixed $goalType): ?string
@@ -272,6 +289,11 @@ final class GoalService
         return $this->goalRepository->move($userId, $goalId, $parentGoalId, $beforeGoalId);
     }
 
+    public function setFocused(int $userId, int $goalId, bool $focused): string
+    {
+        return $this->goalRepository->setFocused($userId, $goalId, $focused);
+    }
+
     private function normalizeNullableText(string $value, int $maxLength): ?string
     {
         $value = trim($value);
@@ -347,6 +369,7 @@ final class GoalService
             'periodProgress' => $periodProgress,
             'status' => $status,
             'statusLabel' => self::STATUSES[$status] ?? '진행 중',
+            'isFocused' => (int) ($goal['is_focused'] ?? 0) === 1,
             'completedAt' => $goal['completed_at'] === null ? null : (string) $goal['completed_at'],
             'linkedPlans' => [],
             'linkedRoutines' => [],

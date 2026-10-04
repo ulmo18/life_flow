@@ -1,0 +1,3 @@
+ALTER TABLE retrospect_report_actual_items ADD COLUMN energy_group_name_snapshot TEXT NULL;
+ALTER TABLE retrospect_report_actual_items ADD COLUMN energy_effect_type_snapshot TEXT NULL;
+ALTER TABLE retrospect_report_actual_items ADD COLUMN energy_value_snapshot INTEGER NULL;

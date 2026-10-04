@@ -130,6 +130,8 @@ CREATE TABLE IF NOT EXISTS goals (
   period_start_date TEXT NULL,
   period_end_date TEXT NULL,
   status TEXT NOT NULL DEFAULT 'active',
+  is_focused INTEGER NOT NULL DEFAULT 0,
+  focused_at TEXT NULL,
   sort_order INTEGER NOT NULL DEFAULT 1,
   completed_at TEXT NULL,
   deleted_at TEXT NULL,
@@ -139,10 +141,12 @@ CREATE TABLE IF NOT EXISTS goals (
   FOREIGN KEY (parent_goal_id) REFERENCES goals(id) ON DELETE SET NULL ON UPDATE CASCADE,
   CHECK (goal_type IN ('bucket', 'yearly', 'half_year', 'quarterly', 'monthly')),
   CHECK (status IN ('active', 'completed', 'paused', 'archived')),
+  CHECK (is_focused IN (0, 1)),
   CHECK (period_start_date IS NULL OR period_end_date IS NULL OR period_start_date <= period_end_date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_goals_user_deleted ON goals(user_id, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_goals_user_focus ON goals(user_id, is_focused, focused_at);
 CREATE INDEX IF NOT EXISTS idx_goals_parent_goal_id ON goals(parent_goal_id);
 CREATE INDEX IF NOT EXISTS idx_goals_type_status ON goals(goal_type, status);
 
@@ -507,6 +511,9 @@ CREATE TABLE IF NOT EXISTS retrospect_report_actual_items (
   tag_color_snapshot TEXT NULL,
   plan_template_id_snapshot INTEGER NULL,
   plan_importance_snapshot TEXT NULL,
+  energy_group_name_snapshot TEXT NULL,
+  energy_effect_type_snapshot TEXT NULL,
+  energy_value_snapshot INTEGER NULL,
   is_linked INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

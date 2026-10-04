@@ -60,6 +60,42 @@ final class TodoController
         exit;
     }
 
+    public function store(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $_SESSION['errors'] = ['general' => t('todo.invalid')];
+            header('Location: /todo');
+            exit;
+        }
+        $result = $this->todoService->createToday($this->userId(), $_POST['title'] ?? '');
+        if ($result['ok']) {
+            $_SESSION['flash_success'] = $result['message'];
+        } else {
+            $_SESSION['errors'] = ['general' => $result['message']];
+        }
+        header('Location: /todo');
+        exit;
+    }
+
+    public function update(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $_SESSION['errors'] = ['general' => t('todo.invalid')];
+            header('Location: /todo');
+            exit;
+        }
+
+        $result = $this->todoService->updateToday($this->userId(), $_POST);
+        if ($result['ok']) {
+            $_SESSION['flash_success'] = $result['message'];
+        } else {
+            $_SESSION['errors'] = ['general' => $result['message']];
+        }
+
+        header('Location: /todo');
+        exit;
+    }
+
     private function userId(): int
     {
         return (int) ($_SESSION['user_id'] ?? 0);

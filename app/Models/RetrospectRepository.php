@@ -388,11 +388,15 @@ final class RetrospectRepository
                 dpi.importance AS plan_importance,
                 ct.name AS tag_name,
                 ct.color_hex AS tag_color,
-                ct.sort_order AS tag_sort_order
+                ct.sort_order AS tag_sort_order,
+                ees.group_name_snapshot AS energy_group_name,
+                ees.effect_type AS energy_effect_type,
+                ees.energy_value AS energy_value
              FROM calendar_events ce
              LEFT JOIN daily_plan_items dpi ON dpi.id = ce.daily_plan_item_id
              LEFT JOIN calendar_tags ct ON ct.id = ce.calendar_tag_id
                 AND ct.deleted_at IS NULL
+             LEFT JOIN execution_energy_event_settings ees ON ees.calendar_event_id = ce.id
              WHERE ce.user_id = :user_id
                 AND ce.calendar_day_id = :calendar_day_id
                 AND ce.schedule_type = \'timed\'
@@ -728,11 +732,13 @@ final class RetrospectRepository
                     report_id, calendar_day_id, calendar_event_id, title_snapshot,
                     memo_snapshot, start_index, end_index, tag_name_snapshot, tag_color_snapshot,
                     plan_template_id_snapshot, plan_importance_snapshot,
+                    energy_group_name_snapshot, energy_effect_type_snapshot, energy_value_snapshot,
                     is_linked, sort_order, created_at
                 ) VALUES (
                     :report_id, :calendar_day_id, :calendar_event_id, :title_snapshot,
                     :memo_snapshot, :start_index, :end_index, :tag_name_snapshot, :tag_color_snapshot,
                     :plan_template_id_snapshot, :plan_importance_snapshot,
+                    :energy_group_name_snapshot, :energy_effect_type_snapshot, :energy_value_snapshot,
                     :is_linked, :sort_order, CURRENT_TIMESTAMP
                 )';
         $stmt = $this->db->prepare($sql);
@@ -750,6 +756,9 @@ final class RetrospectRepository
                 'tag_color_snapshot' => $item['tag_color'],
                 'plan_template_id_snapshot' => $item['plan_template_id'],
                 'plan_importance_snapshot' => $item['plan_importance'],
+                'energy_group_name_snapshot' => $item['energy_group_name'] ?? null,
+                'energy_effect_type_snapshot' => $item['energy_effect_type'] ?? null,
+                'energy_value_snapshot' => $item['energy_value'] ?? null,
                 'is_linked' => !empty($item['is_linked']) ? 1 : 0,
                 'sort_order' => $item['sort_order'],
             ]);

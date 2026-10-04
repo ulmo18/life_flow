@@ -57,6 +57,11 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Shared Eisenhower importance input uses four accessible radio controls displayed horizontally as A/B/C/D buttons. The shared prompt sheet and Calendar/Plan forms reuse this pattern.
 - Shared `.sr-only` keeps semantic page headings available to assistive technology when a content-first feature page omits its large visible menu introduction.
 - Shared bottom sheets focus their primary input during the opening user action and keep the active input visible when the mobile visual viewport changes.
+- Right-side panels align content to the top and scroll internally when content exceeds the viewport. Page-level create actions use a shared pill-shaped floating button above the bottom navigator.
+- Daily Retrospect, Routine, To-do, and Memo primary actions use the shared centered floating button above the navigator. The bottom navigator and overflowing Execution Energy orb stack above page-level floating actions where they overlap. Compact page-header actions use a shared 36px secondary pill so Today, Routine Management, and Retrospect controls remain visually consistent.
+- Shared `.btn` styling applies the same centering and no-underline treatment to both buttons and links, including Retrospect empty-state actions.
+- Compact header actions rendered as links remove the browser's default underline while retaining their visible focus outline.
+- The aside fills the viewport, begins at the top, and scrolls internally when its navigation content is taller than the screen.
 
 ## Theme
 - The authenticated shell reads `$_SESSION['theme_preference']` and writes it to `body[data-theme]`.

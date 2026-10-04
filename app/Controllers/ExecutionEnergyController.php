@@ -35,11 +35,27 @@ final class ExecutionEnergyController
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
             'ok' => true,
+            'date' => date('Y-m-d'),
             'currentCapacity' => $data['currentCapacity'],
             'startCapacity' => $data['startCapacity'],
             'percent' => $data['percent'],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
+    }
+
+    public function history(): void
+    {
+        $requestedDate = is_string($_GET['date'] ?? null) ? (string) $_GET['date'] : '';
+        $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $requestedDate);
+        $date = $parsedDate instanceof \DateTimeImmutable && $parsedDate->format('Y-m-d') === $requestedDate
+            ? $requestedDate
+            : date('Y-m-d');
+        $this->render('pages/execution-energy/history', [
+            'title' => '실행력 사용 이력',
+            'energy' => $this->energyService->getDayData($this->userId(), $date),
+            'date' => $date,
+            'pageStyles' => [$this->versionedAsset('/assets/css/pages/execution-energy-history.css')],
+        ]);
     }
 
     public function updateProfile(): void

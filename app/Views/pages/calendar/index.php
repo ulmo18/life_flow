@@ -19,6 +19,10 @@ $availableTagPalettes = array_values(array_filter(
 ));
 $executionEnergy = $calendar['executionEnergy'] ?? [];
 $executionEnergyGroups = $executionEnergy['groups'] ?? [];
+$untimedPlanItems = array_values(array_filter(
+    $calendar['planReminderItems'] ?? [],
+    static fn(array $item): bool => ($item['scheduleType'] ?? '') === 'unscheduled'
+));
 ?>
 
 <main
@@ -98,6 +102,38 @@ $executionEnergyGroups = $executionEnergy['groups'] ?? [];
                 <p>실행한 시간을 남기면 계획과 실제 흐름을 회고할 수 있어요.</p>
             </div>
             <button type="button" class="btn btn-primary" data-actual-event-open>실제 일정 추가</button>
+        </section>
+    <?php endif; ?>
+
+    <?php if ($untimedPlanItems !== []): ?>
+        <section class="calendar-untimed-plans" data-calendar-empty-mode="plan" hidden aria-labelledby="calendarUntimedPlanTitle">
+            <div class="calendar-untimed-plans-heading">
+                <strong id="calendarUntimedPlanTitle">시간 미정 계획</strong>
+                <span><?= e((string) count($untimedPlanItems)) ?></span>
+            </div>
+            <ul id="calendarUntimedPlanList">
+                <?php foreach ($untimedPlanItems as $index => $item): ?>
+                    <li class="<?= !empty($item['isLinked']) ? 'is-linked' : '' ?>" <?= $index > 0 ? 'hidden data-untimed-plan-extra' : '' ?>>
+                        <span class="calendar-importance-badge importance-<?= e(strtolower((string) $item['importance'])) ?>"><?= e((string) $item['importanceBadge']) ?></span>
+                        <strong><?= e((string) $item['title']) ?></strong>
+                        <button type="button" class="btn btn-secondary" data-plan-item-open
+                            data-plan-item-id="<?= e((string) $item['itemId']) ?>"
+                            data-plan-item-title="<?= e((string) $item['title']) ?>"
+                            data-plan-item-importance="<?= e((string) $item['importance']) ?>"
+                            data-plan-item-goal-id="<?= $item['goalId'] === null ? '' : e((string) $item['goalId']) ?>"
+                            data-plan-item-schedule-type="unscheduled"
+                            data-plan-item-start-index=""
+                            data-plan-item-end-index=""
+                            data-plan-item-linked="<?= !empty($item['isLinked']) ? '1' : '0' ?>"
+                        >시간 설정</button>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <?php if (count($untimedPlanItems) > 1): ?>
+                <button type="button" class="calendar-untimed-toggle" data-untimed-plan-toggle aria-expanded="false" aria-controls="calendarUntimedPlanList" data-hidden-count="<?= e((string) (count($untimedPlanItems) - 1)) ?>">
+                    나머지 <?= e((string) (count($untimedPlanItems) - 1)) ?>개 보기
+                </button>
+            <?php endif; ?>
         </section>
     <?php endif; ?>
 
@@ -191,18 +227,14 @@ $executionEnergyGroups = $executionEnergy['groups'] ?? [];
                 <small><?= e((string) $calendar['date']) ?></small>
             </div>
             <div class="calendar-fab-quick-actions">
-                <button type="button" class="is-primary" data-actual-event-open>실제 일정 추가</button>
-                <button type="button" data-plan-add-open>계획 추가</button>
-                <button type="button" data-quick-memo-open>메모 작성</button>
                 <?php if (!empty($calendar['isToday'])): ?><button type="button" data-condition-open>오늘의 컨디션</button><?php endif; ?>
                 <?php if (!empty($calendar['planGroups'])): ?>
-                    <button type="button" data-plan-settings-open>계획 연결</button>
+                    <button type="button" data-plan-settings-open>계획 템플릿 연결</button>
                 <?php endif; ?>
+                <button type="button" data-quick-memo-open>메모 작성</button>
+                <button type="button" data-plan-add-open>계획 일정 추가</button>
+                <button type="button" class="is-primary" data-actual-event-open>실제 일정 추가</button>
             </div>
-            <section class="calendar-fab-section calendar-fab-daily-links">
-                <a href="/todo"><strong><?= e(t('calendar.todo_shortcut')) ?></strong><span aria-hidden="true">›</span></a>
-                <a href="/routine"><strong><?= e(t('calendar.routine_shortcut')) ?></strong><span aria-hidden="true">›</span></a>
-            </section>
         </div>
         <button type="button" class="calendar-fab-toggle" data-calendar-fab-toggle aria-label="빠른 메뉴 열기" aria-expanded="false">+</button>
     </div>

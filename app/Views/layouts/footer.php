@@ -15,7 +15,7 @@
                 <span class="bottom-nav-icon" aria-hidden="true">✓</span>
                 <span><?= e(t('nav.routine')) ?></span>
             </a>
-            <a class="bottom-nav-item bottom-nav-energy" href="/execution-energy" <?= ($currentPath ?? '') === '/execution-energy' ? 'aria-current="page"' : '' ?> data-energy-orb>
+            <a class="bottom-nav-item bottom-nav-energy" href="/execution-energy/history" <?= ($currentPath ?? '') === '/execution-energy/history' ? 'aria-current="page"' : '' ?> data-energy-orb data-energy-date="<?= e(date('Y-m-d')) ?>" data-energy-cache-key="<?= e('life-flow.energy.' . (string) ($_SESSION['user_id'] ?? 0)) ?>" data-ui-tooltip="실행력 사용 이력" aria-label="실행력 사용 이력">
                 <span class="bottom-nav-energy-orb" aria-hidden="true">
                     <span class="bottom-nav-energy-liquid"></span>
                     <span class="bottom-nav-energy-bubbles"><i></i><i></i><i></i></span>

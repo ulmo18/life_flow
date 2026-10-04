@@ -32,6 +32,8 @@ final class GoalRepository
                     g.period_start_date,
                     g.period_end_date,
                     g.status,
+                    g.is_focused,
+                    g.focused_at,
                     g.sort_order,
                     g.completed_at,
                     g.created_at,
@@ -60,6 +62,30 @@ final class GoalRepository
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listFocused(int $userId): array
+    {
+        $sql = 'SELECT
+                    g.id, g.user_id, g.parent_goal_id, g.goal_type, g.title,
+                    g.behavior_when, g.behavior_where, g.behavior_how,
+                    g.period_start_date, g.period_end_date, g.status,
+                    g.is_focused, g.focused_at, g.sort_order, g.completed_at,
+                    g.created_at, g.updated_at,
+                    parent.title AS parent_title,
+                    parent.goal_type AS parent_goal_type
+                FROM goals g
+                LEFT JOIN goals parent ON parent.id = g.parent_goal_id
+                    AND parent.user_id = g.user_id AND parent.deleted_at IS NULL
+                WHERE g.user_id = :user_id AND g.deleted_at IS NULL
+                    AND g.status = :status AND g.is_focused = 1
+                ORDER BY g.focused_at ASC, g.id ASC
+                LIMIT 5';
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(['user_id' => $userId, 'status' => 'active']);
 
         return $stmt->fetchAll();
     }
@@ -257,6 +283,8 @@ final class GoalRepository
                     period_start_date,
                     period_end_date,
                     status,
+                    is_focused,
+                    focused_at,
                     sort_order,
                     completed_at,
                     created_at,
@@ -392,6 +420,8 @@ final class GoalRepository
                     period_start_date = :period_start_date,
                     period_end_date = :period_end_date,
                     status = :status,
+                    is_focused = :is_focused,
+                    focused_at = :focused_at,
                     sort_order = :sort_order,
                     completed_at = :completed_at,
                     updated_at = CURRENT_TIMESTAMP
@@ -410,6 +440,8 @@ final class GoalRepository
             'period_start_date' => $data['periodStartDate'],
             'period_end_date' => $data['periodEndDate'],
             'status' => $data['status'],
+            'is_focused' => $data['status'] === 'active' ? (int) ($existing['is_focused'] ?? 0) : 0,
+            'focused_at' => $data['status'] === 'active' ? $existing['focused_at'] : null,
             'sort_order' => $sortOrder,
             'completed_at' => $data['status'] === 'completed' ? $this->currentTimestampExpressionValue() : null,
             'id' => $goalId,
@@ -417,6 +449,51 @@ final class GoalRepository
         ]);
 
         return true;
+    }
+
+    public function setFocused(int $userId, int $goalId, bool $focused): string
+    {
+        $goal = $this->findActive($userId, $goalId);
+        if ($goal === null || (string) $goal['status'] !== 'active') {
+            return 'invalid';
+        }
+        if (!$focused) {
+            $stmt = $this->db->prepare(
+                'UPDATE goals SET is_focused = 0, focused_at = NULL, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+            );
+            $stmt->execute(['id' => $goalId, 'user_id' => $userId]);
+            return 'updated';
+        }
+        if ((int) ($goal['is_focused'] ?? 0) === 1) {
+            return 'updated';
+        }
+
+        try {
+            $this->db->beginTransaction();
+            $count = $this->db->prepare(
+                'SELECT COUNT(*) FROM goals
+                 WHERE user_id = :user_id AND status = :status AND is_focused = 1 AND deleted_at IS NULL'
+            );
+            $count->execute(['user_id' => $userId, 'status' => 'active']);
+            if ((int) $count->fetchColumn() >= 5) {
+                $this->db->rollBack();
+                return 'limit';
+            }
+            $stmt = $this->db->prepare(
+                'UPDATE goals SET is_focused = 1, focused_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND user_id = :user_id AND status = :status AND deleted_at IS NULL'
+            );
+            $stmt->execute(['id' => $goalId, 'user_id' => $userId, 'status' => 'active']);
+            $this->db->commit();
+            return $stmt->rowCount() === 1 ? 'updated' : 'invalid';
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('[goal] focus update failed: ' . $exception->getMessage());
+            return 'invalid';
+        }
     }
 
     public function softDelete(int $userId, int $goalId): bool

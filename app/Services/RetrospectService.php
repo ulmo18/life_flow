@@ -47,9 +47,10 @@ final class RetrospectService
             $snapshot = $this->buildLiveSnapshot($userId, $date, $sort);
         }
 
-        $memoItems = $useSnapshots
+        $standaloneMemoItems = $useSnapshots
             ? $this->formatSnapshotMemoItems($this->retrospectRepository->listMemoItems((int) $report['id']))
             : $this->formatMemoItems($this->memoRepository->listForDate($userId, $date));
+        $memoItems = $this->combineMemoItems($standaloneMemoItems, $snapshot['actualItems']);
         $routineItems = $this->withRoutineDetails($userId, $snapshot['routineItems'], $date);
         $scheduleItems = $this->buildScheduleItems($snapshot['planItems'], $snapshot['actualItems'], $sort);
         $recordComposition = $this->buildRecordComposition(
@@ -559,6 +560,9 @@ final class RetrospectService
                 'durationLabel' => $this->formatMinutes(($end - $start) * 10),
                 'timeRange' => $this->formatTimeRange($start, $end),
                 'sort_order' => (int) ($item['tag_sort_order'] ?? 999),
+                'energy_group_name' => (string) ($item['energy_group_name'] ?? ''),
+                'energy_effect_type' => (string) ($item['energy_effect_type'] ?? ''),
+                'energy_value' => $item['energy_value'] === null ? null : (int) $item['energy_value'],
             ];
         }, $items);
     }
@@ -630,6 +634,9 @@ final class RetrospectService
                 'durationMinutes' => ($end - $start) * 10,
                 'durationLabel' => $this->formatMinutes(($end - $start) * 10),
                 'timeRange' => $this->formatTimeRange($start, $end),
+                'energy_group_name' => (string) ($item['energy_group_name_snapshot'] ?? ''),
+                'energy_effect_type' => (string) ($item['energy_effect_type_snapshot'] ?? ''),
+                'energy_value' => $item['energy_value_snapshot'] === null ? null : (int) $item['energy_value_snapshot'],
             ];
         }, $items);
     }
@@ -765,6 +772,9 @@ final class RetrospectService
                 'actualMemo' => $actual === null ? '' : (string) ($actual['memo'] ?? ''),
                 'tagName' => $actual === null ? '' : (string) ($actual['tag_name'] ?? ''),
                 'tagColor' => $actual === null ? '' : (string) ($actual['tag_color'] ?? ''),
+                'energyGroupName' => $actual === null ? '' : (string) ($actual['energy_group_name'] ?? ''),
+                'energyEffectType' => $actual === null ? '' : (string) ($actual['energy_effect_type'] ?? ''),
+                'energyValue' => $actual === null ? null : $actual['energy_value'],
                 'isLinked' => $actual !== null,
                 'hasDifference' => $hasDifference,
                 'durationDifferenceLabel' => $actual === null || $planDuration === null
@@ -792,6 +802,9 @@ final class RetrospectService
                 'actualMemo' => (string) ($actual['memo'] ?? ''),
                 'tagName' => (string) ($actual['tag_name'] ?? ''),
                 'tagColor' => (string) ($actual['tag_color'] ?? ''),
+                'energyGroupName' => (string) ($actual['energy_group_name'] ?? ''),
+                'energyEffectType' => (string) ($actual['energy_effect_type'] ?? ''),
+                'energyValue' => $actual['energy_value'],
                 'isLinked' => false,
                 'hasDifference' => false,
                 'durationDifferenceLabel' => '',
@@ -817,21 +830,74 @@ final class RetrospectService
     /** @param array<int, array<string, mixed>> $items */
     private function formatMemoItems(array $items): array
     {
-        return array_map(fn (array $item): array => [
-            'content' => (string) $item['content'],
-            'createdAt' => (string) $item['created_at'],
-            'timeLabel' => $this->formatMemoTime((string) $item['created_at']),
-        ], $items);
+        return array_map(function (array $item): array {
+            $timeLabel = $this->formatMemoTime((string) $item['created_at']);
+
+            return [
+                'content' => (string) $item['content'],
+                'createdAt' => (string) $item['created_at'],
+                'timeLabel' => $timeLabel,
+                'sortMinute' => $this->timeLabelToMinutes($timeLabel),
+                'source' => 'standalone',
+                'sourceLabel' => '메모',
+                'scheduleTitle' => '',
+            ];
+        }, $items);
     }
 
     /** @param array<int, array<string, mixed>> $items */
     private function formatSnapshotMemoItems(array $items): array
     {
-        return array_map(fn (array $item): array => [
-            'content' => (string) $item['content_snapshot'],
-            'createdAt' => (string) $item['created_at_snapshot'],
-            'timeLabel' => $this->formatMemoTime((string) $item['created_at_snapshot']),
-        ], $items);
+        return array_map(function (array $item): array {
+            $timeLabel = $this->formatMemoTime((string) $item['created_at_snapshot']);
+
+            return [
+                'content' => (string) $item['content_snapshot'],
+                'createdAt' => (string) $item['created_at_snapshot'],
+                'timeLabel' => $timeLabel,
+                'sortMinute' => $this->timeLabelToMinutes($timeLabel),
+                'source' => 'standalone',
+                'sourceLabel' => '메모',
+                'scheduleTitle' => '',
+            ];
+        }, $items);
+    }
+
+    /**
+     * Calendar event memos keep their event lifecycle, while Retrospect presents them
+     * beside standalone notes as one chronological reading surface.
+     *
+     * @param array<int, array<string, mixed>> $standaloneItems
+     * @param array<int, array<string, mixed>> $actualItems
+     * @return array<int, array<string, mixed>>
+     */
+    private function combineMemoItems(array $standaloneItems, array $actualItems): array
+    {
+        $items = $standaloneItems;
+        foreach ($actualItems as $actual) {
+            $content = (string) ($actual['memo'] ?? '');
+            if (trim($content) === '') {
+                continue;
+            }
+
+            $startIndex = (int) ($actual['start_index'] ?? 0);
+            $items[] = [
+                'content' => $content,
+                'createdAt' => '',
+                'timeLabel' => $this->indexToTime($startIndex),
+                'sortMinute' => $startIndex * 10,
+                'source' => 'schedule',
+                'sourceLabel' => '일정 메모',
+                'scheduleTitle' => (string) ($actual['title'] ?? ''),
+            ];
+        }
+
+        usort($items, static function (array $left, array $right): int {
+            return [(int) ($left['sortMinute'] ?? 0), (string) ($left['source'] ?? '')]
+                <=> [(int) ($right['sortMinute'] ?? 0), (string) ($right['source'] ?? '')];
+        });
+
+        return $items;
     }
 
     private function formatMemoTime(string $createdAt): string
@@ -843,6 +909,15 @@ final class RetrospectService
         return (new DateTimeImmutable($createdAt, new \DateTimeZone('UTC')))
             ->setTimezone(new \DateTimeZone(date_default_timezone_get()))
             ->format('H:i');
+    }
+
+    private function timeLabelToMinutes(string $time): int
+    {
+        if (preg_match('/^(\d{2}):(\d{2})$/', $time, $matches) !== 1) {
+            return 0;
+        }
+
+        return ((int) $matches[1] * 60) + (int) $matches[2];
     }
 
     private function formatDurationDifference(int $minutes): string

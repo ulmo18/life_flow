@@ -578,7 +578,7 @@ body[data-theme='dark'] .routine-log-row {
   position: fixed;
   left: 50%;
   bottom: max(96px, calc(env(safe-area-inset-bottom) + 96px));
-  z-index: 860;
+  z-index: 840;
   width: min(calc(100% - 32px), 430px);
   transform: translateX(-50%);
   box-shadow: 0 14px 30px rgba(200, 95, 90, 0.26);

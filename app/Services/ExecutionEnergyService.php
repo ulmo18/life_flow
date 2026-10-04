@@ -349,7 +349,7 @@ final class ExecutionEnergyService
 
     private function normalizeStateDirection(string $field, int $state): int
     {
-        return in_array($field, ['fatigue_state', 'stress_state'], true) ? 6 - $state : $state;
+        return $state;
     }
 
     /** @param array<string, mixed> $day */

@@ -91,9 +91,11 @@ final class Database
             self::ensureSqliteUntimedDailyPlans($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteRetrospectReviewColumns($connection);
+            self::ensureSqliteRetrospectExecutionEnergyColumns($connection);
             self::ensureSqliteUntimedRetrospectPlans($connection);
             self::ensureSqlitePlanBlockTemplates($connection);
             self::ensureSqliteExecutionEnergy($connection);
+            self::ensureSqliteGoalFocusColumns($connection);
             self::ensureSqliteSchemaObjects($connection);
             return;
         }
@@ -324,6 +326,38 @@ final class Database
                 $connection->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' TEXT NULL');
             }
         }
+    }
+
+    private static function ensureSqliteRetrospectExecutionEnergyColumns(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='retrospect_report_actual_items' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+        $columns = $connection->query('PRAGMA table_info(retrospect_report_actual_items)');
+        $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        foreach (['energy_group_name_snapshot' => 'TEXT NULL', 'energy_effect_type_snapshot' => 'TEXT NULL', 'energy_value_snapshot' => 'INTEGER NULL'] as $column => $definition) {
+            if (!in_array($column, $columnNames, true)) {
+                $connection->exec('ALTER TABLE retrospect_report_actual_items ADD COLUMN ' . $column . ' ' . $definition);
+            }
+        }
+    }
+
+    private static function ensureSqliteGoalFocusColumns(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='goals' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+        $columns = $connection->query('PRAGMA table_info(goals)');
+        $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        if (!in_array('is_focused', $columnNames, true)) {
+            $connection->exec('ALTER TABLE goals ADD COLUMN is_focused INTEGER NOT NULL DEFAULT 0 CHECK (is_focused IN (0, 1))');
+        }
+        if (!in_array('focused_at', $columnNames, true)) {
+            $connection->exec('ALTER TABLE goals ADD COLUMN focused_at TEXT NULL');
+        }
+        $connection->exec('CREATE INDEX IF NOT EXISTS idx_goals_user_focus ON goals(user_id, is_focused, focused_at)');
     }
 
     private static function ensureSqliteSchemaObjects(PDO $connection): void
