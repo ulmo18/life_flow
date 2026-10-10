@@ -23,7 +23,7 @@ $renderGoalBranch = static function (array $nodes, int $depth = 0, ?int $parentI
         $goalId = (int) $node['id'];
         $children = $node['children'] ?? [];
         $status = (string) $node['status'];
-        ?><li class="goal-map-item is-<?= e($status) ?>" data-goal-node data-goal-id="<?= e((string) $goalId) ?>" data-parent-id="<?= $parentId === null ? '' : e((string) $parentId) ?>" style="--goal-depth:<?= e((string) min($depth, 5)) ?>">
+        ?><li class="goal-map-item is-<?= e($status) ?>" data-goal-node data-goal-id="<?= e((string) $goalId) ?>" data-parent-id="<?= $parentId === null ? '' : e((string) $parentId) ?>" data-focus-path="<?= !empty($node['hasFocusedDescendant']) ? '1' : '0' ?>" style="--goal-depth:<?= e((string) min($depth, 5)) ?>">
             <div class="goal-drop-before" data-goal-drop-before="<?= e((string) $goalId) ?>" aria-hidden="true"></div>
             <div class="goal-node-row">
                 <?php if (!empty($children)): ?><button class="goal-collapse" type="button" data-goal-collapse aria-expanded="true" aria-label="<?= e((string) $node['title']) ?> 하위 목표 접기">▾</button><?php else: ?><span class="goal-collapse-placeholder" aria-hidden="true"></span><?php endif; ?>
@@ -57,6 +57,7 @@ $renderGoalBranch = static function (array $nodes, int $depth = 0, ?int $parentI
         <a href="/goal" <?= $selectedMode === 'focus' ? 'aria-current="page"' : '' ?>>지금 집중</a>
         <a href="/goal?mode=all" <?= $selectedMode === 'all' ? 'aria-current="page"' : '' ?>>전체 목표</a>
     </nav>
+    <?php if ($selectedMode === 'all' && !empty($goalTree)): ?><div class="goal-map-toolbar"><button type="button" class="btn btn-secondary" data-goal-toggle-all>전부 펼치기</button></div><?php endif; ?>
 
     <section class="goal-map" aria-label="목표 지도">
         <?php if (empty($goalTree)): ?>
@@ -95,7 +96,7 @@ $renderGoalBranch = static function (array $nodes, int $depth = 0, ?int $parentI
 </div>
 
 <button class="page-floating-action goal-floating-add" type="button" data-goal-create-open>목표 추가</button>
-<div class="goal-create-layer" data-goal-create-layer hidden><button type="button" class="goal-local-overlay" data-goal-create-close aria-label="목표 추가 닫기"></button><section class="goal-create-sheet" role="dialog" aria-modal="true" aria-labelledby="goalCreateTitle"><div class="goal-detail-header"><div><small>새로운 방향</small><strong id="goalCreateTitle">목표 추가</strong></div><button type="button" class="ui-close-button" data-goal-create-close aria-label="닫기">×</button></div><form method="post" action="/goal" data-goal-quick-form><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="goal_type" value="bucket"><input type="hidden" name="status" value="active"><input type="hidden" name="mode" value="all"><label class="form-label" for="goalQuickTitle">무엇을 하고 싶나요?</label><input class="input" id="goalQuickTitle" name="title" type="text" maxlength="80" placeholder="목표명을 입력하세요" autocomplete="off" required data-goal-quick-input><p class="muted">기간과 유형은 목표를 만든 뒤 상세 화면에서 정할 수 있어요.</p><button class="btn btn-primary" type="submit">목표 추가</button></form></section></div>
+<div class="goal-create-layer" data-goal-create-layer hidden><button type="button" class="goal-local-overlay" data-goal-create-close aria-label="목표 추가 닫기"></button><section class="goal-create-sheet ui-form-sheet" role="dialog" aria-modal="true" aria-labelledby="goalCreateTitle"><div class="goal-detail-header ui-form-sheet-header"><div><small>새로운 방향</small><strong id="goalCreateTitle">목표 추가</strong></div><button type="button" class="ui-close-button" data-goal-create-close aria-label="닫기">×</button></div><form method="post" action="/goal" data-goal-quick-form><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="goal_type" value="bucket"><input type="hidden" name="status" value="active"><input type="hidden" name="mode" value="all"><label class="form-label" for="goalQuickTitle">무엇을 하고 싶나요?</label><input class="input" id="goalQuickTitle" name="title" type="text" maxlength="80" placeholder="목표명을 입력하세요" autocomplete="off" required data-goal-quick-input><p class="muted">기간과 유형은 목표를 만든 뒤 상세 화면에서 정할 수 있어요.</p><div class="ui-form-sheet-actions"><button class="btn btn-primary" type="submit">목표 추가</button></div></form></section></div>
 
 <?php if (!empty($notificationSyncPayload)): ?><script type="application/json" data-notification-sync><?= json_encode($notificationSyncPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}' ?></script><?php endif; ?>
 <?php require __DIR__ . '/../../layouts/footer.php'; ?>

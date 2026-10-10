@@ -174,8 +174,8 @@ body[data-theme='dark'] .routine-week-metrics article {
   display: inline-flex !important;
   align-items: center;
   border-radius: 999px;
-  background: rgba(255, 94, 91, 0.12);
-  color: var(--color-primary) !important;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text) !important;
   padding: 0 8px;
   font-size: 11px !important;
   font-weight: 900;
@@ -346,7 +346,7 @@ button.routine-tracker-cell::after {
   left: 50%;
   bottom: -17px;
   transform: translateX(-50%);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
   font-size: 9px;
   font-weight: 900;
   white-space: nowrap;
@@ -429,6 +429,7 @@ body[data-theme='dark'] .routine-lifecycle-actions {
 .routine-edit-actions .btn {
   width: 100%;
 }
+.routine-edit-section{display:grid;gap:9px;border:1px solid var(--border);border-radius:14px;margin:0;padding:12px}.routine-edit-section legend{padding:0 6px;color:var(--color-primary);font-size:12px;font-weight:900}.routine-edit-reminder .routine-reminder-option{grid-template-columns:auto minmax(0,1fr) 112px}.routine-edit-actions.is-sticky{position:sticky;bottom:calc(var(--space-4) * -1);z-index:2;grid-template-columns:1fr;margin:0 calc(var(--space-4) * -1) calc(var(--space-4) * -1);border-top:1px solid var(--border);background:#fffaf2;padding:12px var(--space-4)}body[data-theme='dark'] .routine-edit-actions.is-sticky{background:#24251f}.routine-delete-action{width:100%;border-color:var(--color-danger-text);color:var(--color-danger-text)}
 
 .routine-local-layer {
   position: fixed;

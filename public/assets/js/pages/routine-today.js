@@ -3,6 +3,17 @@
   const quickLayer = document.querySelector('[data-routine-quick-layer]');
   const quickInput = document.getElementById('routineQuickName');
 
+  function refreshGroups() {
+    const groups = Array.from(document.querySelectorAll('[data-routine-group]'));
+    groups.forEach(group => {
+      const count = group.querySelectorAll('[data-routine-today-row]').length;
+      const counter = group.querySelector('[data-routine-group-count]');
+      const empty = group.querySelector('[data-routine-group-empty]');
+      if (counter) counter.textContent = `${count}개`;
+      if (empty) empty.hidden = count > 0;
+    });
+  }
+
   function closeQuickCreate() {
     if (!quickLayer) return;
     quickLayer.hidden = true;
@@ -35,11 +46,18 @@
         const payload = await response.json();
         if (!response.ok || !payload.ok) throw new Error(payload.message || '루틴 상태 변경에 실패했습니다.');
         if (button && state?.apply) state.apply(button, payload.state || '');
-        const streak = form.closest('li')?.querySelector('[data-routine-today-streak]');
+        const row = form.closest('[data-routine-today-row]');
+        const streak = row?.querySelector('[data-routine-today-streak]');
         const streakCount = Number(payload.routine?.streakCount || 0);
         if (streak) {
           streak.hidden = streakCount < 3;
           streak.textContent = streakCount >= 3 ? `🔥 ${streakCount}일 연속 완료` : '';
+        }
+        if (row) {
+          row.dataset.routineState = payload.state || '';
+          const target = document.querySelector(`[data-routine-group="${payload.state === 'O' ? 'completed' : 'unfinished'}"] [data-routine-group-body]`);
+          target?.append(row);
+          refreshGroups();
         }
         window.LifeFlowToast?.show?.(payload.message || '루틴 상태를 변경했습니다.');
       } catch (error) {

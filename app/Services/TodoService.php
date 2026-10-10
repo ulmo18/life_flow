@@ -28,6 +28,9 @@ final class TodoService
         $day = $this->calendarRepository->getOrCreateDay($userId, $date);
         $items = array_map(function (array $item): array {
             $isTimed = $item['start_index'] !== null && $item['end_index'] !== null;
+            $durationMinutes = $isTimed
+                ? ((int) $item['end_index'] - (int) $item['start_index']) * 10
+                : ($item['estimated_duration_minutes'] === null ? null : (int) $item['estimated_duration_minutes']);
 
             return [
                 'id' => (int) $item['daily_plan_item_id'],
@@ -40,6 +43,7 @@ final class TodoService
                 'timeRange' => $isTimed
                     ? $this->formatTime((int) $item['start_index']) . '–' . $this->formatTime((int) $item['end_index'])
                     : t('todo.untimed'),
+                'isLongDuration' => $durationMinutes !== null && $durationMinutes >= 60,
                 'isCompleted' => $item['linked_event_id'] !== null,
             ];
         }, $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']));

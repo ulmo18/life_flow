@@ -46,7 +46,7 @@ if (isset($burdenLabels[(string) ($energyDay['burden_feedback'] ?? '')])) $condi
             <?php else: ?>
                 <ul class="retrospect-history-list">
                     <?php foreach ($history['items'] as $item): ?>
-                        <li><a href="/retrospect?date=<?= e((string) $item['date']) ?>"><span><strong><?= e((string) $item['dateTitle']) ?></strong> <?= e((string) $item['dateSubTitle']) ?></span><small>계획 <?= e((string) $item['planAchievementRate']) ?>% · 루틴 <?= e((string) $item['routineAchievementRate']) ?>%</small><p><?= e((string) ($item['snippet'] !== '' ? $item['snippet'] : '작성된 KPT 내용이 없습니다.')) ?></p></a></li>
+                        <li><a href="/retrospect/report?date=<?= e((string) $item['date']) ?>"><span><strong><?= e((string) $item['dateTitle']) ?></strong> <?= e((string) $item['dateSubTitle']) ?></span><small>계획 <?= e((string) $item['planAchievementRate']) ?>% · 루틴 <?= e((string) $item['routineAchievementRate']) ?>%</small><p><?= e((string) ($item['snippet'] !== '' ? $item['snippet'] : '작성된 KPT 내용이 없습니다.')) ?></p></a></li>
                     <?php endforeach; ?>
                 </ul>
                 <nav class="retrospect-pagination" aria-label="발행 이력 페이지">
@@ -106,12 +106,58 @@ if (isset($burdenLabels[(string) ($energyDay['burden_feedback'] ?? '')])) $condi
                 <div class="retrospect-record-tabs" role="tablist" aria-label="하루 기록"><button type="button" role="tab" aria-selected="true" data-record-tab="routine">루틴 <b><?= e((string) count($retrospect['routineItems'])) ?></b></button><button type="button" role="tab" aria-selected="false" data-record-tab="schedule">일정 <b><?= e((string) count($retrospect['scheduleItems'])) ?></b></button><button type="button" role="tab" aria-selected="false" data-record-tab="memo">메모 <b><?= e((string) count($retrospect['memoItems'])) ?></b></button></div>
                 <div class="retrospect-tab-panel" role="tabpanel" data-record-panel="routine">
                     <?php if (empty($retrospect['routineItems'])): ?><div class="retrospect-empty-action"><p>오늘 확인할 루틴이 없어요.</p><a class="btn btn-secondary" href="/manage/routines">루틴 만들기</a></div>
-                    <?php else: ?><div class="retrospect-table-wrap"><table class="retrospect-record-table retrospect-routine-table"><thead><tr><th scope="col">상태</th><th scope="col">루틴</th><th scope="col">연속 달성</th></tr></thead><tbody><?php foreach ($retrospect['routineItems'] as $index => $routine): ?><?php $state = (string) ($routine['state'] ?? ''); ?><tr><td class="retrospect-table-state"><?php if ($isToday): ?><form method="post" action="/routine/toggle" data-retrospect-routine-toggle-form><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="return_to" value="retrospect"><input type="hidden" name="date" value="<?= e($date) ?>"><input type="hidden" name="routine_id" value="<?= e((string) $routine['id']) ?>"><button type="submit" class="routine-state-control <?= $state === 'O' ? 'is-done' : ($state === 'X' ? 'is-failed' : '') ?>" data-routine-toggle-control data-retrospect-routine-state data-state="<?= e($state) ?>" aria-label="<?= e((string) $routine['name']) ?> 상태 변경"><span data-routine-state-marker aria-hidden="true"><?= $state === 'O' ? '✓' : ($state === 'X' ? '×' : '') ?></span></button></form><?php else: ?><strong class="retrospect-state-label"><?= e((string) $routine['stateLabel']) ?></strong><?php endif; ?></td><td><button type="button" class="retrospect-table-link" data-detail-open="routine-detail-<?= e((string) $index) ?>"><?= e((string) $routine['name']) ?></button></td><td class="retrospect-table-streak"><?php if ((int) ($routine['streakCount'] ?? 0) >= 3): ?>🔥 <?= e((string) $routine['streakCount']) ?>일<?php else: ?>-<?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+                    <?php else: ?>
+                        <div class="retrospect-table-wrap">
+                            <table class="retrospect-record-table retrospect-routine-table">
+                                <thead><tr><th scope="col">루틴명</th><th scope="col">연속 달성</th><th scope="col">루틴 완료 체크</th></tr></thead>
+                                <tbody>
+                                    <?php foreach ($retrospect['routineItems'] as $index => $routine): ?>
+                                        <?php $state = (string) ($routine['state'] ?? ''); ?>
+                                        <tr>
+                                            <td><button type="button" class="retrospect-table-link" data-detail-open="routine-detail-<?= e((string) $index) ?>"><?= e((string) $routine['name']) ?></button></td>
+                                            <td class="retrospect-table-streak"><?php if ((int) ($routine['streakCount'] ?? 0) >= 3): ?>🔥 <?= e((string) $routine['streakCount']) ?>일<?php else: ?>-<?php endif; ?></td>
+                                            <td class="retrospect-table-state"><?php if ($isToday): ?><form method="post" action="/routine/toggle" data-retrospect-routine-toggle-form><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="return_to" value="retrospect"><input type="hidden" name="date" value="<?= e($date) ?>"><input type="hidden" name="routine_id" value="<?= e((string) $routine['id']) ?>"><button type="submit" class="routine-state-control <?= $state === 'O' ? 'is-done' : ($state === 'X' ? 'is-failed' : '') ?>" data-routine-toggle-control data-retrospect-routine-state data-state="<?= e($state) ?>" aria-label="<?= e((string) $routine['name']) ?> 상태 변경"><span data-routine-state-marker aria-hidden="true"><?= $state === 'O' ? '✓' : ($state === 'X' ? '×' : '') ?></span></button></form><?php else: ?><strong class="retrospect-state-label"><?= e((string) $routine['stateLabel']) ?></strong><?php endif; ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="retrospect-tab-panel" role="tabpanel" data-record-panel="schedule" hidden>
                     <div class="retrospect-sort-tabs" aria-label="일정 정렬"><a href="/retrospect?date=<?= e($date) ?>&sort=importance#schedule" <?= $retrospect['sort'] === 'importance' ? 'aria-current="page"' : '' ?>>중요도순</a><a href="/retrospect?date=<?= e($date) ?>&sort=time#schedule" <?= $retrospect['sort'] === 'time' ? 'aria-current="page"' : '' ?>>시간순</a></div>
                     <?php if (empty($retrospect['scheduleItems'])): ?><div class="retrospect-empty-action"><p>이 날짜에 계획된 일정이 없어요.</p><a class="btn btn-secondary" href="/calendar?date=<?= e($date) ?>">일정 추가</a></div>
-                    <?php else: ?><div class="retrospect-table-wrap"><table class="retrospect-record-table retrospect-schedule-table"><thead><tr><th scope="col">상태</th><th scope="col">일정</th><th scope="col">시간</th><th scope="col">차이</th><th scope="col">실행력</th></tr></thead><tbody><?php foreach ($retrospect['scheduleItems'] as $index => $item): ?><?php $hasActual = (string) $item['actualTimeRange'] !== ''; ?><tr class="<?= $item['kind'] === 'actual' ? 'is-unplanned' : '' ?> <?= $hasActual ? 'has-actual' : '' ?>"<?= $hasActual ? ' style="--tag-color:' . e((string) $item['tagColor']) . '"' : '' ?>><td><span class="retrospect-link-state" aria-label="<?= $item['kind'] === 'actual' ? '계획 외 일정' : (!empty($item['isLinked']) ? '실제 일정 연결됨' : '실제 일정 미연결') ?>"><?= $item['kind'] === 'actual' ? '•' : (!empty($item['isLinked']) ? '☑' : '☐') ?></span></td><td><button type="button" class="retrospect-table-link retrospect-schedule-title" data-detail-open="schedule-detail-<?= e((string) $index) ?>"><?php if ($item['kind'] === 'plan'): ?><b><?= e((string) $item['importance']) ?></b><?php endif; ?><?= e((string) $item['title']) ?></button></td><td class="retrospect-table-time"><?= e((string) ($hasActual ? $item['actualTimeRange'] : $item['planTimeRange'])) ?></td><td class="retrospect-table-difference"><?= $item['kind'] === 'actual' ? '계획 외' : (!empty($item['hasDifference']) ? '🕒 ' . e((string) $item['durationDifferenceLabel']) : (!empty($item['isLinked']) ? '연결' : '미연결')) ?></td><td class="retrospect-table-energy"><?= $item['energyValue'] === null ? '—' : ($item['energyEffectType'] === 'recover' ? '+' : '−') . e((string) $item['energyValue']) ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+                    <?php else: ?>
+                        <div class="retrospect-table-wrap">
+                            <table class="retrospect-record-table retrospect-schedule-table">
+                                <thead><tr><th scope="col">상태</th><th scope="col">일정</th><th scope="col">시간</th><th scope="col">차이</th><th scope="col">실행력</th></tr></thead>
+                                <tbody>
+                                <?php foreach ($retrospect['scheduleItems'] as $index => $item): ?>
+                                    <?php
+                                    $hasActual = (string) $item['actualTimeRange'] !== '';
+                                    $differenceLabel = $item['kind'] === 'actual'
+                                        ? '계획 외'
+                                        : (!empty($item['hasDifference'])
+                                            ? '🕒 ' . (string) $item['durationDifferenceLabel']
+                                            : (!empty($item['isLinked']) ? '연결' : '미연결'));
+                                    ?>
+                                    <tr class="<?= $item['kind'] === 'actual' ? 'is-unplanned' : '' ?> <?= $hasActual ? 'has-actual' : '' ?>"<?= $hasActual ? ' style="--tag-color:' . e((string) $item['tagColor']) . '"' : '' ?>>
+                                        <td><span class="retrospect-link-state" aria-label="<?= $item['kind'] === 'actual' ? '계획 외 일정' : (!empty($item['isLinked']) ? '실제 일정 연결됨' : '실제 일정 미연결') ?>"><?= $item['kind'] === 'actual' ? '•' : (!empty($item['isLinked']) ? '☑' : '☐') ?></span></td>
+                                        <td>
+                                            <button type="button" class="retrospect-table-link retrospect-schedule-title" data-detail-open="schedule-detail-<?= e((string) $index) ?>">
+                                                <span><?php if ($item['kind'] === 'plan'): ?><b><?= e((string) $item['importance']) ?></b><?php endif; ?><span class="<?= !empty($item['isLongDuration']) ? 'duration-highlight' : '' ?>"><?= e((string) $item['title']) ?></span></span>
+                                                <small><?= e((string) ($hasActual ? $item['actualTimeRange'] : $item['planTimeRange'])) ?> · <?= e($differenceLabel) ?></small>
+                                            </button>
+                                        </td>
+                                        <td class="retrospect-table-time"><?= e((string) ($hasActual ? $item['actualTimeRange'] : $item['planTimeRange'])) ?></td>
+                                        <td class="retrospect-table-difference"><?= e($differenceLabel) ?></td>
+                                        <td class="retrospect-table-energy"><?php if ($item['energyValue'] === null): ?><span class="energy-change is-none">—</span><?php else: ?><span class="energy-change <?= $item['energyEffectType'] === 'recover' ? 'is-recover' : 'is-consume' ?>" aria-label="실행력 <?= e((string) $item['energyValue']) ?> <?= $item['energyEffectType'] === 'recover' ? '회복' : '소모' ?>"><?= $item['energyEffectType'] === 'recover' ? '+' : '−' ?><?= e((string) $item['energyValue']) ?></span><?php endif; ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="retrospect-tab-panel" role="tabpanel" data-record-panel="memo" hidden>
                     <?php if (empty($retrospect['memoItems'])): ?><p class="retrospect-empty">이 날짜에 작성한 메모가 없어요.</p>
@@ -146,7 +192,7 @@ if (isset($burdenLabels[(string) ($energyDay['burden_feedback'] ?? '')])) $condi
                     <span class="retrospect-kpt-timer-message" data-kpt-timer-message aria-live="polite"></span>
                 </div>
                 <div class="retrospect-kpt-actions">
-                    <button type="button" class="btn btn-secondary" data-kpt-close>닫기</button><button type="button" class="btn btn-secondary" data-kpt-collapse>접기</button><button type="button" class="btn btn-secondary" data-kpt-previous>이전</button><button type="button" class="btn btn-primary" data-kpt-next>다음</button><button type="submit" class="btn btn-primary" formaction="/retrospect/publish" data-kpt-publish hidden><?= $isSubmitted ? '재발행' : '발행' ?></button>
+                    <button type="button" class="btn btn-secondary" data-kpt-close>닫기</button><button type="button" class="btn btn-secondary" data-kpt-collapse>기록 보기</button><button type="button" class="btn btn-secondary" data-kpt-previous>이전</button><button type="button" class="btn btn-primary" data-kpt-next>다음</button><button type="submit" class="btn btn-primary" formaction="/retrospect/publish" data-kpt-publish hidden><?= $isSubmitted ? '재발행' : '발행' ?></button>
                 </div>
             </header>
             <div class="retrospect-kpt-body">

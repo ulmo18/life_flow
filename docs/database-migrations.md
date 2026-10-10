@@ -45,6 +45,10 @@ Back up the database, then apply these one-time migrations after their prerequis
 11. `sql/migration.add_execution_energy.mysql.sql` — requires `user` and `calendar_events`; creates Execution Energy baseline, group, daily snapshot, event setting, and legacy correction/notice tables retained for migration compatibility.
 12. `sql/migration.add_execution_energy_feedback.mysql.sql` — apply only when migration 11 was deployed before `execution_energy_days.burden_feedback` was introduced; do not apply it after the current full migration.
 13. `sql/migration.retrospect_execution_energy.mysql.sql` — requires `retrospect_report_actual_items`; adds the Actual-event Execution Energy snapshot columns required by Retrospect publish and republish.
+14. `sql/migration.retrospect_report_milestones.mysql.sql` — requires `retrospect_reports`; creates immutable Goal/Routine completion-news snapshots used by the published report archive.
+15. `sql/migration.wellness_entries.mysql.sql` — requires `user` and `calendar_events`; creates Sleep, Meal, Snack, Exercise, and Rest records used by Calendar and Search.
+16. `sql/migration.wellness_event_link.mysql.sql` — apply only when migration 15 was already deployed; adds the nullable unique Actual-event link used by schedule-bound Life Records.
+17. `sql/migration.daily_plan_estimated_duration.mysql.sql` — requires `daily_plan_items`; adds the optional expected duration used to highlight long time-unspecified Plan items.
 
 The Routine validation trigger migration depends on the lifecycle columns; the other feature migrations are independent. The order above is the recommended release order for repeatable deployments. Record each applied migration because the `ALTER TABLE` statements are not intended to be rerun.
 
@@ -66,6 +70,28 @@ MySQL application connections set the session timezone to `+00:00`. Before deplo
 - `app/Core/Database.php` creates the Execution Energy tables when `execution_energy_profiles` is missing; `sql/migration.add_execution_energy.sqlite.sql` is available for controlled manual migration.
 - Existing SQLite Execution Energy tables receive the missing `burden_feedback` column automatically; `sql/migration.add_execution_energy_feedback.sqlite.sql` is available for controlled manual migration.
 - Existing SQLite Retrospect Actual snapshots receive missing Execution Energy columns automatically; `sql/migration.retrospect_execution_energy.sqlite.sql` remains available for controlled manual migration.
+- Reapplying `sql/schema.sqlite.sql` creates the Retrospect milestone snapshot table; `sql/migration.retrospect_report_milestones.sqlite.sql` is available for controlled manual migration.
+- Reapplying `sql/schema.sqlite.sql` creates `wellness_entries`; `sql/migration.wellness_entries.sqlite.sql` is available for controlled manual migration. Existing standalone tables receive `calendar_event_id` and its unique index automatically; `sql/migration.wellness_event_link.sqlite.sql` is the matching controlled migration.
 - Reapplying `sql/schema.sqlite.sql` creates `calendar_tag_preferences`; `sql/migration.calendar_tag_preferences.sqlite.sql` is available for controlled manual migration.
+- `app/Core/Database.php` automatically adds `daily_plan_items.estimated_duration_minutes`; `sql/migration.daily_plan_estimated_duration.sqlite.sql` is available for controlled manual migration.
 - The matching `*.sqlite.sql` files remain available for controlled manual migrations.
 - Do not delete SQLite compatibility or fallback code even when production uses MySQL; it remains part of local and fallback support.
+
+## Existing Docker Development Database
+
+- The MariaDB `db_data` named volume persists between container rebuilds. Files mounted under `/docker-entrypoint-initdb.d` run only when that volume is first initialized, so rebuilding or restarting containers does not upgrade an existing development schema.
+- Do not remove the volume merely to pick up a schema change when development data should be preserved. Apply only the required migration file to the running `db` service.
+- PowerShell examples for the Goal focus and Calendar-linked Life Record upgrades:
+
+```powershell
+Get-Content -Raw -Encoding utf8 sql/migration.goal_focus.mysql.sql |
+  docker compose exec -T db sh -lc 'mariadb -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
+
+Get-Content -Raw -Encoding utf8 sql/migration.wellness_event_link.mysql.sql |
+  docker compose exec -T db sh -lc 'mariadb -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
+
+Get-Content -Raw -Encoding utf8 sql/migration.daily_plan_estimated_duration.mysql.sql |
+  docker compose exec -T db sh -lc 'mariadb -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
+```
+
+- Record which migrations were applied. These `ALTER TABLE` migrations are not intended to be rerun.

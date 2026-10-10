@@ -401,6 +401,7 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
   `importance` CHAR(1) NOT NULL DEFAULT 'D',
   `start_index` SMALLINT UNSIGNED NULL,
   `end_index` SMALLINT UNSIGNED NULL,
+  `estimated_duration_minutes` SMALLINT UNSIGNED NULL,
   `sort_order` INT UNSIGNED NOT NULL DEFAULT 1,
   `deleted_at` DATETIME NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -422,7 +423,9 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
       (`start_index` IS NULL AND `end_index` IS NULL)
       OR (`start_index` IS NOT NULL AND `end_index` IS NOT NULL
           AND `start_index` >= 0 AND `end_index` <= 144 AND `start_index` < `end_index`)
-    )
+    ),
+  CONSTRAINT `chk_daily_plan_items_estimated_duration`
+    CHECK (`estimated_duration_minutes` IS NULL OR (`estimated_duration_minutes` >= 10 AND `estimated_duration_minutes` <= 1440))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `calendar_tag_palettes` (
@@ -766,6 +769,25 @@ CREATE TABLE IF NOT EXISTS `retrospect_report_memo_items` (
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `retrospect_report_milestone_items` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `report_id` BIGINT UNSIGNED NOT NULL,
+  `item_type` VARCHAR(20) NOT NULL,
+  `source_id` BIGINT UNSIGNED NULL,
+  `title_snapshot` VARCHAR(120) NOT NULL,
+  `feedback_snapshot` VARCHAR(500) NOT NULL,
+  `sort_order` INT UNSIGNED NOT NULL DEFAULT 1,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_retrospect_milestones_report` (`report_id`, `sort_order`),
+  CONSTRAINT `fk_retrospect_milestones_report`
+    FOREIGN KEY (`report_id`) REFERENCES `retrospect_reports` (`id`)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT `chk_retrospect_milestones_type`
+    CHECK (`item_type` IN ('goal', 'routine'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `notes` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,
@@ -780,4 +802,31 @@ CREATE TABLE IF NOT EXISTS `notes` (
     FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
     ON DELETE CASCADE
     ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `wellness_entries` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `calendar_event_id` BIGINT UNSIGNED NULL,
+  `entry_date` DATE NOT NULL,
+  `entry_type` VARCHAR(20) NOT NULL,
+  `occurred_time` TIME NULL,
+  `start_time` TIME NULL,
+  `end_time` TIME NULL,
+  `detail` VARCHAR(160) NULL,
+  `note` TEXT NULL,
+  `rating` TINYINT UNSIGNED NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_wellness_user_date` (`user_id`, `entry_date`, `entry_type`),
+  UNIQUE KEY `uq_wellness_calendar_event` (`calendar_event_id`),
+  CONSTRAINT `fk_wellness_user`
+    FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_wellness_calendar_event`
+    FOREIGN KEY (`calendar_event_id`) REFERENCES `calendar_events` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `chk_wellness_type`
+    CHECK (`entry_type` IN ('sleep', 'meal', 'snack', 'exercise', 'rest')),
+  CONSTRAINT `chk_wellness_rating`
+    CHECK (`rating` IS NULL OR (`rating` BETWEEN 1 AND 5))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

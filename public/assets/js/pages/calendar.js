@@ -10,6 +10,9 @@
   const quickMemoSheet = document.querySelector('[data-quick-memo-sheet]');
   const conditionSheet = document.querySelector('[data-condition-sheet]');
   const retrospectPreview = document.querySelector('[data-retrospect-preview]');
+  const retrospectPreviewTitle = document.querySelector('[data-retrospect-preview-title]');
+  const retrospectPreviewBody = document.querySelector('[data-retrospect-preview-body]');
+  const retrospectPreviewMoves = Array.from(document.querySelectorAll('[data-retrospect-preview-move]'));
   const eventForm = document.getElementById('calendarEventForm');
   const titleInput = document.getElementById('calendarEventTitle');
   const startInput = document.getElementById('calendarStartIndex');
@@ -23,11 +26,16 @@
   const deleteEventId = document.getElementById('calendarDeleteEventId');
   const editTitleInput = document.getElementById('calendarEditEventTitle');
   const editMemoInput = document.getElementById('calendarEditMemo');
+  const editStartInput = document.getElementById('calendarEditStartIndex');
+  const editEndInput = document.getElementById('calendarEditEndIndex');
+  const editTimeFields = document.querySelector('[data-calendar-edit-time-fields]');
   const createEnergyGroup = document.getElementById('calendarEnergyGroup');
   const createEnergyValue = eventForm?.querySelector('input[name="execution_energy_value"]');
   const editEnergyGroup = document.getElementById('calendarEditEnergyGroup');
   const editEnergyValue = document.getElementById('calendarEditEnergyValue');
   const editEnergyPreserve = document.getElementById('calendarEditEnergyPreserve');
+  const createWellnessFields = eventForm?.querySelector('[data-wellness-fields]');
+  const editWellnessFields = document.getElementById('calendarEventEditForm')?.querySelector('[data-wellness-fields]');
   const planPicker = document.querySelector('.calendar-plan-picker');
   const createPlanGroup = document.querySelector('[data-create-plan-group]');
   const createRoutineGroup = document.querySelector('[data-create-routine-group]');
@@ -45,6 +53,7 @@
   const planItemGoal = document.getElementById('calendarPlanItemGoal');
   const planBlockTemplatePicker = document.getElementById('calendarPlanBlockTemplate');
   const planScheduleType = document.getElementById('calendarPlanScheduleType');
+  const planEstimatedDuration = document.getElementById('calendarPlanEstimatedDuration');
   const planTimeToggle = document.getElementById('calendarPlanTimeToggle');
   const planCreateTimeFields = document.querySelector('[data-plan-create-time-fields]');
   const planStartInput = document.getElementById('calendarPlanStartIndex');
@@ -73,7 +82,7 @@
     hourCycle: 'h23',
   });
 
-  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !conditionSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !timeFields || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !planLayer || !actualLayer || !planScheduleType || !planTimeToggle || !planCreateTimeFields || !planStartInput || !planEndInput || !planEditScheduleType || !planEditTimeFields || !planEditStart || !planEditEnd || !timeGrid) {
+  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !conditionSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !timeFields || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !editStartInput || !editEndInput || !editTimeFields || !planLayer || !actualLayer || !planScheduleType || !planTimeToggle || !planCreateTimeFields || !planStartInput || !planEndInput || !planEditScheduleType || !planEditTimeFields || !planEditStart || !planEditEnd || !timeGrid) {
     return;
   }
 
@@ -138,6 +147,26 @@
     }
   }
 
+  function focusCurrentTimeOnce() {
+    if (page.dataset.currentTimeFocused === '1' || window.location.hash || window.scrollY > 24) return;
+
+    const navigation = window.performance?.getEntriesByType?.('navigation')?.[0];
+    if (navigation?.type === 'back_forward') return;
+
+    const currentTime = getUserCurrentTime();
+    if (page.dataset.calendarDate !== currentTime.date) return;
+
+    const currentCell = daygrid.querySelector('.cell.current-cell');
+    if (!currentCell) return;
+
+    page.dataset.currentTimeFocused = '1';
+    const targetTop = currentCell.getBoundingClientRect().top + window.scrollY - (window.innerHeight * .42);
+    window.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }
+
   let currentTimeCellTimer = null;
   let currentTimeCellInterval = null;
 
@@ -160,6 +189,7 @@
   }
 
   function openPanel(panel) {
+    syncCalendarViewport();
     layer.hidden = false;
     eventSheet.hidden = panel !== eventSheet;
     eventEditSheet.hidden = panel !== eventEditSheet;
@@ -171,6 +201,14 @@
     retrospectPreview.hidden = panel !== retrospectPreview;
     document.body.classList.add('is-ui-open');
     closeFab();
+  }
+
+  function syncCalendarViewport() {
+    const viewport = window.visualViewport;
+    const height = viewport?.height || window.innerHeight;
+    const keyboardOffset = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+    layer.style.setProperty('--calendar-visual-height', `${height}px`);
+    layer.style.setProperty('--calendar-keyboard-offset', `${keyboardOffset}px`);
   }
 
   function focusSheetInput(input) {
@@ -204,6 +242,7 @@
     quickMemoSheet.hidden = true;
     conditionSheet.hidden = true;
     retrospectPreview.hidden = true;
+    document.querySelectorAll('[data-actual-form]').forEach(form => showActualFormView(form, 'main'));
     document.querySelectorAll('[data-quick-tag-create]').forEach(editor => closeQuickTagEditor(editor));
     document.body.classList.remove('is-ui-open');
   }
@@ -242,13 +281,18 @@
     createMemoInput.value = '';
     if (sourceTabs) {
       sourceTabs.hidden = isUnscheduled;
+      sourceTabs.open = false;
       setSourceTab('new');
     }
     if (unscheduledManager) {
       unscheduledManager.hidden = !isUnscheduled;
     }
     if (createPlanGroup) {
-      createPlanGroup.hidden = isUnscheduled;
+      const picker = createPlanGroup.closest('[data-actual-view="plan"]');
+      const summaryRow = eventForm.querySelector('[data-actual-view-open="plan"]');
+      if (picker) picker.hidden = isUnscheduled;
+      if (summaryRow) summaryRow.hidden = isUnscheduled;
+      createPlanGroup.hidden = false;
     }
     if (createRoutineGroup) {
       createRoutineGroup.hidden = isUnscheduled;
@@ -258,6 +302,7 @@
     if (noneOption) {
       noneOption.checked = true;
     }
+    syncPlanLinkSummary(createPlanGroup);
 
     const emptyTagOption = eventForm.querySelector('input[name="calendar_tag_id"][value=""]');
     if (emptyTagOption) {
@@ -272,9 +317,13 @@
     }
     checkRadio(eventForm, 'execution_energy_type', '');
     if (createEnergyValue) createEnergyValue.value = '';
+    setWellnessFields(createWellnessFields, {}, !isUnscheduled);
+    updatePlanRecommendations(eventForm, selectedStart, selectedEnd);
+    resetActualDisclosures(eventForm);
+    showActualFormView(eventForm, 'main');
 
     openPanel(eventSheet);
-    focusSheetInput(focusTime && !isUnscheduled ? startInput : titleInput);
+    focusSheetInput(titleInput);
   }
 
   function checkRadio(form, name, value) {
@@ -291,6 +340,182 @@
     }
   }
 
+  function syncPlanLinkSummary(group) {
+    if (!group) return;
+    const form = group.closest('form');
+    const summary = form?.querySelector('[data-plan-link-summary]');
+    const detail = form?.querySelector('[data-plan-link-detail]');
+    const action = form?.querySelector('[data-selection-action]');
+    const selected = group.querySelector('input[name="daily_plan_item_id"]:checked');
+    if (!summary) return;
+    const hasPlan = Boolean(selected?.value);
+    summary.textContent = hasPlan
+      ? (selected.dataset.planSummary || selected.closest('.calendar-plan-link')?.querySelector('span')?.textContent?.trim() || '연결된 계획')
+      : '연결하기';
+    if (detail) detail.textContent = hasPlan ? (selected.dataset.planDetail || '') : '';
+    if (action) action.textContent = hasPlan ? '변경 ›' : '연결하기 ›';
+  }
+
+  function syncActualFormSummary(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+
+    const selectedRoutines = form.querySelectorAll('input[name="routine_ids[]"]:checked:not(:disabled)').length;
+    const routineSummary = form.querySelector('[data-actual-summary="routine"]');
+    if (routineSummary) routineSummary.textContent = selectedRoutines > 0 ? `${selectedRoutines}개 선택됨` : '연결 없음';
+    form.querySelectorAll('[data-routine-state-label]').forEach(label => {
+      const input = label.closest('.calendar-routine-link')?.querySelector('input[name="routine_ids[]"]');
+      label.textContent = input?.checked ? '저장 시 완료' : '미완료';
+    });
+    form.querySelectorAll('[data-routine-done]').forEach(button => {
+      button.textContent = `완료${selectedRoutines > 0 ? ` (${selectedRoutines})` : ''}`;
+    });
+
+    const wellness = form.querySelector('input[name="wellness_type"]:checked');
+    const wellnessSummary = form.querySelector('[data-actual-summary="wellness"]');
+    if (wellnessSummary) wellnessSummary.textContent = wellness?.dataset.summaryLabel || '기록 안 함';
+
+    const memo = form.querySelector('textarea[name="memo"]');
+    const memoSummary = form.querySelector('[data-actual-summary="memo"]');
+    if (memoSummary) {
+      const content = memo?.value.trim() || '';
+      memoSummary.textContent = content === '' ? '메모 없음' : (content.length > 24 ? `${content.slice(0, 24)}…` : content);
+    }
+
+    const energyGroup = form.querySelector('select[name="execution_energy_group_id"]');
+    const energyType = form.querySelector('input[name="execution_energy_type"]:checked')?.value || '';
+    const energyValue = form.querySelector('input[name="execution_energy_value"]');
+    const energyMain = form.querySelector('[data-energy-summary-main]');
+    const energyDetail = form.querySelector('[data-energy-summary-detail]');
+    const selectedGroup = energyGroup?.selectedOptions?.[0];
+    if (energyMain && selectedGroup) {
+      const isOverride = energyType === 'consume' || energyType === 'recover';
+      const effectType = isOverride ? energyType : (selectedGroup.dataset.energyType || 'consume');
+      const value = isOverride ? (energyValue?.value || '—') : (selectedGroup.dataset.energyValue || '—');
+      const name = isOverride ? '개별 설정' : (selectedGroup.dataset.energyName || selectedGroup.textContent.trim());
+      energyMain.textContent = `${name} ${effectType === 'recover' ? '+' : '−'}${value}`;
+      energyDetail.textContent = isOverride ? '개별 설정 · 변경' : '그룹 기준 적용 · 변경';
+      if (energyValue) energyValue.hidden = !isOverride;
+    }
+  }
+
+  function resetActualDisclosures(form, openFilled = false) {
+    if (!(form instanceof HTMLFormElement)) return;
+    form.querySelectorAll('[data-actual-disclosure]').forEach(disclosure => {
+      const type = disclosure.dataset.actualDisclosure;
+      const hasValue = type === 'memo'
+        ? Boolean(form.querySelector('textarea[name="memo"]')?.value.trim())
+        : type === 'wellness' && Boolean(form.querySelector('input[name="wellness_type"]:checked')?.value);
+      disclosure.open = openFilled && hasValue;
+    });
+    syncActualFormSummary(form);
+  }
+
+  function updatePlanRecommendations(form, start, end) {
+    if (!(form instanceof HTMLFormElement)) return;
+    form.querySelectorAll('.calendar-plan-link').forEach(label => {
+      label.classList.remove('is-recommended');
+      delete label.dataset.recommendationRank;
+    });
+    if (!Number.isInteger(start) || !Number.isInteger(end)) return;
+    const candidates = Array.from(form.querySelectorAll('input[name="daily_plan_item_id"][data-plan-start-index]')).map(input => {
+      const planStart = Number.parseInt(input.dataset.planStartIndex || '', 10);
+      const planEnd = Number.parseInt(input.dataset.planEndIndex || '', 10);
+      if (!Number.isInteger(planStart) || !Number.isInteger(planEnd) || input.disabled) return null;
+      const distance = rangeOverlaps(start, end, planStart, planEnd)
+        ? 0
+        : Math.min(Math.abs(start - planEnd), Math.abs(end - planStart));
+      return { input, planStart, distance };
+    }).filter(Boolean);
+    candidates.sort((left, right) => left.distance - right.distance || left.planStart - right.planStart);
+    candidates.slice(0, 3).forEach((candidate, index) => {
+      const row = candidate.input.closest('.calendar-plan-link');
+      row?.classList.add('is-recommended');
+      if (row) row.dataset.recommendationRank = String(index + 1);
+    });
+  }
+
+  const actualViewSnapshots = new WeakMap();
+
+  function showActualFormView(form, viewName) {
+    if (!(form instanceof HTMLFormElement)) return;
+    form.querySelectorAll('[data-actual-view]').forEach(view => {
+      view.hidden = view.dataset.actualView !== viewName;
+    });
+    form.dataset.activeActualView = viewName;
+    const activeView = form.querySelector(`[data-actual-view="${viewName}"]`);
+    const activeTitle = activeView?.querySelector('.ui-form-sheet-header strong[id]');
+    if (activeTitle?.id) form.closest('[role="dialog"]')?.setAttribute('aria-labelledby', activeTitle.id);
+    const body = activeView?.querySelector('.ui-form-sheet-body');
+    if (body instanceof HTMLElement) body.scrollTop = 0;
+  }
+
+  function snapshotActualSelection(form, viewName) {
+    const selectedPlan = form.querySelector('input[name="daily_plan_item_id"]:checked');
+    actualViewSnapshots.set(form, {
+      viewName,
+      title: form.querySelector('input[name="title"]')?.value || '',
+      planId: selectedPlan?.value || '',
+      routines: Array.from(form.querySelectorAll('input[name="routine_ids[]"]:checked')).map(input => input.value),
+    });
+  }
+
+  function restoreActualSelection(form) {
+    const snapshot = actualViewSnapshots.get(form);
+    if (!snapshot) return;
+    const title = form.querySelector('input[name="title"]');
+    if (title) title.value = snapshot.title;
+    checkRadio(form, 'daily_plan_item_id', snapshot.planId);
+    form.querySelectorAll('input[name="routine_ids[]"]').forEach(input => {
+      input.checked = snapshot.routines.includes(input.value);
+    });
+    syncPlanLinkSummary(form.querySelector('[data-create-plan-group], [data-edit-plan-group]'));
+    syncActualFormSummary(form);
+  }
+
+  function setPlanFilter(view, filter) {
+    if (!(view instanceof HTMLElement)) return;
+    view.querySelectorAll('[data-plan-filter]').forEach(button => {
+      button.setAttribute('aria-selected', button.dataset.planFilter === filter ? 'true' : 'false');
+    });
+    view.querySelectorAll('[data-plan-filter-item]').forEach(row => {
+      const input = row.querySelector('input[name="daily_plan_item_id"]');
+      row.hidden = filter === 'recommended' && !row.classList.contains('is-recommended') && !input?.checked;
+      row.style.order = filter === 'recommended' ? (row.dataset.recommendationRank || '99') : '';
+    });
+    const list = view.querySelector('.calendar-compact-selection-list');
+    const hasVisible = Array.from(view.querySelectorAll('[data-plan-filter-item]')).some(row => !row.hidden);
+    list?.classList.toggle('has-no-recommendations', filter === 'recommended' && !hasVisible);
+  }
+
+  function setWellnessFields(container, values = {}, enabled = true) {
+    if (!container) return;
+    const type = enabled ? (values.type || '') : '';
+    container.hidden = !enabled;
+    container.querySelectorAll('input, textarea').forEach(control => { control.disabled = !enabled; });
+    const typeInput = Array.from(container.querySelectorAll('input[name="wellness_type"]'))
+      .find(input => input.value === type) || container.querySelector('input[name="wellness_type"][value=""]');
+    if (typeInput) typeInput.checked = true;
+    const details = container.querySelector('[data-wellness-details]');
+    if (details) details.hidden = type === '';
+    const detail = container.querySelector('input[name="wellness_detail"]');
+    const note = container.querySelector('textarea[name="wellness_note"]');
+    if (detail) detail.value = values.detail || '';
+    if (note) note.value = values.note || '';
+    container.querySelectorAll('input[name="wellness_rating"]').forEach(input => {
+      input.checked = input.value === String(values.rating || '');
+    });
+  }
+
+  [createWellnessFields, editWellnessFields].forEach(container => {
+    container?.querySelectorAll('input[name="wellness_type"]').forEach(input => {
+      input.addEventListener('change', () => {
+        const details = container.querySelector('[data-wellness-details]');
+        if (details) details.hidden = input.value === '';
+        syncActualFormSummary(container.closest('form'));
+      });
+    });
+  });
+
   function openEditSheet(button) {
     const form = document.getElementById('calendarEventEditForm');
     if (!form) return;
@@ -300,12 +525,25 @@
     editEventId.value = eventId;
     editScheduleTypeInput.value = scheduleType;
     deleteEventId.value = eventId;
+    const editStart = Number.parseInt(button.dataset.eventStartIndex || '', 10);
+    const editEnd = Number.parseInt(button.dataset.eventEndIndex || '', 10);
+    const isTimed = scheduleType === 'timed' && Number.isInteger(editStart) && Number.isInteger(editEnd);
+    editTimeFields.hidden = !isTimed;
+    editStartInput.disabled = !isTimed;
+    editEndInput.disabled = !isTimed;
+    editStartInput.required = isTimed;
+    editEndInput.required = isTimed;
+    if (isTimed) {
+      editStartInput.value = String(editStart);
+      editEndInput.value = String(editEnd);
+    }
     editTitleInput.value = button.dataset.eventTitle || '';
     editMemoInput.value = button.dataset.eventMemoTarget
       ? (document.getElementById(button.dataset.eventMemoTarget)?.value || '')
       : (button.dataset.eventMemo || '');
     checkRadio(form, 'calendar_tag_id', button.dataset.eventTagId || '');
     checkRadio(form, 'daily_plan_item_id', button.dataset.eventDailyPlanItemId || '');
+    syncPlanLinkSummary(editPlanGroup);
     form.dataset.originalPlanId = button.dataset.eventDailyPlanItemId || '';
     if (editEnergyGroup) {
       const savedGroupId = button.dataset.eventEnergyGroupId || '';
@@ -319,6 +557,14 @@
     if (editEnergyValue) {
       editEnergyValue.value = isEnergyOverride ? (button.dataset.eventEnergyValue || '') : '';
     }
+    setWellnessFields(editWellnessFields, {
+      type: button.dataset.eventWellnessType || '',
+      detail: button.dataset.eventWellnessDetail || '',
+      note: button.dataset.eventWellnessNote || '',
+      rating: button.dataset.eventWellnessRating || '',
+    }, scheduleType === 'timed');
+    form.querySelectorAll('input[name="routine_ids[]"]:not(:disabled)').forEach(input => { input.checked = false; });
+    updatePlanRecommendations(form, editStart, editEnd);
 
     const currentTagId = button.dataset.eventTagId || '';
     form.querySelectorAll('[data-tag-option]').forEach(label => {
@@ -349,19 +595,34 @@
       const hasSelectablePlan = currentPlanId !== '' || Array.from(
         editPlanGroup.querySelectorAll('input[name="daily_plan_item_id"]:not([value=""])')
       ).some(input => !input.disabled);
-      editPlanGroup.hidden = scheduleType === 'unscheduled' || !hasSelectablePlan;
+      const picker = editPlanGroup.closest('[data-actual-view="plan"]');
+      const summaryRow = form.querySelector('[data-actual-view-open="plan"]');
+      if (picker) picker.hidden = scheduleType === 'unscheduled' || !hasSelectablePlan;
+      if (summaryRow) summaryRow.hidden = scheduleType === 'unscheduled' || !hasSelectablePlan;
+      editPlanGroup.hidden = false;
+      syncPlanLinkSummary(editPlanGroup);
     }
 
+    resetActualDisclosures(form, true);
+    showActualFormView(form, 'main');
+
     openPanel(eventEditSheet);
-    focusSheetInput(editTitleInput);
+    focusSheetInput(eventEditSheet.querySelector('[data-calendar-close]'));
   }
 
   let calendarMode = 'actual';
 
-  function setCalendarMode(mode) {
+  function setCalendarMode(mode, syncUrl = false) {
     calendarMode = mode === 'plan' ? 'plan' : 'actual';
+    page.dataset.calendarMode = calendarMode;
     document.querySelectorAll('[data-calendar-mode]').forEach(button => {
       button.setAttribute('aria-selected', button.dataset.calendarMode === calendarMode ? 'true' : 'false');
+    });
+    document.querySelectorAll('input[name="calendar_mode"]').forEach(input => { input.value = calendarMode; });
+    document.querySelectorAll('a[href^="/calendar?date="]').forEach(link => {
+      const url = new URL(link.href, window.location.origin);
+      url.searchParams.set('mode', calendarMode);
+      link.href = `${url.pathname}${url.search}${url.hash}`;
     });
     planLayer.hidden = false;
     planLayer.classList.toggle('is-background', calendarMode === 'actual');
@@ -369,6 +630,11 @@
     document.querySelectorAll('[data-calendar-empty-mode]').forEach(prompt => {
       prompt.hidden = prompt.dataset.calendarEmptyMode !== calendarMode;
     });
+    if (syncUrl) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', calendarMode);
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
   }
 
   function setPlanCreateScheduleType(scheduleType) {
@@ -393,10 +659,13 @@
     planItemTitle.value = option.dataset.title || '';
     checkRadio(planItemForm, 'importance', option.dataset.importance || 'D');
     if (planItemGoal) planItemGoal.value = option.dataset.goalId || '';
+    const duration = Number.parseInt(option.dataset.durationIndex || '', 10);
+    if (planEstimatedDuration) {
+      planEstimatedDuration.value = Number.isInteger(duration) && duration > 0 ? String(duration * 10) : '';
+    }
     if (planScheduleType.value !== 'timed') return;
 
     const start = Number.parseInt(planStartInput.value, 10);
-    const duration = Number.parseInt(option.dataset.durationIndex || '', 10);
     if (!Number.isInteger(start) || !Number.isInteger(duration) || duration < 1) return;
 
     const desiredEnd = start + duration;
@@ -436,6 +705,7 @@
     setPlanCreateScheduleType(isTimed ? 'timed' : 'unscheduled');
     planItemTitle.value = '';
     if (planBlockTemplatePicker) planBlockTemplatePicker.value = '';
+    if (planEstimatedDuration) planEstimatedDuration.value = '';
     if (planItemForm) checkRadio(planItemForm, 'importance', 'D');
     if (planItemGoal) planItemGoal.value = '';
     openPanel(planItemSheet);
@@ -495,7 +765,7 @@
   });
 
   document.querySelectorAll('[data-calendar-mode]').forEach(button => {
-    button.addEventListener('click', () => setCalendarMode(button.dataset.calendarMode));
+    button.addEventListener('click', () => setCalendarMode(button.dataset.calendarMode, true));
   });
   document.querySelectorAll('[data-plan-item-open]').forEach(button => {
     button.addEventListener('click', () => openPlanItemEditSheet(button));
@@ -505,7 +775,8 @@
     const expanded = button.getAttribute('aria-expanded') === 'true';
     document.querySelectorAll('[data-untimed-plan-extra]').forEach(item => { item.hidden = expanded; });
     button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-    button.textContent = expanded ? `나머지 ${button.dataset.hiddenCount || '0'}개 보기` : '접기';
+    button.setAttribute('aria-label', expanded ? '시간 미정 계획 펼치기' : '시간 미정 계획 접기');
+    button.textContent = expanded ? '펼치기' : '접기';
   });
   document.querySelectorAll('[data-plan-add-open]').forEach(button => {
     button.addEventListener('click', () => openPlanItemSheet());
@@ -514,7 +785,10 @@
     setPlanCreateScheduleType(planTimeToggle.checked ? 'timed' : 'unscheduled');
     if (planTimeToggle.checked) await applySelectedPlanBlockTemplate();
   });
-  planBlockTemplatePicker?.addEventListener('change', applySelectedPlanBlockTemplate);
+  planBlockTemplatePicker?.addEventListener('change', () => {
+    if (planBlockTemplatePicker.value === '' && planEstimatedDuration) planEstimatedDuration.value = '';
+    applySelectedPlanBlockTemplate();
+  });
   planStartInput.addEventListener('change', async () => {
     if (planBlockTemplatePicker?.value) {
       await applySelectedPlanBlockTemplate();
@@ -589,10 +863,75 @@
     }
   });
 
+  document.querySelectorAll('[data-actual-form]').forEach(form => {
+    form.querySelectorAll('[data-actual-view-open]').forEach(button => {
+      button.addEventListener('click', () => {
+        const viewName = button.dataset.actualViewOpen;
+        snapshotActualSelection(form, viewName);
+        const view = form.querySelector(`[data-actual-view="${viewName}"]`);
+        if (viewName === 'plan') {
+          const hasRecommended = Boolean(view?.querySelector('[data-plan-filter-item].is-recommended:not(.is-disabled)'));
+          setPlanFilter(view, hasRecommended ? 'recommended' : 'all');
+        } else if (viewName === 'routine') {
+          const search = view?.querySelector('[data-routine-search]');
+          if (search) search.value = '';
+          view?.querySelectorAll('[data-routine-filter-item]').forEach(row => { row.hidden = false; });
+        }
+        showActualFormView(form, viewName);
+        focusSheetInput(view?.querySelector('[data-routine-search], [data-plan-filter-item]:not([hidden]) input:not([disabled]), [data-routine-filter-item]:not([hidden]) input:not([disabled]), button') || button);
+      });
+    });
+    form.querySelectorAll('[data-actual-view-cancel]').forEach(button => {
+      button.addEventListener('click', () => {
+        restoreActualSelection(form);
+        showActualFormView(form, 'main');
+        focusSheetInput(form.querySelector(`[data-actual-view-open="${actualViewSnapshots.get(form)?.viewName || ''}"]`) || form.querySelector('[data-calendar-close]'));
+      });
+    });
+    form.querySelectorAll('[data-actual-view-done]').forEach(button => {
+      button.addEventListener('click', () => {
+        syncPlanLinkSummary(form.querySelector('[data-create-plan-group], [data-edit-plan-group]'));
+        syncActualFormSummary(form);
+        const viewName = form.dataset.activeActualView || '';
+        showActualFormView(form, 'main');
+        focusSheetInput(form.querySelector(`[data-actual-view-open="${viewName}"]`) || form.querySelector('[data-calendar-close]'));
+      });
+    });
+    form.querySelectorAll('[data-plan-filter]').forEach(button => {
+      button.addEventListener('click', () => setPlanFilter(button.closest('[data-actual-view="plan"]'), button.dataset.planFilter || 'all'));
+    });
+    form.querySelectorAll('[data-plan-clear]').forEach(button => {
+      button.addEventListener('click', () => {
+        checkRadio(form, 'daily_plan_item_id', '');
+        syncPlanLinkSummary(form.querySelector('[data-create-plan-group], [data-edit-plan-group]'));
+      });
+    });
+    form.querySelectorAll('[data-routine-clear]').forEach(button => {
+      button.addEventListener('click', () => {
+        form.querySelectorAll('input[name="routine_ids[]"]:not(:disabled)').forEach(input => { input.checked = false; });
+        syncActualFormSummary(form);
+      });
+    });
+    form.querySelectorAll('[data-routine-search]').forEach(input => {
+      input.addEventListener('input', () => {
+        const query = input.value.trim().toLocaleLowerCase();
+        form.querySelectorAll('[data-routine-filter-item]').forEach(row => {
+          row.hidden = query !== '' && !row.textContent.toLocaleLowerCase().includes(query);
+        });
+      });
+    });
+  });
+
   eventForm.querySelectorAll('input[name="daily_plan_item_id"][data-plan-title]').forEach(input => {
     input.addEventListener('change', () => {
-      if (input.checked) titleInput.value = input.dataset.planTitle || '';
+      if (input.checked) {
+        titleInput.value = input.dataset.planTitle || '';
+        syncPlanLinkSummary(createPlanGroup);
+      }
     });
+  });
+  eventForm.querySelector('input[name="daily_plan_item_id"][value=""]')?.addEventListener('change', () => {
+    syncPlanLinkSummary(createPlanGroup);
   });
 
   document.getElementById('calendarEventEditForm')?.querySelectorAll('input[name="daily_plan_item_id"][data-plan-title]').forEach(input => {
@@ -601,7 +940,26 @@
       if (input.checked && input.value !== (form?.dataset.originalPlanId || '')) {
         editTitleInput.value = input.dataset.planTitle || '';
       }
+      syncPlanLinkSummary(editPlanGroup);
     });
+  });
+  document.getElementById('calendarEventEditForm')?.querySelector('input[name="daily_plan_item_id"][value=""]')?.addEventListener('change', () => {
+    syncPlanLinkSummary(editPlanGroup);
+  });
+  document.querySelectorAll('[data-actual-form]').forEach(form => {
+    const refresh = () => {
+      syncActualFormSummary(form);
+      const startControl = form.querySelector('select[name="start_index"]');
+      const endControl = form.querySelector('select[name="end_index"]');
+      updatePlanRecommendations(
+        form,
+        Number.parseInt(startControl?.value || '', 10),
+        Number.parseInt(endControl?.value || '', 10)
+      );
+    };
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    refresh();
   });
   document.getElementById('calendarEventEditForm')?.querySelectorAll(
     'select[name="execution_energy_group_id"], input[name="execution_energy_type"], input[name="execution_energy_value"]'
@@ -610,7 +968,7 @@
       if (editEnergyPreserve) editEnergyPreserve.value = '0';
     });
   });
-  setCalendarMode('actual');
+  setCalendarMode(page.dataset.calendarMode || 'actual');
 
   document.getElementById('calendarPlanItemDeleteForm')?.addEventListener('submit', async event => {
     const deleteForm = event.currentTarget;
@@ -647,7 +1005,7 @@
         }
 
         closePanels();
-        window.location.assign(payload.redirect || `/calendar?date=${encodeURIComponent(page.dataset.calendarDate)}`);
+        window.location.assign(payload.redirect || `/calendar?date=${encodeURIComponent(page.dataset.calendarDate)}&mode=${encodeURIComponent(calendarMode)}`);
       } catch (error) {
         window.LifeFlowToast?.show?.(error.message || '계획 일정을 삭제하지 못했습니다.');
       }
@@ -656,6 +1014,10 @@
 
 
   startCurrentTimeCellUpdates();
+
+  const scheduleCurrentTimeFocus = () => window.setTimeout(focusCurrentTimeOnce, 80);
+  if (document.readyState === 'complete') scheduleCurrentTimeFocus();
+  else window.addEventListener('load', scheduleCurrentTimeFocus, { once: true });
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
@@ -673,6 +1035,36 @@
     button.addEventListener('click', () => {
       openPanel(retrospectPreview);
     });
+  });
+
+  async function loadRetrospectPreview(date) {
+    if (!retrospectPreviewBody || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    retrospectPreview.setAttribute('aria-busy', 'true');
+    retrospectPreviewMoves.forEach(button => { button.disabled = true; });
+    try {
+      const response = await fetch(`/retrospect/report/preview?date=${encodeURIComponent(date)}`, {
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.message || '발행 회고를 불러오지 못했습니다.');
+      retrospectPreviewBody.innerHTML = payload.html || '';
+      retrospectPreviewBody.scrollTop = 0;
+      if (retrospectPreviewTitle) retrospectPreviewTitle.textContent = `${payload.dateTitle || payload.date} 발행 회고`;
+      retrospectPreviewMoves.forEach(button => {
+        const targetDate = button.dataset.retrospectPreviewMove === 'previous' ? payload.previous : payload.next;
+        button.dataset.reportDate = targetDate || '';
+        button.disabled = !targetDate;
+      });
+    } catch (error) {
+      showCalendarToast(error.message || '발행 회고를 불러오지 못했습니다.');
+      retrospectPreviewMoves.forEach(button => { button.disabled = !button.dataset.reportDate; });
+    } finally {
+      retrospectPreview.removeAttribute('aria-busy');
+    }
+  }
+
+  retrospectPreviewMoves.forEach(button => {
+    button.addEventListener('click', () => loadRetrospectPreview(button.dataset.reportDate || ''));
   });
 
   document.querySelectorAll('[data-plan-settings-open]').forEach(button => {
@@ -704,6 +1096,7 @@
       const planItemId = button.dataset.planItemId || '';
       if (planItemId !== '') {
         checkRadio(eventForm, 'daily_plan_item_id', planItemId);
+        syncPlanLinkSummary(createPlanGroup);
         titleInput.value = button.dataset.planTitle || '';
         focusSheetInput(titleInput);
       }
@@ -736,6 +1129,8 @@
       titleInput.value = input.dataset.eventTitle || '';
       createMemoInput.value = input.closest('.calendar-source-option')?.querySelector('[data-source-event-memo]')?.value || '';
       checkRadio(eventForm, 'calendar_tag_id', input.dataset.eventTagId || '');
+      syncActualFormSummary(eventForm);
+      sourceTabs.open = false;
       focusSheetInput(titleInput);
     });
   });
@@ -895,6 +1290,23 @@
     }
   });
 
+  editStartInput.addEventListener('change', () => {
+    const start = Number.parseInt(editStartInput.value, 10);
+    const end = Number.parseInt(editEndInput.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      editEndInput.value = String(Math.min(start + 6, 144));
+    }
+  });
+
+  editEndInput.addEventListener('change', () => {
+    const start = Number.parseInt(editStartInput.value, 10);
+    const end = Number.parseInt(editEndInput.value, 10);
+    if (Number.isInteger(start) && (!Number.isInteger(end) || end <= start)) {
+      editEndInput.value = String(Math.min(start + 1, 144));
+      showCalendarToast('종료시간은 시작시간보다 늦어야 합니다.');
+    }
+  });
+
   eventForm.addEventListener('submit', event => {
     if (scheduleTypeInput.value === 'timed') {
       const start = Number.parseInt(startInput.value, 10);
@@ -915,6 +1327,21 @@
     if (scheduleTypeInput.value === 'timed' && sourceTab === 'unscheduled' && !sourceEventIdInput.value) {
       event.preventDefault();
       showCalendarToast('시간을 배치할 일정을 선택해주세요.');
+    }
+  });
+
+  document.getElementById('calendarEventEditForm')?.addEventListener('submit', event => {
+    if (editScheduleTypeInput.value !== 'timed') return;
+    const start = Number.parseInt(editStartInput.value, 10);
+    const end = Number.parseInt(editEndInput.value, 10);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 144 || end <= start) {
+      event.preventDefault();
+      showCalendarToast('시작시간보다 늦은 종료시간을 선택해주세요.');
+      return;
+    }
+    if (hasOccupiedRange(start, end, '[data-event-open][data-event-start-index]', 'eventStartIndex', 'eventEndIndex', 'eventId', editEventId.value)) {
+      event.preventDefault();
+      showCalendarToast('이미 등록된 실제 일정과 시간이 겹칩니다.');
     }
   });
 
@@ -956,7 +1383,7 @@
   document.querySelectorAll('[data-calendar-date-picker]').forEach(input => {
     input.addEventListener('change', () => {
       if (/^\d{4}-\d{2}-\d{2}$/.test(input.value)) {
-        window.location.href = `/calendar?date=${encodeURIComponent(input.value)}`;
+        window.location.href = `/calendar?date=${encodeURIComponent(input.value)}&mode=${encodeURIComponent(calendarMode)}`;
       }
     });
   });
@@ -1004,7 +1431,7 @@
 
       suppressClick = true;
       window.setTimeout(() => { suppressClick = false; }, 500);
-      window.location.href = `/calendar?date=${encodeURIComponent(targetDate)}`;
+      window.location.href = `/calendar?date=${encodeURIComponent(targetDate)}&mode=${encodeURIComponent(calendarMode)}`;
     }
 
     if (window.PointerEvent) {
@@ -1138,6 +1565,13 @@
 
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && !layer.hidden) {
+      const activeForm = [eventForm, document.getElementById('calendarEventEditForm')]
+        .find(form => form && form.dataset.activeActualView && form.dataset.activeActualView !== 'main');
+      if (activeForm) {
+        restoreActualSelection(activeForm);
+        showActualFormView(activeForm, 'main');
+        return;
+      }
       closePanels();
     }
   });
@@ -1146,6 +1580,7 @@
     let viewportResizeTimer = null;
 
     window.visualViewport.addEventListener('resize', () => {
+      syncCalendarViewport();
       window.clearTimeout(viewportResizeTimer);
       viewportResizeTimer = window.setTimeout(() => {
         const activeElement = document.activeElement;

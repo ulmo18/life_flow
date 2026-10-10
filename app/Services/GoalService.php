@@ -138,6 +138,13 @@ final class GoalService
             $branch = [];
             foreach ($childrenByParentId[$parentGoalId] ?? [] as $goal) {
                 $goal['children'] = $buildBranch((int) $goal['id']);
+                $goal['hasFocusedDescendant'] = false;
+                foreach ($goal['children'] as $child) {
+                    if (!empty($child['isFocused']) || !empty($child['hasFocusedDescendant'])) {
+                        $goal['hasFocusedDescendant'] = true;
+                        break;
+                    }
+                }
                 $goal['descendantCount'] = array_reduce(
                     $goal['children'],
                     static fn (int $count, array $child): int => $count + 1 + (int) ($child['descendantCount'] ?? 0),

@@ -28,16 +28,22 @@ final class CalendarController
             $_GET['date'] ?? null,
             $notificationSettings
         );
+        $calendarMode = $this->calendarMode($_GET['mode'] ?? null);
 
         $this->render('pages/calendar/index', [
             'title' => t('nav.today'),
             'calendar' => $calendar,
+            'calendarMode' => $calendarMode,
             'headerGuidance' => $calendar['headerGuidance'] ?? null,
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($userId, $calendar),
-            'pageStyles' => ['/assets/css/components/routine-state.css', $this->versionedAsset('/assets/css/pages/calendar.css')],
+            'pageStyles' => [
+                '/assets/css/components/routine-state.css',
+                $this->versionedAsset('/assets/css/pages/retrospect-report.css'),
+                $this->versionedAsset('/assets/css/pages/calendar.css'),
+            ],
             'pageScripts' => [
                 '/assets/js/components/time-grid-selection.js',
                 '/assets/js/components/routine-state.js',
@@ -98,7 +104,7 @@ final class CalendarController
 
         if (!$this->calendarService->updateActualEvent($this->userId(), $validation['data'])) {
             $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null), [
-                'general' => '일정 수정 중 오류가 발생했습니다. 계획 연결이나 태그를 다시 확인해주세요.',
+                'general' => '일정 수정 중 오류가 발생했습니다. 시간 겹침, 계획 연결 또는 태그를 다시 확인해주세요.',
             ]);
         }
 
@@ -216,11 +222,17 @@ final class CalendarController
         $this->redirect($path);
     }
 
-    private function calendarPath(mixed $date): string
+    private function calendarPath(mixed $date, mixed $mode = null): string
     {
         $date = is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : date('Y-m-d');
+        $mode = $this->calendarMode($mode ?? ($_POST['calendar_mode'] ?? null));
 
-        return '/calendar?date=' . rawurlencode($date);
+        return '/calendar?date=' . rawurlencode($date) . '&mode=' . rawurlencode($mode);
+    }
+
+    private function calendarMode(mixed $mode): string
+    {
+        return is_string($mode) && $mode === 'plan' ? 'plan' : 'actual';
     }
 
     private function redirect(string $path): void

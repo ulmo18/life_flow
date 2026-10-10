@@ -1,6 +1,8 @@
 <?php
 $appCssPath = dirname(__DIR__, 3) . '/public/assets/css/app.css';
 $appCssVersion = is_file($appCssPath) ? filemtime($appCssPath) : false;
+$uiCssPath = dirname(__DIR__, 3) . '/public/assets/css/components/ui.css';
+$uiCssVersion = is_file($uiCssPath) ? filemtime($uiCssPath) : false;
 $localePreference = \App\Core\I18n::normalizeLocale((string) ($_SESSION['locale_preference'] ?? 'ko'));
 ?>
 <!doctype html>
@@ -10,7 +12,7 @@ $localePreference = \App\Core\I18n::normalizeLocale((string) ($_SESSION['locale_
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e($title ?? 'LifeFlow') ?></title>
     <link rel="stylesheet" href="/assets/css/app.css<?= $appCssVersion === false ? '' : '?v=' . e((string) $appCssVersion) ?>">
-    <link rel="stylesheet" href="/assets/css/components/ui.css">
+    <link rel="stylesheet" href="/assets/css/components/ui.css<?= $uiCssVersion === false ? '' : '?v=' . e((string) $uiCssVersion) ?>">
     <link rel="stylesheet" href="/assets/css/components/toast.css">
     <?php foreach (($pageStyles ?? []) as $stylePath): ?>
         <link rel="stylesheet" href="<?= e((string) $stylePath) ?>">
@@ -29,6 +31,7 @@ $isRetrospectActive = $currentPath === '/retrospect';
 $isGoalActive = $currentPath === '/goal';
 $isMemoActive = $currentPath === '/memo';
 $isExecutionEnergyActive = $currentPath === '/execution-energy';
+$isSearchActive = $currentPath === '/search';
 $themePreference = (string) ($_SESSION['theme_preference'] ?? 'light');
 $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
 ?>
@@ -61,18 +64,32 @@ $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
-                <button
-                    class="menu-toggle"
-                    type="button"
-                    aria-label="<?= e(t('common.menu_open')) ?>"
-                    aria-controls="appAside"
-                    aria-expanded="false"
-                    data-menu-toggle
-                >
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </button>
+                <form class="header-search-panel" id="headerSearchPanel" method="get" action="/search" data-header-search-panel data-minimum-message="<?= e(t('search.minimum')) ?>" hidden>
+                    <label class="sr-only" for="headerSearchQuery"><?= e(t('nav.search')) ?></label>
+                    <input class="input" id="headerSearchQuery" name="q" type="search" minlength="2" maxlength="80" placeholder="<?= e(t('search.placeholder')) ?>" value="<?= $isSearchActive ? e(trim((string) ($_GET['q'] ?? ''))) : '' ?>" data-header-search-input required>
+                    <button class="header-search-submit" type="submit">
+                        <span><?= e(t('search.submit')) ?></span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-9 9M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+                    </button>
+                    <button class="header-search-close" type="button" aria-label="<?= e(t('search.close')) ?>" data-header-search-close>×</button>
+                </form>
+                <div class="site-header-actions">
+                    <button class="header-search-toggle" type="button" aria-label="<?= e(t('search.open')) ?>" aria-controls="headerSearchPanel" aria-expanded="false" data-header-search-toggle>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m16 16 4 4"></path></svg>
+                    </button>
+                    <button
+                        class="menu-toggle"
+                        type="button"
+                        aria-label="<?= e(t('common.menu_open')) ?>"
+                        aria-controls="appAside"
+                        aria-expanded="false"
+                        data-menu-toggle
+                    >
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                </div>
             <?php endif; ?>
         </div>
     </header>
@@ -113,6 +130,7 @@ $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
                 <div class="aside-nav-group">
                     <span class="aside-nav-label"><?= e(t('nav.tools')) ?></span>
                     <a href="/memo" <?= $isMemoActive ? 'aria-current="page"' : '' ?>><?= e(t('nav.memo')) ?></a>
+                    <a href="/search" <?= $isSearchActive ? 'aria-current="page"' : '' ?>><?= e(t('nav.search')) ?></a>
                     <a href="/tags" <?= $currentPath === '/tags' ? 'aria-current="page"' : '' ?>><?= e(t('nav.tags')) ?></a>
                 </div>
             </nav>

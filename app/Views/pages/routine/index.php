@@ -17,13 +17,6 @@ $selectedEndDate = $parsedEndDate instanceof DateTimeImmutable && $parsedEndDate
     : $defaultEndDate;
 $maximumInitialEndDate = (new DateTimeImmutable($selectedStartDate))->modify('+59 days')->format('Y-m-d');
 $selectedGoalId = (int) ($old['goal_id'] ?? 0);
-$routineSummary = $routineSummary ?? [
-    'activeCount' => 0,
-    'weekDoneCount' => 0,
-    'weekTotalCount' => 0,
-    'weekAchievementRate' => 0,
-    'streakCount' => 0,
-];
 ?>
 
 <main class="page routine-page">
@@ -36,26 +29,6 @@ $routineSummary = $routineSummary ?? [
     <?php if (!empty($errors['general'])): ?>
         <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
     <?php endif; ?>
-
-    <section class="routine-week-summary" aria-labelledby="routineWeekSummaryTitle">
-        <h2 id="routineWeekSummaryTitle">이번 주 루틴 요약</h2>
-        <div class="routine-week-metrics">
-            <article>
-                <span>전체 루틴</span>
-                <strong><b data-routine-page-active><?= e((string) $routineSummary['activeCount']) ?></b>개</strong>
-            </article>
-            <article>
-                <span>이번 주 달성률</span>
-                <strong><b data-routine-page-rate><?= e((string) $routineSummary['weekAchievementRate']) ?></b>%</strong>
-                <small><b data-routine-page-done><?= e((string) $routineSummary['weekDoneCount']) ?></b>/<b data-routine-page-total><?= e((string) $routineSummary['weekTotalCount']) ?></b>회</small>
-            </article>
-            <article>
-                <span>연속 성공</span>
-                <strong><b data-routine-page-streak><?= e((string) $routineSummary['streakCount']) ?></b>일</strong>
-                <small>활성 루틴 중 최장</small>
-            </article>
-        </div>
-    </section>
 
     <section class="routine-list-section" aria-label="루틴 목록">
         <?php if (empty($routines)): ?>
@@ -149,8 +122,8 @@ $routineSummary = $routineSummary ?? [
 <div class="routine-local-layer" data-routine-layer hidden>
     <button type="button" class="routine-local-overlay" data-routine-close aria-label="루틴 창 닫기"></button>
 
-    <section class="routine-sheet" data-routine-sheet="create" hidden aria-modal="true" role="dialog" aria-labelledby="routineCreateTitle">
-        <div class="routine-sheet-header">
+    <section class="routine-sheet ui-form-sheet" data-routine-sheet="create" hidden aria-modal="true" role="dialog" aria-labelledby="routineCreateTitle">
+        <div class="routine-sheet-header ui-form-sheet-header">
             <strong id="routineCreateTitle">루틴 추가</strong>
             <button type="button" class="ui-close-button" data-routine-close aria-label="닫기">×</button>
         </div>
@@ -212,7 +185,7 @@ $routineSummary = $routineSummary ?? [
                 <p class="field-error"><?= e((string) $errors['reminder_time']) ?></p>
             <?php endif; ?>
 
-            <button type="submit" class="btn btn-primary">저장</button>
+            <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary">저장</button></div>
         </form>
     </section>
 
@@ -274,8 +247,8 @@ $routineSummary = $routineSummary ?? [
             <?php endif; ?>
         </section>
 
-        <section class="routine-sheet" data-routine-sheet="edit-<?= e((string) $routineId) ?>" hidden aria-modal="true" role="dialog" aria-labelledby="routineEditTitle<?= e((string) $routineId) ?>">
-            <div class="routine-sheet-header">
+        <section class="routine-sheet ui-form-sheet" data-routine-sheet="edit-<?= e((string) $routineId) ?>" hidden aria-modal="true" role="dialog" aria-labelledby="routineEditTitle<?= e((string) $routineId) ?>">
+            <div class="routine-sheet-header ui-form-sheet-header is-sticky">
                 <strong id="routineEditTitle<?= e((string) $routineId) ?>">루틴 수정</strong>
                 <button type="button" class="ui-close-button" data-routine-close aria-label="닫기">×</button>
             </div>
@@ -283,6 +256,7 @@ $routineSummary = $routineSummary ?? [
                 <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                 <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
 
+                <fieldset class="routine-edit-section"><legend>기본 정보</legend>
                 <label class="form-label" for="routineName<?= e((string) $routineId) ?>">습관명</label>
                 <input class="input" id="routineName<?= e((string) $routineId) ?>" name="name" type="text" maxlength="60" value="<?= e((string) $routine['name']) ?>" required>
 
@@ -303,19 +277,20 @@ $routineSummary = $routineSummary ?? [
                         </option>
                     <?php endforeach; ?>
                 </select>
+                </fieldset>
 
-                <label class="routine-reminder-option">
-                    <input type="checkbox" name="reminder_enabled" value="1" <?= !empty($routine['reminderEnabled']) ? 'checked' : '' ?>>
+                <fieldset class="routine-edit-section routine-edit-reminder"><legend>알림</legend><label class="routine-reminder-option">
+                    <input type="checkbox" name="reminder_enabled" value="1" <?= !empty($routine['reminderEnabled']) ? 'checked' : '' ?> data-routine-reminder-toggle>
                     <span>중간 루틴 리마인드 사용</span>
-                    <input class="input" name="reminder_time" type="time" value="<?= e((string) ($routine['reminderTime'] ?: $defaultReminderTime)) ?>">
-                </label>
+                    <input class="input" name="reminder_time" type="time" value="<?= e((string) ($routine['reminderTime'] ?: $defaultReminderTime)) ?>" data-routine-reminder-time <?= empty($routine['reminderEnabled']) ? 'hidden disabled' : '' ?>>
+                </label></fieldset>
 
-                <div class="routine-edit-actions">
+                <div class="routine-edit-actions is-sticky ui-form-sheet-actions">
                     <button type="submit" class="btn btn-primary">저장</button>
-                    <button type="submit" class="btn btn-ghost" form="routineDelete<?= e((string) $routineId) ?>">삭제</button>
                 </div>
             </form>
             <div class="routine-lifecycle-actions">
+                <strong>기간 및 종료 관리</strong>
                 <?php if ((int) $routine['durationDays'] < 365): ?>
                     <form method="post" action="/routine/extend">
                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
@@ -345,6 +320,7 @@ $routineSummary = $routineSummary ?? [
             <form id="routineDelete<?= e((string) $routineId) ?>" method="post" action="/routine/delete" data-confirm="루틴을 삭제할까요? 기존 실행 기록은 회고 참고용으로 숨김 처리됩니다.">
                 <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                 <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
+                <button type="submit" class="btn btn-ghost routine-delete-action">루틴 삭제</button>
             </form>
         </section>
     <?php endforeach; ?>

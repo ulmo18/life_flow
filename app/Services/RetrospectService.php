@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\MemoRepository;
 use App\Models\RetrospectRepository;
 use DateTimeImmutable;
+use DateTimeZone;
 
 final class RetrospectService
 {
@@ -119,6 +120,62 @@ final class RetrospectService
             'page' => $page,
             'hasPrevious' => $page > 1,
             'hasNext' => $hasNext,
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getPublishedReportData(int $userId, ?string $requestedDate): ?array
+    {
+        $date = $this->normalizeDate($requestedDate);
+        $report = $this->retrospectRepository->findReport($userId, $date);
+        if ($report === null || (string) $report['status'] !== 'submitted') {
+            return null;
+        }
+
+        return $this->buildPublishedReportData($userId, $report);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getLatestPublishedReportData(int $userId): ?array
+    {
+        $report = $this->retrospectRepository->findLatestSubmittedReport($userId);
+        return $report === null ? null : $this->buildPublishedReportData($userId, $report);
+    }
+
+    /** @param array<string, mixed> $report @return array<string, mixed> */
+    private function buildPublishedReportData(int $userId, array $report): array
+    {
+        $date = (string) $report['report_date'];
+
+        $snapshot = $this->buildSnapshotFromReport($report, 'time');
+        $standaloneMemos = $this->formatSnapshotMemoItems(
+            $this->retrospectRepository->listMemoItems((int) $report['id'])
+        );
+        $memoItems = $this->combineMemoItems($standaloneMemos, $snapshot['actualItems']);
+        $routineItems = $snapshot['routineItems'];
+        $composition = $this->buildRecordComposition(
+            count($routineItems),
+            count($snapshot['planItems']),
+            count($snapshot['actualItems']),
+            count($memoItems)
+        );
+
+        return [
+            'date' => $date,
+            'dateTitle' => $this->formatDateTitle($date),
+            'dateSubTitle' => $this->formatDateSubTitle($date),
+            'submittedAt' => $this->formatSubmittedAt((string) ($report['submitted_at'] ?? '')),
+            'canEdit' => $this->isEditableDate($date),
+            'texts' => $this->textsFromReport($report),
+            'summary' => $snapshot['summary'],
+            'planItems' => $snapshot['planItems'],
+            'actualItems' => $snapshot['actualItems'],
+            'scheduleItems' => $this->buildScheduleItems($snapshot['planItems'], $snapshot['actualItems'], 'time'),
+            'routineItems' => $routineItems,
+            'memoItems' => $memoItems,
+            'recordComposition' => $composition,
+            'milestones' => $this->retrospectRepository->listMilestoneItems((int) $report['id']),
+            'adjacent' => $this->retrospectRepository->findAdjacentPublishedDates($userId, $date),
         ];
     }
 
@@ -336,6 +393,7 @@ final class RetrospectService
 
         $snapshot = $this->buildLiveSnapshot($userId, $date, 'time');
         $memoItems = $this->memoRepository->listForDate($userId, $date);
+        $milestoneItems = $this->buildMilestoneItems($userId, $date);
 
         return $this->retrospectRepository->publishReport(
             $userId,
@@ -345,6 +403,7 @@ final class RetrospectService
             $snapshot['actualItems'],
             $snapshot['routineItems'],
             $memoItems,
+            $milestoneItems,
             $texts
         );
     }
@@ -777,6 +836,7 @@ final class RetrospectService
                 'energyValue' => $actual === null ? null : $actual['energy_value'],
                 'isLinked' => $actual !== null,
                 'hasDifference' => $hasDifference,
+                'isLongDuration' => $planDuration !== null && $planDuration >= 60,
                 'durationDifferenceLabel' => $actual === null || $planDuration === null
                     ? ''
                     : $this->formatDurationDifference($actualDuration - $planDuration),
@@ -807,6 +867,7 @@ final class RetrospectService
                 'energyValue' => $actual['energy_value'],
                 'isLinked' => false,
                 'hasDifference' => false,
+                'isLongDuration' => false,
                 'durationDifferenceLabel' => '',
                 'startDifferenceLabel' => '',
                 'endDifferenceLabel' => '',
@@ -911,6 +972,44 @@ final class RetrospectService
             ->format('H:i');
     }
 
+    /** @return array<int, array<string, mixed>> */
+    private function buildMilestoneItems(int $userId, string $date): array
+    {
+        // Goal completion timestamps are persisted from PHP in the active user time zone.
+        $start = new DateTimeImmutable($date . ' 00:00:00');
+        $end = $start->modify('+1 day');
+        $items = $this->retrospectRepository->listMilestoneCandidates(
+            $userId,
+            $date,
+            $start->format('Y-m-d H:i:s'),
+            $end->format('Y-m-d H:i:s')
+        );
+
+        return array_map(static function (array $item): array {
+            if ((string) $item['type'] === 'goal') {
+                $item['feedback'] = '목표를 완성한 날이에요. 여기까지 이어온 선택과 실행을 다음 방향의 힘으로 남겨보세요.';
+                return $item;
+            }
+
+            $duration = max(1, (int) ($item['durationDays'] ?? 1));
+            $done = max(0, (int) ($item['doneCount'] ?? 0));
+            $rate = (int) round(($done / $duration) * 100);
+            $item['feedback'] = $duration . '일의 루틴 기간을 마쳤고 ' . $done . '일을 실천했어요. 달성률 ' . $rate . '%의 기록을 다음 루틴을 설계하는 기준으로 활용해보세요.';
+            return $item;
+        }, $items);
+    }
+
+    private function formatSubmittedAt(string $submittedAt): string
+    {
+        if ($submittedAt === '') {
+            return '';
+        }
+
+        return (new DateTimeImmutable($submittedAt, new DateTimeZone('UTC')))
+            ->setTimezone(new DateTimeZone(date_default_timezone_get()))
+            ->format('Y.m.d H:i');
+    }
+
     private function timeLabelToMinutes(string $time): int
     {
         if (preg_match('/^(\d{2}):(\d{2})$/', $time, $matches) !== 1) {
@@ -923,10 +1022,10 @@ final class RetrospectService
     private function formatDurationDifference(int $minutes): string
     {
         if ($minutes === 0) {
-            return '소요시간 동일';
+            return '0분';
         }
 
-        return '계획보다 ' . abs($minutes) . '분 ' . ($minutes > 0 ? '길게' : '짧게');
+        return ($minutes > 0 ? '+' : '-') . abs($minutes) . '분';
     }
 
     private function formatPointDifference(int $minutes): string

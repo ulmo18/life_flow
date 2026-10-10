@@ -126,31 +126,31 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
 <?php if (!$isTrash): ?>
 <div class="memo-local-layer" data-memo-layer hidden>
     <div class="memo-overlay" data-memo-close></div>
-    <section class="memo-sheet" data-memo-add-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoAddTitle">
+    <section class="memo-sheet ui-form-sheet" data-memo-add-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoAddTitle">
         <form method="post" action="/memo">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-            <div class="memo-sheet-header">
+            <div class="memo-sheet-header ui-form-sheet-header">
                 <strong id="memoAddTitle">메모 작성</strong>
                 <button type="button" class="ui-close-button" data-memo-close aria-label="닫기">×</button>
             </div>
             <label class="form-label" for="memoAddContent">메모</label>
             <textarea class="input" id="memoAddContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow><?= e((string) ($old['content'] ?? '')) ?></textarea>
             <?php if (!empty($errors['content'])): ?><p class="field-error"><?= e((string) $errors['content']) ?></p><?php endif; ?>
-            <button type="submit" class="btn btn-primary">저장</button>
+            <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary">저장</button></div>
         </form>
     </section>
-    <section class="memo-sheet" data-memo-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoEditTitle">
+    <section class="memo-sheet ui-form-sheet" data-memo-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoEditTitle">
         <form method="post" action="/memo/update">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="memo_id" id="memoEditId">
             <input type="hidden" name="type" value="<?= e($selectedType) ?>">
-            <div class="memo-sheet-header">
+            <div class="memo-sheet-header ui-form-sheet-header">
                 <strong id="memoEditTitle">메모 수정</strong>
                 <button type="button" class="ui-close-button" data-memo-close aria-label="닫기">×</button>
             </div>
             <label class="form-label" for="memoEditContent">메모</label>
             <textarea class="input" id="memoEditContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow></textarea>
-            <button type="submit" class="btn btn-primary">수정 저장</button>
+            <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary">수정 저장</button></div>
         </form>
     </section>
 </div>

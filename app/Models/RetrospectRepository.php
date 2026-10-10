@@ -195,6 +195,7 @@ final class RetrospectRepository
         array $actualItems,
         array $routineItems,
         array $memoItems,
+        array $milestoneItems,
         array $texts
     ): bool {
         try {
@@ -206,6 +207,7 @@ final class RetrospectRepository
             $this->insertActualItems($reportId, $actualItems);
             $this->insertRoutineItems($reportId, $routineItems);
             $this->insertMemoItems($reportId, $memoItems);
+            $this->insertMilestoneItems($reportId, $milestoneItems);
 
             $this->db->commit();
             return true;
@@ -269,6 +271,100 @@ final class RetrospectRepository
              ORDER BY created_at_snapshot ASC, id ASC',
             $reportId
         );
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listMilestoneItems(int $reportId): array
+    {
+        return $this->fetchItems(
+            'SELECT *
+             FROM retrospect_report_milestone_items
+             WHERE report_id = :report_id
+             ORDER BY sort_order ASC, id ASC',
+            $reportId
+        );
+    }
+
+    /** @return array{previous: ?string, next: ?string} */
+    public function findAdjacentPublishedDates(int $userId, string $date): array
+    {
+        $previous = $this->db->prepare(
+            'SELECT report_date FROM retrospect_reports
+             WHERE user_id = :user_id AND status = :status AND report_date < :report_date
+             ORDER BY report_date DESC LIMIT 1'
+        );
+        $previous->execute(['user_id' => $userId, 'status' => 'submitted', 'report_date' => $date]);
+        $next = $this->db->prepare(
+            'SELECT report_date FROM retrospect_reports
+             WHERE user_id = :user_id AND status = :status AND report_date > :report_date
+             ORDER BY report_date ASC LIMIT 1'
+        );
+        $next->execute(['user_id' => $userId, 'status' => 'submitted', 'report_date' => $date]);
+
+        $previousDate = $previous->fetchColumn();
+        $nextDate = $next->fetchColumn();
+        return [
+            'previous' => $previousDate === false ? null : (string) $previousDate,
+            'next' => $nextDate === false ? null : (string) $nextDate,
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function listMilestoneCandidates(
+        int $userId,
+        string $date,
+        string $utcStart,
+        string $utcEnd
+    ): array {
+        $items = [];
+        $goals = $this->db->prepare(
+            'SELECT id, title
+             FROM goals
+             WHERE user_id = :user_id AND status = :status
+                AND completed_at >= :utc_start AND completed_at < :utc_end
+             ORDER BY completed_at ASC, id ASC'
+        );
+        $goals->execute([
+            'user_id' => $userId,
+            'status' => 'completed',
+            'utc_start' => $utcStart,
+            'utc_end' => $utcEnd,
+        ]);
+        foreach ($goals->fetchAll() as $goal) {
+            $items[] = ['type' => 'goal', 'id' => (int) $goal['id'], 'title' => (string) $goal['title']];
+        }
+
+        $routines = $this->db->prepare(
+            'SELECT r.id, r.name, r.duration_days, r.status, r.ended_at,
+                COALESCE(SUM(CASE WHEN rl.is_done = 1 THEN 1 ELSE 0 END), 0) AS done_count
+             FROM routines r
+             LEFT JOIN routine_logs rl ON rl.routine_id = r.id AND rl.user_id = r.user_id
+                AND rl.log_date >= r.start_date
+                AND rl.log_date <= ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . '
+             WHERE r.user_id = :user_id AND r.deleted_at IS NULL
+                AND ((r.status = :completed_status AND r.ended_at = :completed_date)
+                    OR (r.status = :active_status AND ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . ' = :natural_end_date))
+             GROUP BY r.id, r.name, r.duration_days, r.status, r.ended_at
+             ORDER BY r.id ASC'
+        );
+        $routines->execute([
+            'user_id' => $userId,
+            'completed_status' => 'completed',
+            'completed_date' => $date,
+            'active_status' => 'active',
+            'natural_end_date' => $date,
+        ]);
+        foreach ($routines->fetchAll() as $routine) {
+            $items[] = [
+                'type' => 'routine',
+                'id' => (int) $routine['id'],
+                'title' => (string) $routine['name'],
+                'durationDays' => (int) $routine['duration_days'],
+                'doneCount' => (int) $routine['done_count'],
+            ];
+        }
+
+        return $items;
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -688,6 +784,7 @@ final class RetrospectRepository
             'retrospect_report_actual_items',
             'retrospect_report_routine_items',
             'retrospect_report_memo_items',
+            'retrospect_report_milestone_items',
         ] as $table) {
             $stmt = $this->db->prepare('DELETE FROM ' . $table . ' WHERE report_id = :report_id');
             $stmt->execute(['report_id' => $reportId]);
@@ -807,6 +904,28 @@ final class RetrospectRepository
                 'note_id' => $item['id'] ?? null,
                 'content_snapshot' => (string) ($item['content'] ?? ''),
                 'created_at_snapshot' => (string) ($item['created_at'] ?? ''),
+                'sort_order' => $index + 1,
+            ]);
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $items */
+    private function insertMilestoneItems(int $reportId, array $items): void
+    {
+        $stmt = $this->db->prepare(
+            'INSERT INTO retrospect_report_milestone_items (
+                report_id, item_type, source_id, title_snapshot, feedback_snapshot, sort_order, created_at
+             ) VALUES (
+                :report_id, :item_type, :source_id, :title_snapshot, :feedback_snapshot, :sort_order, CURRENT_TIMESTAMP
+             )'
+        );
+        foreach ($items as $index => $item) {
+            $stmt->execute([
+                'report_id' => $reportId,
+                'item_type' => (string) $item['type'],
+                'source_id' => (int) $item['id'],
+                'title_snapshot' => (string) $item['title'],
+                'feedback_snapshot' => (string) $item['feedback'],
                 'sort_order' => $index + 1,
             ]);
         }

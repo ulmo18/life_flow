@@ -73,8 +73,8 @@
             hidden
         >
             <button type="button" class="plan-block-local-overlay" data-plan-block-close aria-label="계획 블록 입력창 닫기"></button>
-            <section class="plan-block-sheet" role="dialog" aria-modal="true" aria-labelledby="planBlockSheetTitle">
-                <div class="plan-block-sheet-header">
+            <section class="plan-block-sheet ui-form-sheet" role="dialog" aria-modal="true" aria-labelledby="planBlockSheetTitle">
+                <div class="plan-block-sheet-header ui-form-sheet-header">
                     <strong id="planBlockSheetTitle" data-plan-block-sheet-title>계획 블록 추가</strong>
                     <button type="button" class="ui-close-button" data-plan-block-close aria-label="닫기">×</button>
                 </div>
@@ -108,7 +108,7 @@
                         <option value="">목표 연결 없음</option>
                         <?php foreach (($goalOptions ?? []) as $goal): ?><option value="<?= e((string) $goal['id']) ?>"><?= e((string) ($goal['label'] ?? $goal['title'] ?? '목표')) ?></option><?php endforeach; ?>
                     </select>
-                    <button type="submit" class="btn btn-primary" data-plan-block-submit>계획 블록 저장</button>
+                    <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary" data-plan-block-submit>계획 블록 저장</button></div>
                 </form>
             </section>
         </div>

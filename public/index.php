@@ -13,6 +13,7 @@ use App\Controllers\MemoController;
 use App\Controllers\PlanController;
 use App\Controllers\RetrospectController;
 use App\Controllers\RoutineController;
+use App\Controllers\SearchController;
 use App\Controllers\TodoController;
 use App\Core\Router;
 use App\Middleware\AuthMiddleware;
@@ -74,6 +75,7 @@ $memoController = new MemoController();
 $planController = new PlanController();
 $retrospectController = new RetrospectController();
 $routineController = new RoutineController();
+$searchController = new SearchController();
 $todoController = new TodoController();
 
 $router->aliasMiddleware('auth', AuthMiddleware::class);
@@ -89,6 +91,8 @@ $router->get('/auth/google/callback.php', [$authController, 'handleGoogleCallbac
 
 $router->get('/dashboard', [$authController, 'dashboard'], ['auth']);
 $router->get('/retrospect', [$retrospectController, 'index'], ['auth']);
+$router->get('/retrospect/report', [$retrospectController, 'report'], ['auth']);
+$router->get('/retrospect/report/preview', [$retrospectController, 'reportPreview'], ['auth']);
 $router->post('/retrospect/draft', [$retrospectController, 'saveDraft'], ['auth']);
 $router->post('/retrospect/publish', [$retrospectController, 'publish'], ['auth']);
 $router->post('/retrospect/republish', [$retrospectController, 'republish'], ['auth']);
@@ -138,6 +142,7 @@ $router->post('/memo/update', [$memoController, 'update'], ['auth']);
 $router->post('/memo/delete', [$memoController, 'delete'], ['auth']);
 $router->post('/memo/restore', [$memoController, 'restore'], ['auth']);
 $router->post('/memo/trash/empty', [$memoController, 'emptyTrash'], ['auth']);
+$router->get('/search', [$searchController, 'index'], ['auth']);
 $router->get('/plan', [$planController, 'index'], ['auth']);
 $router->get('/plan/show', [$planController, 'show'], ['auth']);
 $router->get('/plan/new', [$planController, 'create'], ['auth']);

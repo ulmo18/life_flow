@@ -409,6 +409,12 @@ final class GoalRepository
         $sortOrder = $parentChanged
             ? $this->nextSortOrder($userId, $data['parentGoalId'])
             : (int) $existing['sort_order'];
+        $completedAt = null;
+        if ($data['status'] === 'completed') {
+            $completedAt = (string) $existing['status'] === 'completed' && !empty($existing['completed_at'])
+                ? (string) $existing['completed_at']
+                : $this->currentTimestampExpressionValue();
+        }
 
         $sql = 'UPDATE goals
                 SET parent_goal_id = :parent_goal_id,
@@ -443,7 +449,7 @@ final class GoalRepository
             'is_focused' => $data['status'] === 'active' ? (int) ($existing['is_focused'] ?? 0) : 0,
             'focused_at' => $data['status'] === 'active' ? $existing['focused_at'] : null,
             'sort_order' => $sortOrder,
-            'completed_at' => $data['status'] === 'completed' ? $this->currentTimestampExpressionValue() : null,
+            'completed_at' => $completedAt,
             'id' => $goalId,
             'user_id' => $userId,
         ]);

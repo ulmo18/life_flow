@@ -13,7 +13,7 @@ Existing Goal, Plan, To-do, Calendar, Routine, notification, and Retrospect rela
 - Every node exposes a compact `＋` action that opens an inline child-title input. Child creation never requires a page or modal transition.
 - The tree is automatically arranged. Root goals can form two columns on wider screens; mobile always uses a vertical indentation hierarchy without horizontal overflow.
 - Goal depth controls title emphasis. Root goals are strongest and level four or deeper is deliberately quiet.
-- Nodes with children support collapse/expand. Collapsed IDs are UI preferences stored in browser `localStorage`; layout state is not written to the database.
+- Nodes with children support collapse/expand. In `전체 목표`, the first visit starts collapsed except for ancestor paths needed to reveal focused goals. `전부 펼치기` and `전부 접기` apply to the complete tree. Later per-node and global choices are UI preferences stored per Goal mode in browser `localStorage`; layout state is not written to the database.
 - A collapsed node shows the total descendant count.
 - Node status uses a compact symbol: `◐` active, `✓` completed, and `○` paused/archived. Completed nodes are visually muted.
 - Selecting a node opens its details in a right panel on desktop and a bottom sheet on mobile. Desktop content starts at the top and the panel scrolls internally when it exceeds the viewport.
@@ -23,7 +23,9 @@ Existing Goal, Plan, To-do, Calendar, Routine, notification, and Retrospect rela
 
 - `GET /goal` or `GET /goal?mode=focus` is the default and shows only goals explicitly selected for `지금 집중`.
 - `GET /goal?mode=all` shows every non-deleted goal and preserves its hierarchy.
+- The all-goals tree calculates whether each node has a focused descendant. This display-only flag opens only the paths needed to reveal focused goals on the initial visit and is not persisted to the database.
 - A user can focus at most five active goals. Paused, completed, archived, deleted goals are excluded; changing an active focused goal to another status clears its focus flag.
+- Moving a Goal into completed status records its completion time once. Later edits that keep it completed preserve that timestamp so date-based published Retrospect feedback remains stable.
 - The detail panel owns `지금 집중에 추가/해제`. A focused child whose parent is not focused is promoted to a visual root only in this filtered view.
 - Structure dragging is available only in `전체 목표`. It is disabled in the filtered focus view so a visually promoted child cannot accidentally lose its hidden parent.
 - Focus persistence uses `goals.is_focused` and `goals.focused_at`; the service enforces the five-goal limit for both database drivers.

@@ -11,12 +11,15 @@
   const editForm = document.querySelector('[data-todo-edit-form]');
   const editId = editForm?.querySelector('[data-todo-edit-id]');
   const editTitle = document.getElementById('todoEditTitleInput');
-  const editGoal = document.getElementById('todoEditGoal');
+  const editGoalPicker = document.querySelector('[data-todo-goal-picker]');
+  const editGoalSummary = document.querySelector('[data-todo-goal-summary]');
+  const editGoalInputs = Array.from(document.querySelectorAll('[data-todo-goal-picker] input[name="goal_id"]'));
   const editScheduleTypes = Array.from(document.querySelectorAll('[data-todo-edit-schedule-type]'));
   const editTimeFields = document.querySelector('[data-todo-edit-time-fields]');
   const editStart = document.getElementById('todoEditStartIndex');
   const editEnd = document.getElementById('todoEditEndIndex');
   const editLinkAction = document.querySelector('[data-todo-link-action]');
+  let activeMenuTrigger = null;
   if (!page || !layer || !timeForm || !itemIdInput || !startInput || !endInput) return;
 
   function close() {
@@ -51,6 +54,48 @@
     editEnd.required = isTimed;
   }
 
+  function setEditGoal(goalId) {
+    const selectedValue = String(goalId || '');
+    let selected = editGoalInputs.find(input => input.value === selectedValue);
+    if (!selected) selected = editGoalInputs.find(input => input.value === '');
+    if (selected) selected.checked = true;
+    if (editGoalSummary) {
+      const label = selected?.dataset.goalLabel?.trim() || '';
+      editGoalSummary.textContent = label === '' ? '연결하기 ›' : `${label} ›`;
+    }
+  }
+
+  function closeItemMenus(restoreFocus = false) {
+    document.querySelectorAll('[data-todo-menu]').forEach(menu => { menu.hidden = true; });
+    document.querySelectorAll('[data-todo-menu-toggle]').forEach(trigger => trigger.setAttribute('aria-expanded', 'false'));
+    if (restoreFocus && activeMenuTrigger) activeMenuTrigger.focus();
+    activeMenuTrigger = null;
+  }
+
+  document.querySelectorAll('[data-todo-menu-toggle]').forEach(trigger => {
+    trigger.addEventListener('click', event => {
+      event.stopPropagation();
+      const menu = trigger.closest('.todo-item-menu')?.querySelector('[data-todo-menu]');
+      const willOpen = Boolean(menu?.hidden);
+      closeItemMenus();
+      if (!menu || !willOpen) return;
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      activeMenuTrigger = trigger;
+      menu.querySelector('[role="menuitem"]')?.focus();
+    });
+  });
+
+  document.querySelectorAll('[data-todo-edit-proxy]').forEach(button => {
+    button.addEventListener('click', () => {
+      button.closest('[data-todo-item]')?.querySelector('[data-todo-edit-open]')?.click();
+    });
+  });
+
+  document.addEventListener('click', event => {
+    if (!(event.target instanceof Element) || !event.target.closest('.todo-item-menu')) closeItemMenus();
+  });
+
   document.querySelectorAll('[data-todo-create-open]').forEach(button => button.addEventListener('click', () => {
     if (!createLayer) return;
     createLayer.hidden = false;
@@ -64,10 +109,12 @@
   }));
 
   document.querySelectorAll('[data-todo-edit-open]').forEach(button => button.addEventListener('click', () => {
-    if (!editLayer || !editForm || !editId || !editTitle || !editGoal || !editStart || !editEnd || !editLinkAction) return;
+    if (!editLayer || !editForm || !editId || !editTitle || editGoalInputs.length === 0 || !editStart || !editEnd || !editLinkAction) return;
+    closeItemMenus();
     editId.value = button.dataset.itemId || '';
     editTitle.value = button.dataset.title || '';
-    editGoal.value = button.dataset.goalId || '';
+    setEditGoal(button.dataset.goalId || '');
+    if (editGoalPicker) editGoalPicker.open = false;
     editForm.querySelectorAll('input[name="importance"]').forEach(input => {
       input.checked = input.value === (button.dataset.importance || 'D');
     });
@@ -82,6 +129,7 @@
   }));
   document.querySelectorAll('[data-todo-edit-close]').forEach(button => button.addEventListener('click', closeEdit));
   editScheduleTypes.forEach(input => input.addEventListener('change', () => setEditScheduleType(input.value)));
+  editGoalInputs.forEach(input => input.addEventListener('change', () => setEditGoal(input.value)));
   editForm?.addEventListener('submit', event => {
     if (editScheduleTypes.find(input => input.checked)?.value !== 'timed') return;
     const start = Number.parseInt(editStart?.value || '', 10);
@@ -136,6 +184,10 @@
   document.querySelectorAll('[data-todo-close]').forEach(button => button.addEventListener('click', close));
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+    if (activeMenuTrigger) {
+      closeItemMenus(true);
+      return;
+    }
     if (!layer.hidden) close();
     if (createLayer && !createLayer.hidden) {
       createLayer.hidden = true;

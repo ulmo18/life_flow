@@ -278,6 +278,7 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
   importance TEXT NOT NULL DEFAULT 'D',
   start_index INTEGER NULL,
   end_index INTEGER NULL,
+  estimated_duration_minutes INTEGER NULL,
   sort_order INTEGER NOT NULL DEFAULT 1,
   deleted_at TEXT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -290,7 +291,8 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
     (start_index IS NULL AND end_index IS NULL)
     OR (start_index IS NOT NULL AND end_index IS NOT NULL
         AND start_index >= 0 AND end_index <= 144 AND start_index < end_index)
-  )
+  ),
+  CHECK (estimated_duration_minutes IS NULL OR (estimated_duration_minutes >= 10 AND estimated_duration_minutes <= 1440))
 );
 
 CREATE INDEX IF NOT EXISTS idx_daily_plan_items_plan_order ON daily_plan_items(daily_plan_id, sort_order);
@@ -552,6 +554,21 @@ CREATE TABLE IF NOT EXISTS retrospect_report_memo_items (
 
 CREATE INDEX IF NOT EXISTS idx_retrospect_memo_items_report ON retrospect_report_memo_items(report_id, sort_order);
 
+CREATE TABLE IF NOT EXISTS retrospect_report_milestone_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  report_id INTEGER NOT NULL,
+  item_type TEXT NOT NULL,
+  source_id INTEGER NULL,
+  title_snapshot TEXT NOT NULL,
+  feedback_snapshot TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (report_id) REFERENCES retrospect_reports(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (item_type IN ('goal', 'routine'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_retrospect_milestones_report ON retrospect_report_milestone_items(report_id, sort_order);
+
 CREATE TABLE IF NOT EXISTS notes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -561,6 +578,29 @@ CREATE TABLE IF NOT EXISTS notes (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS wellness_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  calendar_event_id INTEGER NULL,
+  entry_date TEXT NOT NULL,
+  entry_type TEXT NOT NULL,
+  occurred_time TEXT NULL,
+  start_time TEXT NULL,
+  end_time TEXT NULL,
+  detail TEXT NULL,
+  note TEXT NULL,
+  rating INTEGER NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  FOREIGN KEY (calendar_event_id) REFERENCES calendar_events(id) ON DELETE SET NULL ON UPDATE CASCADE,
+  CHECK (entry_type IN ('sleep', 'meal', 'snack', 'exercise', 'rest')),
+  CHECK (rating IS NULL OR rating BETWEEN 1 AND 5)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wellness_user_date ON wellness_entries(user_id, entry_date, entry_type);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_wellness_calendar_event ON wellness_entries(calendar_event_id);
 
 CREATE INDEX IF NOT EXISTS idx_notes_user_active_updated ON notes(user_id, deleted_at, updated_at);
 CREATE INDEX IF NOT EXISTS idx_notes_user_deleted ON notes(user_id, deleted_at);

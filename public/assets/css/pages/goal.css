@@ -12,6 +12,8 @@
 .goal-mode-switch { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; border: 1px solid var(--border); border-radius: 14px; background: var(--color-surface-soft); padding: 4px; }
 .goal-mode-switch a { display: grid; min-height: 40px; place-items: center; border-radius: 10px; color: var(--color-text-muted); font-size: .86rem; font-weight: 900; text-decoration: none; }
 .goal-mode-switch a[aria-current='page'] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 5px 14px rgba(26,27,58,.08); }
+.goal-map-toolbar { display: flex; justify-content: flex-end; }
+.goal-map-toolbar .btn { min-height: 36px; border-radius: 999px; padding-inline: 13px; font-size: 12px; }
 
 .goal-map { min-width: 0; }
 .goal-map-help { margin: 0 0 12px; color: var(--color-text-muted); font-size: .8rem; line-height: 1.5; }

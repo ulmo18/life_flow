@@ -85,13 +85,18 @@ final class CalendarRepository
                     ees.group_name_snapshot AS execution_energy_group_name,
                     ees.effect_type AS execution_energy_type,
                     ees.energy_value AS execution_energy_value,
-                    ees.is_override AS execution_energy_is_override
+                    ees.is_override AS execution_energy_is_override,
+                    we.entry_type AS wellness_type,
+                    we.detail AS wellness_detail,
+                    we.note AS wellness_note,
+                    we.rating AS wellness_rating
                 FROM calendar_events ce
                 LEFT JOIN plan_templates pt ON pt.id = ce.plan_template_id
                 LEFT JOIN daily_plan_items dpi ON dpi.id = ce.daily_plan_item_id
                 LEFT JOIN calendar_tags ct ON ct.id = ce.calendar_tag_id
                     AND ct.deleted_at IS NULL
                 LEFT JOIN execution_energy_event_settings ees ON ees.calendar_event_id = ce.id
+                LEFT JOIN wellness_entries we ON we.calendar_event_id = ce.id AND we.user_id = ce.user_id
                 WHERE ce.user_id = :user_id
                     AND ce.calendar_day_id = :calendar_day_id
                     AND ce.deleted_at IS NULL
@@ -201,7 +206,7 @@ final class CalendarRepository
                     dp.source_plan_group_id AS plan_group_id,
                     dpi.source_plan_template_id AS plan_template_id,
                     dpi.source_plan_block_id, dpi.goal_id, dpi.title, dpi.importance,
-                    dpi.start_index, dpi.end_index, dpi.sort_order,
+                    dpi.start_index, dpi.end_index, dpi.estimated_duration_minutes, dpi.sort_order,
                     g.title AS goal_title,
                     (SELECT ce.id FROM calendar_events ce
                      WHERE ce.daily_plan_item_id = dpi.id
@@ -407,7 +412,8 @@ final class CalendarRepository
         string $importance,
         ?int $goalId,
         ?int $startIndex,
-        ?int $endIndex
+        ?int $endIndex,
+        ?int $estimatedDurationMinutes
     ): ?int {
         try {
             $this->db->beginTransaction();
@@ -446,11 +452,11 @@ final class CalendarRepository
             $stmt = $this->db->prepare(
                 'INSERT INTO daily_plan_items (
                     daily_plan_id, source_plan_block_id, source_plan_template_id, goal_id,
-                    title, importance, start_index, end_index, sort_order,
+                    title, importance, start_index, end_index, estimated_duration_minutes, sort_order,
                     deleted_at, created_at, updated_at
                  ) VALUES (
                     :daily_plan_id, NULL, NULL, :goal_id, :title, :importance,
-                    :start_index, :end_index,
+                    :start_index, :end_index, :estimated_duration_minutes,
                     (SELECT COALESCE(MAX(existing.sort_order), 0) + 1
                      FROM daily_plan_items existing WHERE existing.daily_plan_id = :sort_daily_plan_id),
                     NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -464,6 +470,7 @@ final class CalendarRepository
                 'importance' => $importance,
                 'start_index' => $startIndex,
                 'end_index' => $endIndex,
+                'estimated_duration_minutes' => $estimatedDurationMinutes,
             ]);
             $itemId = (int) $this->db->lastInsertId();
             $this->db->commit();
@@ -486,6 +493,7 @@ final class CalendarRepository
         ?int $goalId,
         ?int $startIndex,
         ?int $endIndex,
+        ?int $estimatedDurationMinutes,
         string $linkAction
     ): bool {
         try {
@@ -500,6 +508,15 @@ final class CalendarRepository
             }
 
             $linkedEventId = $item['linked_event_id'] === null ? null : (int) $item['linked_event_id'];
+            if ($startIndex === null || $endIndex === null) {
+                if ($estimatedDurationMinutes === null && $item['start_index'] !== null && $item['end_index'] !== null) {
+                    $estimatedDurationMinutes = ((int) $item['end_index'] - (int) $item['start_index']) * 10;
+                } elseif ($estimatedDurationMinutes === null && $item['estimated_duration_minutes'] !== null) {
+                    $estimatedDurationMinutes = (int) $item['estimated_duration_minutes'];
+                }
+            } else {
+                $estimatedDurationMinutes = null;
+            }
             if ($linkedEventId !== null && $linkAction === 'detach') {
                 $stmt = $this->db->prepare(
                     'UPDATE calendar_events
@@ -545,7 +562,9 @@ final class CalendarRepository
             $stmt = $this->db->prepare(
                 'UPDATE daily_plan_items
                  SET title = :title, importance = :importance, goal_id = :goal_id,
-                     start_index = :start_index, end_index = :end_index, updated_at = CURRENT_TIMESTAMP
+                     start_index = :start_index, end_index = :end_index,
+                     estimated_duration_minutes = :estimated_duration_minutes,
+                     updated_at = CURRENT_TIMESTAMP
                  WHERE id = :id AND deleted_at IS NULL'
             );
             $stmt->execute([
@@ -554,6 +573,7 @@ final class CalendarRepository
                 'goal_id' => $goalId,
                 'start_index' => $startIndex,
                 'end_index' => $endIndex,
+                'estimated_duration_minutes' => $estimatedDurationMinutes,
                 'id' => $itemId,
             ]);
             $this->db->commit();
@@ -682,6 +702,9 @@ final class CalendarRepository
         int $eventId,
         string $date,
         string $title,
+        string $scheduleType,
+        ?int $startIndex,
+        ?int $endIndex,
         ?int $dailyPlanItemId,
         ?int $calendarTagId,
         string $memo
@@ -698,6 +721,11 @@ final class CalendarRepository
             $stmt->execute(['id' => $eventId, 'user_id' => $userId, 'calendar_day_id' => (int) $day['id']]);
             $currentEvent = $stmt->fetch();
             if ($currentEvent === false) {
+                $this->db->rollBack();
+                return false;
+            }
+            if ($scheduleType === 'timed' && ($startIndex === null || $endIndex === null
+                || $this->hasOverlappingEvent($userId, (int) $day['id'], $startIndex, $endIndex, $eventId))) {
                 $this->db->rollBack();
                 return false;
             }
@@ -722,8 +750,11 @@ final class CalendarRepository
 
             $sql = 'UPDATE calendar_events
                     SET title = :title,
-                        plan_template_id = CASE WHEN schedule_type = \'unscheduled\' THEN NULL ELSE :plan_template_id END,
-                        daily_plan_item_id = CASE WHEN schedule_type = \'unscheduled\' THEN NULL ELSE :daily_plan_item_id END,
+                        schedule_type = :schedule_type,
+                        start_index = :start_index,
+                        end_index = :end_index,
+                        plan_template_id = :plan_template_id,
+                        daily_plan_item_id = :daily_plan_item_id,
                         calendar_tag_id = :calendar_tag_id,
                         memo = :memo,
                         updated_at = CURRENT_TIMESTAMP
@@ -735,6 +766,9 @@ final class CalendarRepository
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
                 'title' => $title,
+                'schedule_type' => $scheduleType,
+                'start_index' => $scheduleType === 'timed' ? $startIndex : null,
+                'end_index' => $scheduleType === 'timed' ? $endIndex : null,
                 'plan_template_id' => $planTemplateId,
                 'daily_plan_item_id' => $dailyPlanItemId,
                 'calendar_tag_id' => $calendarTagId,

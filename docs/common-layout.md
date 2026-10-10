@@ -13,10 +13,11 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 
 ## Header
 - The header is sticky.
-- The header contains the `LifeFlow` brand and a hamburger menu button.
+- The header contains the `LifeFlow` brand, a search button, and a hamburger menu button.
 - Do not place primary navigation links directly in the header.
 - The brand links to Dashboard.
 - A feature may supply one compact, single-line contextual action between the brand and hamburger. Calendar uses this slot only for today's highest-priority Plan, Actual, or Retrospect next action; the text truncates rather than increasing the header height.
+- The search button immediately precedes the hamburger. It expands a header-covering GET form, focuses the query, and submits to `/search` from either Enter or the `검색` button. The submit button includes a move-to-results icon; Escape or the close control restores the normal header, and opening the aside closes search first.
 
 ## Aside Menu
 - The aside is opened from the header hamburger button.
@@ -25,7 +26,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The aside owns infrequent navigation:
   - Dashboard
   - Management: Plan, Routine Management, Goal, Execution Energy Management
-  - Tools: Memo, Schedule Tag Management
+  - Tools: Memo, Search, Schedule Tag Management
 - Use visible group labels for Management and Tools. Daily execution pages stay in the bottom navigator.
 - Logout lives inside the Settings page and must remain a POST form with a CSRF token.
 - Account identity is shown in the aside only; Settings does not repeat the same account-information card.
@@ -35,16 +36,16 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - It owns the primary feature navigation in this order:
   - Retrospect
   - Routine
-  - Execution Energy (a center glass-liquid orb showing the current value; its compact label omits the management suffix)
   - To-do
   - Today
 - Today links to Calendar, while Routine and To-do always resolve from the signed-in user's current time zone.
 - Keep active page state through `aria-current="page"`.
-- The center orb intentionally overflows the navigator frame so the frame reads like a belt. Its liquid fill uses the current-capacity percentage from top to bottom, includes a restrained bubble effect, and responds to available device orientation data; pointer movement is the browser fallback. Respect reduced-motion preferences.
+- Execution Energy is a separate 52px HUD on the left of the four-item navigator. It opens usage history, preserves the glass-liquid fill and restrained motion, and does not occupy a navigation column or protrude into the floating-action area. Device orientation and pointer movement remain optional effects, and reduced-motion preferences are respected.
 
 ## Assets
 - Shared layout CSS lives in `public/assets/css/app.css`.
 - The shared app stylesheet URL includes its file modification time so header and shell changes are refreshed in browsers and WebViews after deployment.
+- The shared UI component stylesheet uses the same file-modification cache key so input-sheet primitive changes are not hidden by an older browser or WebView cache.
 - Shared layout JavaScript lives in `public/assets/js/components/app-layout.js`.
 - Page-specific CSS and JavaScript should continue using `$pageStyles` and `$pageScripts`.
 - Android bridge JavaScript is loaded as a shared component so Settings and feature pages can sync notification payloads and temporarily control native pull-to-refresh during touch range selection.
@@ -58,10 +59,24 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Shared `.sr-only` keeps semantic page headings available to assistive technology when a content-first feature page omits its large visible menu introduction.
 - Shared bottom sheets focus their primary input during the opening user action and keep the active input visible when the mobile visual viewport changes.
 - Right-side panels align content to the top and scroll internally when content exceeds the viewport. Page-level create actions use a shared pill-shaped floating button above the bottom navigator.
-- Daily Retrospect, Routine, To-do, and Memo primary actions use the shared centered floating button above the navigator. The bottom navigator and overflowing Execution Energy orb stack above page-level floating actions where they overlap. Compact page-header actions use a shared 36px secondary pill so Today, Routine Management, and Retrospect controls remain visually consistent.
+- Daily Retrospect, Routine, To-do, and Memo primary actions use the shared centered floating button above the navigator. The bottom navigation shell, including the separate Execution Energy HUD, stays below the floating-action area. Compact page-header actions use a shared 36px secondary pill so Today, Routine Management, and Retrospect controls remain visually consistent.
 - Shared `.btn` styling applies the same centering and no-underline treatment to both buttons and links, including Retrospect empty-state actions.
 - Compact header actions rendered as links remove the browser's default underline while retaining their visible focus outline.
 - The aside fills the viewport, begins at the top, and scrolls internally when its navigation content is taller than the screen.
+
+## Input bottom sheets
+
+- Input and edit sheets reuse the shared `ui-form-sheet`, `ui-form-sheet-header`, and `ui-form-sheet-actions` primitives. Feature pages continue to own their field markup, validation, and persistence behavior.
+- Long forms may opt into `ui-form-sheet is-structured` with `ui-form-sheet-layout`, `ui-form-sheet-view`, and `ui-form-sheet-body`. The fixed header and action area sit outside the one scrolling body so field labels cannot slide beneath the header.
+- A structured sheet may switch from its main view to a long selection view without stacking another bottom sheet. It preserves the draft, restores it on cancel, and returns focus to the row that opened the selection view.
+- Do not render a drag handle unless coordinated drag-to-dismiss behavior is actually implemented. Standard LifeFlow sheets use a clear title and a close control with at least a 44px touch target.
+- The header and its close target remain reachable, the body scrolls inside the sheet, and the primary action stays above the mobile safe area. Close controls provide at least a 44px touch target.
+- A quick-create sheet keeps its essential field visible. It must not add a disclosure or another sheet merely to appear consistent with a longer editor.
+- A structured editor keeps its required fields visible and uses an inline summary/disclosure for optional settings. Collapsed summaries must expose the current selection so saved values are not mistaken for empty values.
+- A secondary sheet is not the default extension mechanism. Use at most one secondary level only when the task is independently completable and needs a long searchable list, filtering, or meaningful multi-selection. Simple radio choices, dates, times, importance, toggles, and short text stay in the current sheet.
+- Never open a third sheet level. If a secondary task itself becomes complex, promote it to a full-screen selector instead of nesting again.
+- KPT writing, read-only report/detail views, desktop Goal details, confirmations, and full-page management tables keep their specialized presentation; they share tokens and accessibility behavior rather than the input-sheet information architecture.
+- Optional inline sections may reuse `ui-progressive-disclosure`. Avoid card-in-card decoration inside a sheet; use spacing and dividers for subordinate settings.
 
 ## Theme
 - The authenticated shell reads `$_SESSION['theme_preference']` and writes it to `body[data-theme]`.
@@ -69,6 +84,8 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Settings persists the user choice in `user_preferences.theme`.
 - Choosing light or dark mode applies and persists immediately when JavaScript is available. The POST redirect remains as the non-JavaScript fallback.
 - Shared colors should be expressed through CSS variables so page-specific styles respond to the active theme.
+- Brand coral is reserved for actions and selected surfaces. `--color-primary-text` supplies readable coral-family text on light surfaces, while success, warning, danger, and information/current-time colors keep stable semantic roles.
+- Do not communicate state through color alone. Completion, energy direction, selection, and warnings also need text, icons, shape, or position. Borders required to identify an input or popup use `--color-control-line`; decorative grouping borders may remain quieter.
 - Light mode keeps primary `#FF5E5B` and secondary `#1A1B3A`; dark mode uses primary `#FF756F` and secondary `#F4D27A` with matching contrast-text tokens.
 - The shared 15 Calendar tag colors do not change when the theme changes because they identify user-owned schedule categories. Components that fill a card with a tag color must calculate a readable dark or light foreground instead of assuming white text.
 - Dark mode coverage must include shared inputs, buttons, toast, aside profile/settings surfaces, page cards, bottom sheets, and page-local selection controls.
@@ -87,3 +104,10 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Tablet keeps the same navigation model with wider content.
 - Desktop keeps the same navigation model with a wider content container and drawer.
 - Feature pages, including Calendar, should use the shared `.page` container so their content widths follow the same responsive breakpoints.
+
+## Information hierarchy
+
+- Use a card for an independently actionable record or a deliberately elevated state, not for every section.
+- Group simple information with a heading, spacing, dividers, or a table. Avoid an outer card and repeated inner cards describing the same hierarchy.
+- Repeated homogeneous records should prefer compact rows or tables. Controls receive visible shape; passive labels and supporting metadata normally do not.
+- Card reduction is evaluated by hierarchy and task clarity rather than a fixed percentage. Retrospect composition/history groups and To-do rows are the first shared examples of this rule.

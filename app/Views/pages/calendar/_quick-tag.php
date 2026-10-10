@@ -1,5 +1,5 @@
 <?php if (!empty($availableTagPalettes)): ?>
-    <button type="button" class="calendar-tag-add-toggle" data-quick-tag-toggle>+ 태그 추가</button>
+    <button type="button" class="calendar-tag-add-toggle" data-quick-tag-toggle aria-label="태그 추가">+</button>
     <div class="calendar-quick-tag" data-quick-tag-create hidden>
         <label for="calendarQuickTagName<?= e($quickTagPrefix) ?>">새 태그명</label>
         <input

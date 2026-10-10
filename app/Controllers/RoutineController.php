@@ -50,11 +50,9 @@ final class RoutineController
 
     public function manage(): void
     {
-        $routineData = $this->routineService->getRoutinePageData($this->userId());
         $this->render('pages/routine/index', [
             'title' => t('nav.routine_manage'),
-            'routines' => $routineData['routines'],
-            'routineSummary' => $routineData['summary'],
+            'routines' => $this->routineService->getRoutineList($this->userId()),
             'durationOptions' => $this->routineService->durationOptions(),
             'defaultDurationDays' => $this->routineService->defaultDurationDays(),
             'defaultReminderTime' => $this->routineService->defaultReminderTime(),

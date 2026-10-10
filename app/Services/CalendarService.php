@@ -16,6 +16,7 @@ final class CalendarService
     private CalendarTagService $calendarTagService;
     private PlanService $planService;
     private ExecutionEnergyService $executionEnergyService;
+    private WellnessService $wellnessService;
 
     public function __construct()
     {
@@ -26,6 +27,7 @@ final class CalendarService
         $this->calendarTagService = new CalendarTagService();
         $this->planService = new PlanService();
         $this->executionEnergyService = new ExecutionEnergyService();
+        $this->wellnessService = new WellnessService();
     }
 
     /** @return array<string, mixed> */
@@ -72,7 +74,7 @@ final class CalendarService
             'unscheduledEvents' => $this->buildUnscheduledEvents($actualEvents),
             'hasLinkedActualEvents' => $this->hasLinkedActualEvents($actualEvents),
             'routines' => $this->routineService->getCalendarRoutines($userId, $date),
-            'retrospectPreview' => $this->retrospectService->getPublishedPreview($userId, $date),
+            'retrospectPreview' => $this->retrospectService->getLatestPublishedReportData($userId),
             'headerGuidance' => $this->buildHeaderGuidance(
                 $date,
                 $planReminderItems,
@@ -80,6 +82,7 @@ final class CalendarService
                 $notificationSettings
             ),
             'executionEnergy' => $executionEnergy,
+            'wellnessTypes' => $this->wellnessService->types(),
         ];
     }
 
@@ -98,6 +101,7 @@ final class CalendarService
         $routineIds = $this->normalizeRoutineIds($input['routine_ids'] ?? []);
         $sourceEventId = filter_var($input['source_event_id'] ?? null, FILTER_VALIDATE_INT);
         $energyValidation = $this->executionEnergyService->validateEventSetting($userId, $input);
+        $wellnessValidation = $this->wellnessService->validateEventRecord($input);
         $errors = [];
 
         if ($requestedScheduleType !== 'timed') {
@@ -120,6 +124,7 @@ final class CalendarService
             $errors['memo'] = '메모는 500자 이내로 입력해주세요.';
         }
         $errors += $energyValidation['errors'];
+        $errors += $wellnessValidation['errors'];
 
         return [
             'ok' => $errors === [],
@@ -138,6 +143,7 @@ final class CalendarService
                     ? (int) $sourceEventId
                     : null,
                 'energySetting' => $energyValidation['data'],
+                'wellnessRecord' => $wellnessValidation['data'],
             ],
         ];
     }
@@ -148,11 +154,15 @@ final class CalendarService
         $date = $this->normalizeDate((string) ($input['date'] ?? ''));
         $eventId = filter_var($input['event_id'] ?? null, FILTER_VALIDATE_INT);
         $scheduleType = (string) ($input['schedule_type'] ?? 'timed') === 'unscheduled' ? 'unscheduled' : 'timed';
+        $startIndex = filter_var($input['start_index'] ?? null, FILTER_VALIDATE_INT);
+        $endIndex = filter_var($input['end_index'] ?? null, FILTER_VALIDATE_INT);
         $title = trim((string) ($input['title'] ?? ''));
         $dailyPlanItemId = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
         $calendarTagId = filter_var($input['calendar_tag_id'] ?? null, FILTER_VALIDATE_INT);
         $memo = trim((string) ($input['memo'] ?? ''));
+        $routineIds = $this->normalizeRoutineIds($input['routine_ids'] ?? []);
         $energyValidation = $this->executionEnergyService->validateEventSetting($userId, $input);
+        $wellnessValidation = $this->wellnessService->validateEventRecord($input);
         $errors = [];
 
         if ($eventId === false || $eventId <= 0) {
@@ -165,10 +175,16 @@ final class CalendarService
             $errors['title'] = '일정명은 80자 이내로 입력해주세요.';
         }
 
+        if ($scheduleType === 'timed' && ($startIndex === false || $endIndex === false
+            || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex)) {
+            $errors['time'] = '일정 시간 범위가 올바르지 않습니다.';
+        }
+
         if (mb_strlen($memo) > 500) {
             $errors['memo'] = '메모는 500자 이내로 입력해주세요.';
         }
         $errors += $energyValidation['errors'];
+        $errors += $wellnessValidation['errors'];
 
         return [
             'ok' => $errors === [],
@@ -178,10 +194,14 @@ final class CalendarService
                 'eventId' => $eventId === false ? 0 : $eventId,
                 'title' => $title,
                 'scheduleType' => $scheduleType,
+                'startIndex' => $scheduleType === 'timed' && $startIndex !== false ? (int) $startIndex : null,
+                'endIndex' => $scheduleType === 'timed' && $endIndex !== false ? (int) $endIndex : null,
                 'dailyPlanItemId' => $scheduleType === 'timed' && $dailyPlanItemId !== false && $dailyPlanItemId > 0 ? $dailyPlanItemId : null,
                 'calendarTagId' => $calendarTagId === false || $calendarTagId <= 0 ? null : $calendarTagId,
                 'memo' => $memo,
+                'routineIds' => $scheduleType === 'timed' ? $routineIds : [],
                 'energySetting' => $energyValidation['data'],
+                'wellnessRecord' => $scheduleType === 'timed' ? $wellnessValidation['data'] : null,
             ],
         ];
     }
@@ -215,6 +235,12 @@ final class CalendarService
 
         if ($eventId !== null) {
             $this->executionEnergyService->saveEventSetting($userId, $eventId, (array) ($data['energySetting'] ?? []));
+            $this->wellnessService->syncForEvent(
+                $userId,
+                $eventId,
+                (string) $data['date'],
+                $data['wellnessRecord'] ?? null
+            );
             foreach (($data['routineIds'] ?? []) as $routineId) {
                 $this->routineService->markDoneForDate($userId, (int) $routineId, (string) $data['date']);
             }
@@ -231,6 +257,9 @@ final class CalendarService
             (int) $data['eventId'],
             (string) $data['date'],
             (string) $data['title'],
+            (string) $data['scheduleType'],
+            $data['startIndex'] === null ? null : (int) $data['startIndex'],
+            $data['endIndex'] === null ? null : (int) $data['endIndex'],
             $data['dailyPlanItemId'] === null ? null : (int) $data['dailyPlanItemId'],
             $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
             (string) $data['memo']
@@ -242,13 +271,30 @@ final class CalendarService
                 (array) ($data['energySetting'] ?? [])
             );
         }
+        if ($updated) {
+            $updated = $this->wellnessService->syncForEvent(
+                $userId,
+                (int) $data['eventId'],
+                (string) $data['date'],
+                $data['wellnessRecord'] ?? null
+            );
+        }
+        if ($updated) {
+            foreach (($data['routineIds'] ?? []) as $routineId) {
+                $this->routineService->markDoneForDate($userId, (int) $routineId, (string) $data['date']);
+            }
+        }
 
         return $updated;
     }
 
     public function deleteActualEvent(int $userId, int $eventId): bool
     {
-        return $this->calendarRepository->softDeleteEvent($userId, $eventId);
+        $deleted = $this->calendarRepository->softDeleteEvent($userId, $eventId);
+        if ($deleted) {
+            $this->wellnessService->deleteForEvent($userId, $eventId);
+        }
+        return $deleted;
     }
 
     public function setDayPlanGroup(int $userId, string $date, ?int $planGroupId): bool
@@ -267,6 +313,7 @@ final class CalendarService
         $scheduleType = (string) ($input['schedule_type'] ?? 'timed') === 'unscheduled' ? 'unscheduled' : 'timed';
         $startIndex = filter_var($input['start_index'] ?? null, FILTER_VALIDATE_INT);
         $endIndex = filter_var($input['end_index'] ?? null, FILTER_VALIDATE_INT);
+        $estimatedDurationMinutes = filter_var($input['estimated_duration_minutes'] ?? null, FILTER_VALIDATE_INT);
         $linkActionInput = (string) ($input['link_action'] ?? 'keep');
         $linkAction = in_array($linkActionInput, ['keep', 'sync', 'detach'], true)
             ? $linkActionInput
@@ -283,6 +330,10 @@ final class CalendarService
             || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex)) {
             $errors['time'] = '계획 일정 시간 범위가 올바르지 않습니다.';
         }
+        if ($scheduleType === 'unscheduled' && $estimatedDurationMinutes !== false
+            && ($estimatedDurationMinutes < 10 || $estimatedDurationMinutes > 1440)) {
+            $errors['estimatedDuration'] = '예상 소요시간은 10분 이상 24시간 이내여야 합니다.';
+        }
 
         return [
             'ok' => $errors === [],
@@ -296,6 +347,9 @@ final class CalendarService
                 'scheduleType' => $scheduleType,
                 'startIndex' => $scheduleType === 'timed' && $startIndex !== false ? (int) $startIndex : null,
                 'endIndex' => $scheduleType === 'timed' && $endIndex !== false ? (int) $endIndex : null,
+                'estimatedDurationMinutes' => $scheduleType === 'unscheduled' && $estimatedDurationMinutes !== false
+                    ? (int) $estimatedDurationMinutes
+                    : null,
                 'linkAction' => $linkAction,
             ],
         ];
@@ -311,7 +365,8 @@ final class CalendarService
             (string) $data['importance'],
             $data['goalId'] === null ? null : (int) $data['goalId'],
             $data['startIndex'] === null ? null : (int) $data['startIndex'],
-            $data['endIndex'] === null ? null : (int) $data['endIndex']
+            $data['endIndex'] === null ? null : (int) $data['endIndex'],
+            $data['estimatedDurationMinutes'] === null ? null : (int) $data['estimatedDurationMinutes']
         );
     }
 
@@ -326,6 +381,7 @@ final class CalendarService
             $data['goalId'] === null ? null : (int) $data['goalId'],
             $data['startIndex'] === null ? null : (int) $data['startIndex'],
             $data['endIndex'] === null ? null : (int) $data['endIndex'],
+            $data['estimatedDurationMinutes'] === null ? null : (int) $data['estimatedDurationMinutes'],
             (string) $data['linkAction']
         );
     }
@@ -546,6 +602,8 @@ final class CalendarService
                 'importance' => $importance,
                 'importanceBadge' => $importance,
                 'scheduleType' => $isTimed ? 'timed' : 'unscheduled',
+                'startIndex' => $isTimed ? (int) $block['start_index'] : null,
+                'endIndex' => $isTimed ? (int) $block['end_index'] : null,
                 'timeRange' => $isTimed
                     ? $this->formatTimeRange((int) $block['start_index'], (int) $block['end_index'])
                     : '시간 미정',
@@ -561,6 +619,9 @@ final class CalendarService
             $importance = $this->normalizeImportance((string) ($block['importance'] ?? 'D'));
             $itemId = (int) $block['daily_plan_item_id'];
             $isTimed = $block['start_index'] !== null && $block['end_index'] !== null;
+            $durationMinutes = $isTimed
+                ? ((int) $block['end_index'] - (int) $block['start_index']) * 10
+                : ($block['estimated_duration_minutes'] === null ? null : (int) $block['estimated_duration_minutes']);
 
             return [
                 'itemId' => $itemId,
@@ -573,7 +634,8 @@ final class CalendarService
                 'timeRange' => $isTimed
                     ? $this->formatTimeRange((int) $block['start_index'], (int) $block['end_index'])
                     : '시간 미정',
-                'durationMinutes' => $isTimed ? ((int) $block['end_index'] - (int) $block['start_index']) * 10 : null,
+                'durationMinutes' => $durationMinutes,
+                'isLongDuration' => $durationMinutes !== null && $durationMinutes >= 60,
                 'startIndex' => $isTimed ? (int) $block['start_index'] : null,
                 'endIndex' => $isTimed ? (int) $block['end_index'] : null,
                 'isLinked' => in_array($itemId, $usedPlanItemIds, true),
@@ -657,6 +719,10 @@ final class CalendarService
                     'energyType' => $event['execution_energy_type'] ?? null,
                     'energyValue' => $event['execution_energy_value'] === null ? null : (int) $event['execution_energy_value'],
                     'energyIsOverride' => (int) ($event['execution_energy_is_override'] ?? 0) === 1,
+                    'wellnessType' => (string) ($event['wellness_type'] ?? ''),
+                    'wellnessDetail' => (string) ($event['wellness_detail'] ?? ''),
+                    'wellnessNote' => (string) ($event['wellness_note'] ?? ''),
+                    'wellnessRating' => $event['wellness_rating'] === null ? null : (int) $event['wellness_rating'],
                 ]);
             }
         }
@@ -687,6 +753,10 @@ final class CalendarService
                 'energyType' => $event['execution_energy_type'] ?? null,
                 'energyValue' => $event['execution_energy_value'] === null ? null : (int) $event['execution_energy_value'],
                 'energyIsOverride' => (int) ($event['execution_energy_is_override'] ?? 0) === 1,
+                'wellnessType' => (string) ($event['wellness_type'] ?? ''),
+                'wellnessDetail' => (string) ($event['wellness_detail'] ?? ''),
+                'wellnessNote' => (string) ($event['wellness_note'] ?? ''),
+                'wellnessRating' => $event['wellness_rating'] === null ? null : (int) $event['wellness_rating'],
             ];
         }
 

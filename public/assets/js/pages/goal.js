@@ -4,7 +4,7 @@
   const panels = Array.from(document.querySelectorAll('[data-goal-sheet]'));
   const csrfToken = document.querySelector('[data-goal-quick-form] input[name="_csrf_token"]')?.value || '';
   const createLayer = document.querySelector('[data-goal-create-layer]');
-  const collapsedKey = 'lifeflow.goal-map.collapsed';
+  const collapsedKey = `lifeflow.goal-map.collapsed.v2.${page?.dataset.mode || 'focus'}`;
   let draggedGoalId = null;
 
   if (!page || !layer) return;
@@ -40,8 +40,9 @@
     }
   }
 
+  const hasStoredCollapseState = localStorage.getItem(collapsedKey) !== null;
   const collapsed = collapsedIds();
-  function setCollapsed(item, shouldCollapse) {
+  function setCollapsed(item, shouldCollapse, persist = true) {
     const id = item.dataset.goalId;
     const children = item.querySelector(':scope > [data-goal-children]');
     const button = item.querySelector(':scope > .goal-node-row [data-goal-collapse]');
@@ -51,16 +52,43 @@
     button.textContent = shouldCollapse ? '▸' : '▾';
     button.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
     if (shouldCollapse) collapsed.add(id); else collapsed.delete(id);
-    localStorage.setItem(collapsedKey, JSON.stringify(Array.from(collapsed)));
+    if (persist) localStorage.setItem(collapsedKey, JSON.stringify(Array.from(collapsed)));
   }
 
-  document.querySelectorAll('[data-goal-node]').forEach(item => {
-    if (collapsed.has(item.dataset.goalId)) setCollapsed(item, true);
+  const goalNodes = Array.from(document.querySelectorAll('[data-goal-node]'));
+  const collapsibleGoalNodes = goalNodes.filter(item => item.querySelector(':scope > [data-goal-children]'));
+  goalNodes.forEach(item => {
+    if (page.dataset.mode === 'all') {
+      const shouldCollapse = hasStoredCollapseState
+        ? collapsed.has(item.dataset.goalId)
+        : item.dataset.focusPath !== '1';
+      setCollapsed(item, shouldCollapse, false);
+    } else if (collapsed.has(item.dataset.goalId)) {
+      setCollapsed(item, true, false);
+    }
     item.querySelector(':scope > .goal-node-row [data-goal-collapse]')?.addEventListener('click', event => {
       event.stopPropagation();
       setCollapsed(item, !item.classList.contains('is-collapsed'));
+      updateToggleAllLabel();
     });
   });
+
+  const toggleAll = document.querySelector('[data-goal-toggle-all]');
+  function updateToggleAllLabel() {
+    if (!toggleAll) return;
+    toggleAll.hidden = collapsibleGoalNodes.length === 0;
+    toggleAll.textContent = collapsibleGoalNodes.some(item => item.classList.contains('is-collapsed'))
+      ? '전부 펼치기'
+      : '전부 접기';
+  }
+
+  toggleAll?.addEventListener('click', () => {
+    const shouldExpand = collapsibleGoalNodes.some(item => item.classList.contains('is-collapsed'));
+    collapsibleGoalNodes.forEach(item => setCollapsed(item, !shouldExpand, false));
+    localStorage.setItem(collapsedKey, JSON.stringify(Array.from(collapsed)));
+    updateToggleAllLabel();
+  });
+  updateToggleAllLabel();
 
   document.querySelectorAll('[data-goal-child-add]').forEach(button => {
     button.addEventListener('click', event => {

@@ -97,6 +97,17 @@
     let reviewTimerId = 0;
     let reviewDeadline = 0;
 
+    function activeStepInput() {
+      return steps[currentStep]?.querySelector('textarea');
+    }
+
+    function updateKeyboardLayout() {
+      if (!window.visualViewport || kptSheet.hidden) return;
+      const keyboardOpen = document.activeElement?.matches('.retrospect-kpt-body textarea') === true;
+      kptSheet.classList.toggle('is-keyboard-open', keyboardOpen && !body.hidden);
+      kptSheet.style.setProperty('--kpt-visible-height', `${window.visualViewport.height}px`);
+    }
+
     function renderReviewTimer() {
       if (!reviewTimer || reviewDeadline === 0) return;
       const remainingSeconds = Math.max(0, Math.ceil((reviewDeadline - Date.now()) / 1000));
@@ -169,15 +180,25 @@
       body.hidden = false;
       kptSheet.classList.remove('is-collapsed');
       retrospectPage?.classList.add('is-kpt-open');
-      collapse.textContent = '접기';
+      collapse.textContent = '기록 보기';
       startReviewTimer();
-      steps[currentStep]?.querySelector('textarea')?.focus();
+      activeStepInput()?.focus();
+      window.setTimeout(updateKeyboardLayout, 80);
     });
     collapse?.addEventListener('click', () => {
       body.hidden = !body.hidden;
       kptSheet.classList.toggle('is-collapsed', body.hidden);
       retrospectPage?.classList.toggle('is-kpt-open', !body.hidden);
-      collapse.textContent = body.hidden ? '펼치기' : '접기';
+      collapse.textContent = body.hidden ? '작성으로 돌아가기' : '기록 보기';
+      if (body.hidden) {
+        window.clearTimeout(saveTimer);
+        saveDraft();
+        activeStepInput()?.blur();
+        kptSheet.classList.remove('is-keyboard-open');
+      } else {
+        activeStepInput()?.focus();
+        window.setTimeout(updateKeyboardLayout, 80);
+      }
     });
     close?.addEventListener('click', () => {
       window.clearTimeout(saveTimer);
@@ -186,11 +207,19 @@
       body.hidden = false;
       kptSheet.classList.remove('is-collapsed');
       retrospectPage?.classList.remove('is-kpt-open');
-      collapse.textContent = '접기';
+      collapse.textContent = '기록 보기';
       stopReviewTimer();
     });
-    previous?.addEventListener('click', () => { currentStep = Math.max(0, currentStep - 1); renderStep(); saveDraft(); });
-    next?.addEventListener('click', () => { currentStep = Math.min(steps.length - 1, currentStep + 1); renderStep(); saveDraft(); });
+    function moveStep(step) {
+      currentStep = Math.max(0, Math.min(steps.length - 1, step));
+      renderStep();
+      saveDraft();
+      activeStepInput()?.focus();
+      window.setTimeout(updateKeyboardLayout, 80);
+    }
+
+    previous?.addEventListener('click', () => moveStep(currentStep - 1));
+    next?.addEventListener('click', () => moveStep(currentStep + 1));
     kptForm.addEventListener('submit', async event => {
       if (event.submitter !== publish || kptForm.dataset.publishConfirmed === '1') return;
       const hasBlank = Array.from(kptForm.querySelectorAll('textarea')).some(textarea => !textarea.value.trim());
@@ -205,6 +234,11 @@
       }
     });
     renderStep();
+    window.visualViewport?.addEventListener('resize', updateKeyboardLayout);
+    kptForm.querySelectorAll('textarea').forEach(textarea => {
+      textarea.addEventListener('focus', () => window.setTimeout(updateKeyboardLayout, 80));
+      textarea.addEventListener('blur', () => window.setTimeout(updateKeyboardLayout, 80));
+    });
   }
 
   document.addEventListener('keydown', event => {

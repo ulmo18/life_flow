@@ -44,6 +44,52 @@ final class RetrospectController
         unset($_SESSION['errors'], $_SESSION['flash_success']);
     }
 
+    public function report(): void
+    {
+        $date = is_string($_GET['date'] ?? null) ? (string) $_GET['date'] : null;
+        $report = $date === null || $date === ''
+            ? $this->retrospectService->getLatestPublishedReportData($this->userId())
+            : $this->retrospectService->getPublishedReportData($this->userId(), $date);
+        if ($report === null) {
+            $_SESSION['errors'] = ['general' => '이 날짜에 발행된 회고가 없습니다.'];
+            $this->redirect($this->retrospectPath($date));
+        }
+
+        $this->render('pages/retrospect/report', [
+            'title' => '발행 회고',
+            'publishedReport' => $report,
+            'flashSuccess' => $_SESSION['flash_success'] ?? null,
+            'pageStyles' => [$this->versionedAsset('/assets/css/pages/retrospect-report.css')],
+        ]);
+        unset($_SESSION['flash_success']);
+    }
+
+    public function reportPreview(): void
+    {
+        $date = is_string($_GET['date'] ?? null) ? (string) $_GET['date'] : null;
+        $report = $date === null || $date === ''
+            ? $this->retrospectService->getLatestPublishedReportData($this->userId())
+            : $this->retrospectService->getPublishedReportData($this->userId(), $date);
+
+        if ($report === null) {
+            $this->respondJson(['ok' => false, 'message' => '발행된 회고를 찾을 수 없습니다.'], 404);
+        }
+
+        ob_start();
+        $embeddedReport = true;
+        require dirname(__DIR__) . '/Views/pages/retrospect/report-content.php';
+        $html = (string) ob_get_clean();
+
+        $this->respondJson([
+            'ok' => true,
+            'date' => (string) $report['date'],
+            'dateTitle' => (string) $report['dateTitle'],
+            'html' => $html,
+            'previous' => $report['adjacent']['previous'] ?? null,
+            'next' => $report['adjacent']['next'] ?? null,
+        ]);
+    }
+
     public function saveDraft(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
@@ -94,7 +140,7 @@ final class RetrospectController
         }
 
         $_SESSION['flash_success'] = '오늘의 회고를 발행했습니다.';
-        $this->redirect($this->retrospectPath($date));
+        $this->redirect($this->reportPath($date));
     }
 
     public function republish(): void
@@ -109,7 +155,7 @@ final class RetrospectController
         }
 
         $_SESSION['flash_success'] = '회고를 최신 일정으로 재발행했습니다.';
-        $this->redirect($this->retrospectPath($date));
+        $this->redirect($this->reportPath($date));
     }
 
     public function updateSettings(): void
@@ -150,6 +196,11 @@ final class RetrospectController
         }
 
         return $path;
+    }
+
+    private function reportPath(string $date): string
+    {
+        return '/retrospect/report?date=' . rawurlencode($date);
     }
 
     private function userId(): int

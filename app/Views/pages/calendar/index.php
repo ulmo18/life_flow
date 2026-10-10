@@ -19,6 +19,7 @@ $availableTagPalettes = array_values(array_filter(
 ));
 $executionEnergy = $calendar['executionEnergy'] ?? [];
 $executionEnergyGroups = $executionEnergy['groups'] ?? [];
+$calendarMode = ($calendarMode ?? 'actual') === 'plan' ? 'plan' : 'actual';
 $untimedPlanItems = array_values(array_filter(
     $calendar['planReminderItems'] ?? [],
     static fn(array $item): bool => ($item['scheduleType'] ?? '') === 'unscheduled'
@@ -30,6 +31,7 @@ $untimedPlanItems = array_values(array_filter(
     data-calendar-date="<?= e((string) $calendar['date']) ?>"
     data-timezone="<?= e(date_default_timezone_get()) ?>"
     data-current-index="<?= $calendar['currentIndex'] === null ? '' : e((string) $calendar['currentIndex']) ?>"
+    data-calendar-mode="<?= e($calendarMode) ?>"
 >
     <section class="calendar-header">
         <div
@@ -46,26 +48,18 @@ $untimedPlanItems = array_values(array_filter(
                 </button>
                 <input type="date" value="<?= e((string) $calendar['date']) ?>" data-calendar-date-picker aria-label="특정 날짜로 이동">
             </h1>
-            <a class="calendar-header-action" href="/calendar?date=<?= e((string) $calendar['prevDate']) ?>" aria-label="이전 날짜">
+            <a class="calendar-header-action" href="/calendar?date=<?= e((string) $calendar['prevDate']) ?>&mode=<?= e($calendarMode) ?>" aria-label="이전 날짜">
                 <span class="calendar-header-action-visual is-icon" aria-hidden="true">&lsaquo;</span>
             </a>
-            <a class="calendar-header-action" href="/calendar?date=<?= e((string) $calendar['nextDate']) ?>" aria-label="다음 날짜">
+            <a class="calendar-header-action" href="/calendar?date=<?= e((string) $calendar['nextDate']) ?>&mode=<?= e($calendarMode) ?>" aria-label="다음 날짜">
                 <span class="calendar-header-action-visual is-icon" aria-hidden="true">&rsaquo;</span>
             </a>
             <?php if (empty($calendar['isToday'])): ?>
-                <a class="calendar-header-action is-text" href="/calendar?date=<?= e((string) $calendar['todayDate']) ?>" aria-label="오늘 날짜로 이동">
+                <a class="calendar-header-action is-text" href="/calendar?date=<?= e((string) $calendar['todayDate']) ?>&mode=<?= e($calendarMode) ?>" aria-label="오늘 날짜로 이동">
                     <span class="calendar-header-action-visual">오늘</span>
                 </a>
             <?php endif; ?>
-            <button
-                type="button"
-                class="calendar-header-action is-text"
-                data-retrospect-preview-open
-                title="<?= is_array($retrospectPreview) ? '선택한 날짜의 발행 회고 보기' : '선택한 날짜의 회고 작성으로 이동' ?>"
-                data-retrospect-empty-url="/retrospect?date=<?= e((string) $calendar['date']) ?>"
-            >
-                <span class="calendar-header-action-visual">회고</span>
-            </button>
+            <button type="button" class="calendar-header-action is-text" data-retrospect-preview-open title="가장 최근에 발행한 회고 보기"><span class="calendar-header-action-visual">회고</span></button>
         </div>
     </section>
 
@@ -76,12 +70,12 @@ $untimedPlanItems = array_values(array_filter(
     <?php endif; ?>
 
     <div class="calendar-mode-tabs" role="tablist" aria-label="캘린더 일정 종류">
-        <button type="button" role="tab" aria-selected="false" data-calendar-mode="plan">계획 일정</button>
-        <button type="button" role="tab" aria-selected="true" data-calendar-mode="actual">실제 일정</button>
+        <button type="button" role="tab" aria-selected="<?= $calendarMode === 'plan' ? 'true' : 'false' ?>" data-calendar-mode="plan">계획 일정</button>
+        <button type="button" role="tab" aria-selected="<?= $calendarMode === 'actual' ? 'true' : 'false' ?>" data-calendar-mode="actual">실제 일정</button>
     </div>
 
     <?php if (empty($calendar['planReminderItems'])): ?>
-        <section class="calendar-empty-prompt" data-calendar-empty-mode="plan" hidden>
+        <section class="calendar-empty-prompt" data-calendar-empty-mode="plan" <?= $calendarMode !== 'plan' ? 'hidden' : '' ?>>
             <div>
                 <strong>오늘의 계획을 하나만 적어보세요</strong>
                 <p>완벽한 시간표보다 가장 중요한 한 가지면 충분해요.</p>
@@ -96,7 +90,7 @@ $untimedPlanItems = array_values(array_filter(
     <?php endif; ?>
 
     <?php if (empty($calendar['actualSegments'])): ?>
-        <section class="calendar-empty-prompt" data-calendar-empty-mode="actual">
+        <section class="calendar-empty-prompt" data-calendar-empty-mode="actual" <?= $calendarMode !== 'actual' ? 'hidden' : '' ?>>
             <div>
                 <strong>오늘의 흐름을 기록해보세요</strong>
                 <p>실행한 시간을 남기면 계획과 실제 흐름을 회고할 수 있어요.</p>
@@ -106,16 +100,21 @@ $untimedPlanItems = array_values(array_filter(
     <?php endif; ?>
 
     <?php if ($untimedPlanItems !== []): ?>
-        <section class="calendar-untimed-plans" data-calendar-empty-mode="plan" hidden aria-labelledby="calendarUntimedPlanTitle">
+        <section class="calendar-untimed-plans" data-calendar-empty-mode="plan" <?= $calendarMode !== 'plan' ? 'hidden' : '' ?> aria-labelledby="calendarUntimedPlanTitle">
             <div class="calendar-untimed-plans-heading">
                 <strong id="calendarUntimedPlanTitle">시간 미정 계획</strong>
-                <span><?= e((string) count($untimedPlanItems)) ?></span>
+                <div class="calendar-untimed-plans-actions">
+                    <span><?= e((string) count($untimedPlanItems)) ?>개</span>
+                    <?php if (count($untimedPlanItems) > 1): ?>
+                        <button type="button" class="calendar-untimed-toggle" data-untimed-plan-toggle aria-expanded="false" aria-controls="calendarUntimedPlanList" aria-label="시간 미정 계획 펼치기">펼치기</button>
+                    <?php endif; ?>
+                </div>
             </div>
             <ul id="calendarUntimedPlanList">
                 <?php foreach ($untimedPlanItems as $index => $item): ?>
                     <li class="<?= !empty($item['isLinked']) ? 'is-linked' : '' ?>" <?= $index > 0 ? 'hidden data-untimed-plan-extra' : '' ?>>
                         <span class="calendar-importance-badge importance-<?= e(strtolower((string) $item['importance'])) ?>"><?= e((string) $item['importanceBadge']) ?></span>
-                        <strong><?= e((string) $item['title']) ?></strong>
+                        <strong class="<?= !empty($item['isLongDuration']) ? 'duration-highlight' : '' ?>"><?= e((string) $item['title']) ?></strong>
                         <button type="button" class="btn btn-secondary" data-plan-item-open
                             data-plan-item-id="<?= e((string) $item['itemId']) ?>"
                             data-plan-item-title="<?= e((string) $item['title']) ?>"
@@ -129,11 +128,6 @@ $untimedPlanItems = array_values(array_filter(
                     </li>
                 <?php endforeach; ?>
             </ul>
-            <?php if (count($untimedPlanItems) > 1): ?>
-                <button type="button" class="calendar-untimed-toggle" data-untimed-plan-toggle aria-expanded="false" aria-controls="calendarUntimedPlanList" data-hidden-count="<?= e((string) (count($untimedPlanItems) - 1)) ?>">
-                    나머지 <?= e((string) (count($untimedPlanItems) - 1)) ?>개 보기
-                </button>
-            <?php endif; ?>
         </section>
     <?php endif; ?>
 
@@ -155,11 +149,11 @@ $untimedPlanItems = array_values(array_filter(
                 </div>
             <?php endfor; ?>
 
-            <div class="event-layer is-background" id="planLayer">
+            <div class="event-layer <?= $calendarMode === 'actual' ? 'is-background' : '' ?>" id="planLayer">
                 <?php foreach (($calendar['planSegments'] ?? []) as $segment): ?>
                     <button
                         type="button"
-                        class="event plan-event"
+                        class="event plan-event importance-<?= e(strtolower((string) $segment['importance'])) ?>"
                         style="--row: <?= e((string) $segment['row']) ?>; --col: <?= e((string) $segment['col']) ?>; --span: <?= e((string) $segment['span']) ?>;"
                         data-ui-tooltip="<?= e((string) $segment['title']) ?>"
                         data-plan-item-open
@@ -178,7 +172,7 @@ $untimedPlanItems = array_values(array_filter(
                 <?php endforeach; ?>
             </div>
 
-            <div class="event-layer actual-layer" id="actualLayer">
+            <div class="event-layer actual-layer" id="actualLayer" <?= $calendarMode !== 'actual' ? 'hidden' : '' ?>>
                 <?php foreach (($calendar['actualSegments'] ?? []) as $segment): ?>
                     <?php
                     $tooltipMemo = trim((string) ($segment['memo'] ?? ''));
@@ -208,6 +202,10 @@ $untimedPlanItems = array_values(array_filter(
                             data-event-energy-type="<?= e((string) ($segment['energyType'] ?? '')) ?>"
                             data-event-energy-value="<?= $segment['energyValue'] === null ? '' : e((string) $segment['energyValue']) ?>"
                             data-event-energy-override="<?= !empty($segment['energyIsOverride']) ? '1' : '0' ?>"
+                            data-event-wellness-type="<?= e((string) ($segment['wellnessType'] ?? '')) ?>"
+                            data-event-wellness-detail="<?= e((string) ($segment['wellnessDetail'] ?? '')) ?>"
+                            data-event-wellness-note="<?= e((string) ($segment['wellnessNote'] ?? '')) ?>"
+                            data-event-wellness-rating="<?= $segment['wellnessRating'] === null ? '' : e((string) $segment['wellnessRating']) ?>"
                         >
                             <?php if (!empty($segment['tagName'])): ?>
                                 <span class="calendar-tag-dot" aria-hidden="true"></span>
@@ -243,34 +241,42 @@ $untimedPlanItems = array_values(array_filter(
 <div class="calendar-local-layer" data-calendar-layer hidden>
     <div class="calendar-local-overlay" data-calendar-close></div>
 
-    <section class="calendar-sheet" data-event-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventSheetTitle">
-        <form method="post" action="/calendar/event" id="calendarEventForm">
+    <section class="calendar-sheet ui-form-sheet is-structured" data-event-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventSheetTitle">
+        <form class="calendar-actual-form ui-form-sheet-layout" method="post" action="/calendar/event" id="calendarEventForm" data-actual-form>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="schedule_type" id="calendarScheduleType" value="timed">
             <input type="hidden" name="source_event_id" id="calendarSourceEventId">
-            <div class="calendar-sheet-header">
-                <strong id="eventSheetTitle">실제 일정</strong>
-                <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
-            </div>
-            <div class="calendar-time-fields" data-calendar-time-fields>
+            <div class="ui-form-sheet-view" data-actual-view="main">
+                <div class="calendar-sheet-header ui-form-sheet-header">
+                    <strong id="eventSheetTitle">실제 일정</strong>
+                    <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
+                </div>
+                <div class="ui-form-sheet-body calendar-actual-body">
+                    <label class="form-label calendar-actual-title-label" for="calendarEventTitle">일정명</label>
+                    <input class="input calendar-actual-title-input" id="calendarEventTitle" name="title" type="text" maxlength="80" autocomplete="off" placeholder="무엇을 했나요?" required>
+
+                    <fieldset class="calendar-time-fields calendar-actual-time-range" data-calendar-time-fields>
+                <legend>시간</legend>
                 <label for="calendarStartIndex">
-                    <span>시작시간</span>
+                    <span class="sr-only">시작시간</span>
                     <select class="input" name="start_index" id="calendarStartIndex" required>
                         <?php for ($index = 0; $index < 144; $index++): ?>
                             <option value="<?= $index ?>"><?= sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option>
                         <?php endfor; ?>
                     </select>
                 </label>
+                <span class="calendar-time-arrow" aria-hidden="true">→</span>
                 <label for="calendarEndIndex">
-                    <span>종료시간</span>
+                    <span class="sr-only">종료시간</span>
                     <select class="input" name="end_index" id="calendarEndIndex" required>
                         <?php for ($index = 1; $index <= 144; $index++): ?>
                             <option value="<?= $index ?>"><?= $index === 144 ? '24:00' : sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option>
                         <?php endfor; ?>
                     </select>
                 </label>
-            </div>
+                    </fieldset>
 
             <?php if (!empty($calendar['unscheduledEvents'])): ?>
                 <div class="calendar-unscheduled-manager" data-unscheduled-manager hidden>
@@ -304,42 +310,11 @@ $untimedPlanItems = array_values(array_filter(
                 </div>
             <?php endif; ?>
 
-            <?php if (!empty($calendar['unscheduledEvents'])): ?>
-                <div class="calendar-event-source" data-event-source-tabs>
-                    <div class="calendar-event-source-tabs" role="tablist" aria-label="일정 입력 방식">
-                        <button type="button" role="tab" aria-selected="true" data-event-source-tab="new">새 일정 입력</button>
-                        <button type="button" role="tab" aria-selected="false" data-event-source-tab="unscheduled">
-                            시간 미정 일정 (<?= e((string) count($calendar['unscheduledEvents'])) ?>)
-                        </button>
-                    </div>
-                    <div class="calendar-source-list" data-event-source-panel="unscheduled" hidden>
-                        <?php foreach ($calendar['unscheduledEvents'] as $event): ?>
-                            <label class="calendar-source-option" style="--event-color: <?= e((string) $event['tagColor']) ?>;">
-                                <input
-                                    type="radio"
-                                    name="source_event_choice"
-                                    value="<?= e((string) $event['id']) ?>"
-                                    data-source-event
-                                    data-event-title="<?= e((string) $event['title']) ?>"
-                                    data-event-tag-id="<?= $event['tagId'] === null ? '' : e((string) $event['tagId']) ?>"
-                                >
-                                <span><?= e((string) $event['title']) ?></span>
-                                <small><?= !empty($event['tagName']) ? e((string) $event['tagName']) : '태그 없음' ?></small>
-                                <textarea hidden data-source-event-memo><?= e((string) $event['memo']) ?></textarea>
-                            </label>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            <?php endif; ?>
-
-            <label class="form-label" for="calendarEventTitle">일정명</label>
-            <input class="input" id="calendarEventTitle" name="title" type="text" maxlength="80" autocomplete="off" required>
-
             <fieldset class="calendar-tag-links" data-calendar-tag-group>
                 <legend>태그</legend>
                 <label class="calendar-tag-link is-empty">
                     <input type="radio" name="calendar_tag_id" value="" checked>
-                    <span>태그 없음</span>
+                    <span>없음</span>
                 </label>
                 <?php foreach (($calendar['calendarTags'] ?? []) as $tag): ?>
                     <?php if ((int) ($tag['is_enabled'] ?? 1) !== 1): ?>
@@ -356,56 +331,92 @@ $untimedPlanItems = array_values(array_filter(
                 <?php require __DIR__ . '/_quick-tag.php'; ?>
             </fieldset>
 
+            <?php if (!empty($calendar['unscheduledEvents'])): ?>
+                <details class="calendar-event-source calendar-actual-disclosure ui-progressive-disclosure" data-event-source-tabs>
+                    <summary><span>시간 미정 일정 불러오기</span><strong><?= e((string) count($calendar['unscheduledEvents'])) ?>개</strong></summary>
+                    <div class="calendar-event-source-tabs" role="tablist" aria-label="일정 입력 방식">
+                        <button type="button" role="tab" aria-selected="true" data-event-source-tab="new">새 일정 입력</button>
+                        <button type="button" role="tab" aria-selected="false" data-event-source-tab="unscheduled">시간 미정 일정 (<?= e((string) count($calendar['unscheduledEvents'])) ?>)</button>
+                    </div>
+                    <div class="calendar-source-list" data-event-source-panel="unscheduled" hidden>
+                        <?php foreach ($calendar['unscheduledEvents'] as $event): ?>
+                            <label class="calendar-source-option" style="--event-color: <?= e((string) $event['tagColor']) ?>;"><input type="radio" name="source_event_choice" value="<?= e((string) $event['id']) ?>" data-source-event data-event-title="<?= e((string) $event['title']) ?>" data-event-tag-id="<?= $event['tagId'] === null ? '' : e((string) $event['tagId']) ?>"><span><?= e((string) $event['title']) ?></span><small><?= !empty($event['tagName']) ? e((string) $event['tagName']) : '태그 없음' ?></small><textarea hidden data-source-event-memo><?= e((string) $event['memo']) ?></textarea></label>
+                        <?php endforeach; ?>
+                    </div>
+                </details>
+            <?php endif; ?>
+
             <?php if (!empty($availablePlanOptions)): ?>
-                <fieldset class="calendar-plan-links" data-create-plan-group>
-                    <legend>연결할 계획 일정</legend>
-                    <label class="calendar-plan-link">
-                        <input type="radio" name="daily_plan_item_id" value="" checked>
-                        <span>연결하지 않음</span>
-                    </label>
-                    <?php foreach ($availablePlanOptions as $option): ?>
-                        <label class="calendar-plan-link">
-                            <input type="radio" name="daily_plan_item_id" value="<?= e((string) $option['itemId']) ?>" data-plan-title="<?= e((string) $option['title']) ?>">
-                            <span><?= e((string) $option['title']) ?></span>
-                            <small><?= e((string) $option['timeRange']) ?></small>
-                        </label>
-                    <?php endforeach; ?>
-                </fieldset>
-                <p class="calendar-form-hint">계획을 연결하면 실제 일정명이 계획 일정명으로 설정됩니다.</p>
+                <button type="button" class="calendar-selection-row" data-actual-view-open="plan">
+                    <span>계획과 연결</span>
+                    <span class="calendar-selection-summary"><strong data-plan-link-summary>연결하기</strong><small data-plan-link-detail></small></span>
+                    <b data-selection-action>연결하기 ›</b>
+                </button>
             <?php endif; ?>
 
+            <section class="calendar-additional-records" aria-labelledby="calendarCreateAdditionalTitle">
+                <h3 id="calendarCreateAdditionalTitle">함께 기록하기</h3>
+                <?php if (!empty($calendar['routines']) && !empty($calendar['canEditRoutines'])): ?>
+                    <button type="button" class="calendar-selection-row" data-actual-view-open="routine"><span>루틴</span><strong data-actual-summary="routine">연결 없음</strong><b>선택하기 ›</b></button>
+                <?php endif; ?>
+                <details class="calendar-actual-disclosure ui-progressive-disclosure" data-actual-disclosure="wellness">
+                    <summary><span>생활 기록</span><strong data-actual-summary="wellness">기록 안 함</strong></summary>
+                    <?php $wellnessFieldPrefix = 'calendarCreateWellness'; require __DIR__ . '/_wellness-fields.php'; ?>
+                </details>
+                <details class="calendar-actual-disclosure ui-progressive-disclosure" data-actual-disclosure="memo">
+                    <summary><span>메모</span><strong data-actual-summary="memo">메모 없음</strong></summary>
+                    <label class="sr-only" for="calendarEventMemo">메모</label>
+                    <textarea class="input calendar-memo-input" id="calendarEventMemo" name="memo" maxlength="500" rows="3" placeholder="메모를 입력하세요..."></textarea>
+                </details>
+            </section>
+
+            <?php if (!empty($executionEnergyGroups)): ?>
+                <details class="calendar-actual-disclosure calendar-energy-disclosure ui-progressive-disclosure" data-actual-disclosure="energy">
+                    <summary><span>실행력</span><span class="calendar-energy-summary"><strong data-energy-summary-main>그룹 기준</strong><small data-energy-summary-detail>변경</small></span></summary>
+                    <fieldset class="calendar-energy-links"><legend class="sr-only">실행력 상세 설정</legend><label class="form-label" for="calendarEnergyGroup">실행력 그룹</label><select class="input" id="calendarEnergyGroup" name="execution_energy_group_id"><?php foreach ($executionEnergyGroups as $group): ?><option value="<?= e((string) $group['id']) ?>" data-energy-name="<?= e((string) $group['name']) ?>" data-energy-type="<?= e((string) $group['effect_type']) ?>" data-energy-value="<?= e((string) $group['energy_value']) ?>" <?= !empty($group['is_default']) ? 'selected' : '' ?>><?= e((string) $group['name']) ?> · <?= $group['effect_type'] === 'recover' ? '+' : '-' ?><?= e((string) $group['energy_value']) ?></option><?php endforeach; ?></select><div class="calendar-energy-override"><span>적용 방식</span><label><input type="radio" name="execution_energy_type" value="" checked> 그룹 기준</label><label><input type="radio" name="execution_energy_type" value="consume"> 직접 소모</label><label><input type="radio" name="execution_energy_type" value="recover"> 직접 회복</label><input class="input" name="execution_energy_value" type="number" min="5" max="1000" step="5" placeholder="개별 값" hidden></div><p class="calendar-form-hint">실제 일정 저장 시에만 현재 실행력에 반영됩니다.</p></fieldset>
+                </details>
+            <?php endif; ?>
+
+                </div>
+                <div class="calendar-actual-actions ui-form-sheet-actions"><button type="submit" class="btn btn-primary">일정 저장</button></div>
+            </div>
+            <?php if (!empty($availablePlanOptions)): ?>
+                <div class="ui-form-sheet-view calendar-selection-view" data-actual-view="plan" hidden>
+                    <div class="calendar-sheet-header ui-form-sheet-header"><strong id="calendarCreatePlanSelectionTitle">계획 일정 선택</strong><button type="button" class="ui-close-button" data-actual-view-cancel aria-label="계획 선택 닫기">×</button></div>
+                    <div class="ui-form-sheet-body calendar-selection-body">
+                        <div class="calendar-selection-tabs" role="tablist" aria-label="계획 일정 필터"><button type="button" role="tab" aria-selected="true" data-plan-filter="recommended">추천</button><button type="button" role="tab" aria-selected="false" data-plan-filter="all">전체 계획</button></div>
+                        <fieldset class="calendar-plan-links calendar-compact-selection-list" data-create-plan-group>
+                            <legend class="sr-only">연결할 계획 일정 선택</legend>
+                            <label class="calendar-plan-link is-clear-option" hidden><input type="radio" name="daily_plan_item_id" value="" checked data-plan-summary="연결하기"><span>연결하지 않음</span><small>계획 연결 없음</small></label>
+                            <?php foreach ($availablePlanOptions as $option): ?>
+                                <label class="calendar-plan-link" data-plan-filter-item>
+                                    <input type="radio" name="daily_plan_item_id" value="<?= e((string) $option['itemId']) ?>" data-plan-title="<?= e((string) $option['title']) ?>" data-plan-summary="<?= e((string) $option['title']) ?>" data-plan-detail="<?= e((string) $option['timeRange']) ?>" data-plan-start-index="<?= $option['startIndex'] === null ? '' : e((string) $option['startIndex']) ?>" data-plan-end-index="<?= $option['endIndex'] === null ? '' : e((string) $option['endIndex']) ?>">
+                                    <span><?= e((string) $option['title']) ?></span><small><?= e((string) $option['timeRange']) ?></small>
+                                </label>
+                            <?php endforeach; ?>
+                        </fieldset>
+                    </div>
+                    <div class="ui-form-sheet-actions calendar-selection-actions"><button type="button" class="btn btn-ghost" data-plan-clear>연결 해제</button><button type="button" class="btn btn-primary" data-actual-view-done>완료</button></div>
+                </div>
+            <?php endif; ?>
             <?php if (!empty($calendar['routines']) && !empty($calendar['canEditRoutines'])): ?>
-                <fieldset class="calendar-routine-links" data-create-routine-group>
-                    <legend>함께 완료할 루틴</legend>
-                    <?php foreach ($calendar['routines'] as $routine): ?>
-                        <label class="calendar-routine-link <?= $routine['state'] === 'O' ? 'is-done' : '' ?>">
-                            <input
-                                type="checkbox"
-                                name="routine_ids[]"
-                                value="<?= e((string) $routine['id']) ?>"
-                                <?= $routine['state'] === 'O' ? 'checked disabled' : '' ?>
-                            >
-                            <span><?= e((string) $routine['name']) ?></span>
-                            <small><?= $routine['state'] === 'O' ? '이미 완료' : '일정 저장과 함께 완료' ?></small>
-                        </label>
-                    <?php endforeach; ?>
-                </fieldset>
+                <div class="ui-form-sheet-view calendar-selection-view" data-actual-view="routine" hidden>
+                    <div class="calendar-sheet-header ui-form-sheet-header"><strong id="calendarCreateRoutineSelectionTitle">루틴 선택</strong><button type="button" class="ui-close-button" data-actual-view-cancel aria-label="루틴 선택 닫기">×</button></div>
+                    <div class="ui-form-sheet-body calendar-selection-body">
+                        <?php if (count($calendar['routines']) >= 8): ?><label class="sr-only" for="calendarCreateRoutineSearch">루틴 검색</label><input class="input calendar-selection-search" id="calendarCreateRoutineSearch" type="search" placeholder="루틴 검색..." data-routine-search><?php endif; ?>
+                        <fieldset class="calendar-routine-links calendar-compact-selection-list" data-create-routine-group><legend class="sr-only">일정 저장과 함께 완료할 미완료 루틴</legend><?php foreach ($calendar['routines'] as $routine): ?><label class="calendar-routine-link" data-routine-filter-item><input type="checkbox" name="routine_ids[]" value="<?= e((string) $routine['id']) ?>"><span><?= e((string) $routine['name']) ?></span><small data-routine-state-label>미완료</small></label><?php endforeach; ?></fieldset>
+                    </div>
+                    <div class="ui-form-sheet-actions calendar-selection-actions"><button type="button" class="btn btn-ghost" data-routine-clear>초기화</button><button type="button" class="btn btn-primary" data-actual-view-done data-routine-done>완료</button></div>
+                </div>
             <?php endif; ?>
-
-            <label class="form-label" for="calendarEventMemo">메모</label>
-            <textarea class="input calendar-memo-input" id="calendarEventMemo" name="memo" maxlength="500" rows="3"></textarea>
-
-            <?php if (!empty($executionEnergyGroups)): ?><fieldset class="calendar-energy-links"><legend>실행력 적용</legend><label class="form-label" for="calendarEnergyGroup">실행력 그룹</label><select class="input" id="calendarEnergyGroup" name="execution_energy_group_id"><?php foreach ($executionEnergyGroups as $group): ?><option value="<?= e((string) $group['id']) ?>" <?= !empty($group['is_default']) ? 'selected' : '' ?>><?= e((string) $group['name']) ?> · <?= $group['effect_type'] === 'recover' ? '+' : '-' ?><?= e((string) $group['energy_value']) ?></option><?php endforeach; ?></select><div class="calendar-energy-override"><label><input type="radio" name="execution_energy_type" value="" checked> 그룹 기준</label><label><input type="radio" name="execution_energy_type" value="consume"> 소모</label><label><input type="radio" name="execution_energy_type" value="recover"> 회복</label><input class="input" name="execution_energy_value" type="number" min="5" max="1000" step="5" placeholder="개별 값 (선택)"></div><p class="calendar-form-hint">실제 일정 저장 시에만 현재 실행력에 반영됩니다.</p></fieldset><?php endif; ?>
-
-            <button type="submit" class="btn btn-primary">일정 저장</button>
         </form>
     </section>
 
-    <section class="calendar-sheet calendar-condition-sheet" data-condition-sheet hidden aria-modal="true" role="dialog" aria-labelledby="conditionSheetTitle">
+    <section class="calendar-sheet calendar-condition-sheet ui-form-sheet" data-condition-sheet hidden aria-modal="true" role="dialog" aria-labelledby="conditionSheetTitle">
         <form method="post" action="/execution-energy/morning" id="calendarConditionForm">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
-            <div class="calendar-sheet-header"><strong id="conditionSheetTitle">오늘의 컨디션</strong><button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button></div>
+            <div class="calendar-sheet-header ui-form-sheet-header"><strong id="conditionSheetTitle">오늘의 컨디션</strong><button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button></div>
             <p class="calendar-form-hint">오늘의 시작 실행력은 컨디션 선택을 저장할 때 한 번만 다시 계산됩니다.</p>
             <?php foreach ([
                 'sleep_state' => ['수면', [1 => '매우 나쁨', 2 => '나쁨', 3 => '평소', 4 => '좋음', 5 => '매우 좋음']],
@@ -416,29 +427,38 @@ $untimedPlanItems = array_values(array_filter(
                 <fieldset class="calendar-condition-choice"><legend><?= e($label) ?></legend><div><label><input type="radio" name="<?= e($field) ?>" value="" <?= ($executionEnergy['day'][$field] ?? null) === null ? 'checked' : '' ?>><span>선택 안 함</span></label><?php foreach ($options as $value => $option): ?><label><input type="radio" name="<?= e($field) ?>" value="<?= e((string) $value) ?>" <?= (int) ($executionEnergy['day'][$field] ?? 0) === $value ? 'checked' : '' ?>><span><?= e($option) ?></span></label><?php endforeach; ?></div></fieldset>
             <?php endforeach; ?>
             <fieldset class="calendar-condition-choice"><legend>오늘 체감 부담</legend><div><label><input type="radio" name="burden_feedback" value="" <?= empty($executionEnergy['day']['burden_feedback']) ? 'checked' : '' ?>><span>선택 안 함</span></label><?php foreach (['lower' => '예상보다 낮음', 'similar' => '예상과 비슷함', 'higher' => '예상보다 높음'] as $value => $label): ?><label><input type="radio" name="burden_feedback" value="<?= e($value) ?>" <?= ($executionEnergy['day']['burden_feedback'] ?? '') === $value ? 'checked' : '' ?>><span><?= e($label) ?></span></label><?php endforeach; ?></div></fieldset>
-            <button class="btn btn-primary" type="submit">컨디션 반영</button>
+            <div class="ui-form-sheet-actions"><button class="btn btn-primary" type="submit">컨디션 반영</button></div>
         </form>
     </section>
 
-    <section class="calendar-sheet" data-event-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventEditSheetTitle">
-        <form method="post" action="/calendar/event/update" id="calendarEventEditForm">
+    <section class="calendar-sheet ui-form-sheet is-structured" data-event-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventEditSheetTitle">
+        <form class="calendar-actual-form ui-form-sheet-layout" method="post" action="/calendar/event/update" id="calendarEventEditForm" data-actual-form>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="event_id" id="calendarEditEventId">
             <input type="hidden" name="schedule_type" id="calendarEditScheduleType" value="timed">
             <input type="hidden" name="execution_energy_preserve" id="calendarEditEnergyPreserve" value="0">
-            <div class="calendar-sheet-header">
-                <strong id="eventEditSheetTitle">일정 수정</strong>
-                <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
-            </div>
-            <label class="form-label" for="calendarEditEventTitle">일정명</label>
-            <input class="input" id="calendarEditEventTitle" name="title" type="text" maxlength="80" autocomplete="off" required>
+            <div class="ui-form-sheet-view" data-actual-view="main">
+                <div class="calendar-sheet-header ui-form-sheet-header">
+                    <strong id="eventEditSheetTitle">일정 수정</strong>
+                    <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
+                </div>
+                <div class="ui-form-sheet-body calendar-actual-body">
+                    <label class="form-label calendar-actual-title-label" for="calendarEditEventTitle">일정명</label>
+                    <input class="input calendar-actual-title-input" id="calendarEditEventTitle" name="title" type="text" maxlength="80" autocomplete="off" placeholder="무엇을 했나요?" required>
+                    <fieldset class="calendar-time-fields calendar-actual-time-range" data-calendar-edit-time-fields>
+                        <legend>시간</legend>
+                        <label for="calendarEditStartIndex"><span class="sr-only">시작시간</span><select class="input" name="start_index" id="calendarEditStartIndex" required><?php for ($index = 0; $index < 144; $index++): ?><option value="<?= $index ?>"><?= sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
+                        <span class="calendar-time-arrow" aria-hidden="true">→</span>
+                        <label for="calendarEditEndIndex"><span class="sr-only">종료시간</span><select class="input" name="end_index" id="calendarEditEndIndex" required><?php for ($index = 1; $index <= 144; $index++): ?><option value="<?= $index ?>"><?= $index === 144 ? '24:00' : sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
+                    </fieldset>
 
             <fieldset class="calendar-tag-links" data-edit-tag-group data-calendar-tag-group>
                 <legend>태그</legend>
                 <label class="calendar-tag-link is-empty">
                     <input type="radio" name="calendar_tag_id" value="">
-                    <span>태그 없음</span>
+                    <span>없음</span>
                 </label>
                 <?php foreach (($calendar['calendarTags'] ?? []) as $tag): ?>
                     <?php $tagDisabled = (int) ($tag['is_enabled'] ?? 1) !== 1; ?>
@@ -458,45 +478,49 @@ $untimedPlanItems = array_values(array_filter(
             </fieldset>
 
             <?php if (!empty($calendar['planOptions'])): ?>
-                <fieldset class="calendar-plan-links" data-edit-plan-group>
-                    <legend>연결할 계획 일정</legend>
-                    <label class="calendar-plan-link">
-                        <input type="radio" name="daily_plan_item_id" value="">
-                        <span>연결하지 않음</span>
-                    </label>
-                    <?php foreach (($calendar['planOptions'] ?? []) as $option): ?>
-                        <label
-                            class="calendar-plan-link <?= !empty($option['disabled']) ? 'is-disabled' : '' ?>"
-                            data-plan-option="<?= e((string) $option['itemId']) ?>"
-                            data-plan-disabled="<?= !empty($option['disabled']) ? '1' : '0' ?>"
-                        >
-                            <input
-                                type="radio"
-                                name="daily_plan_item_id"
-                                value="<?= e((string) $option['itemId']) ?>"
-                                data-plan-title="<?= e((string) $option['title']) ?>"
-                                <?= !empty($option['disabled']) ? 'disabled' : '' ?>
-                            >
-                            <span><?= e((string) $option['title']) ?></span>
-                            <small><?= e((string) $option['timeRange']) ?><?= !empty($option['disabled']) ? ' · 이미 연결됨' : '' ?></small>
-                        </label>
-                    <?php endforeach; ?>
-                </fieldset>
-                <p class="calendar-form-hint">다른 계획을 연결하면 실제 일정명이 해당 계획명으로 변경됩니다.</p>
+                <button type="button" class="calendar-selection-row" data-actual-view-open="plan"><span>계획과 연결</span><span class="calendar-selection-summary"><strong data-plan-link-summary>연결하기</strong><small data-plan-link-detail></small></span><b data-selection-action>연결하기 ›</b></button>
             <?php endif; ?>
 
-            <label class="form-label" for="calendarEditMemo">메모</label>
-            <textarea class="input calendar-memo-input" id="calendarEditMemo" name="memo" maxlength="500" rows="4"></textarea>
+            <section class="calendar-additional-records" aria-labelledby="calendarEditAdditionalTitle">
+                <h3 id="calendarEditAdditionalTitle">함께 기록하기</h3>
+                <?php if (!empty($calendar['routines']) && !empty($calendar['canEditRoutines'])): ?>
+                    <button type="button" class="calendar-selection-row" data-actual-view-open="routine"><span>루틴</span><strong data-actual-summary="routine">연결 없음</strong><b>선택하기 ›</b></button>
+                <?php endif; ?>
+                <details class="calendar-actual-disclosure" data-actual-disclosure="wellness"><summary><span>생활 기록</span><strong data-actual-summary="wellness">기록 안 함</strong></summary><?php $wellnessFieldPrefix = 'calendarEditWellness'; require __DIR__ . '/_wellness-fields.php'; ?></details>
+                <details class="calendar-actual-disclosure" data-actual-disclosure="memo"><summary><span>메모</span><strong data-actual-summary="memo">메모 없음</strong></summary><label class="sr-only" for="calendarEditMemo">메모</label><textarea class="input calendar-memo-input" id="calendarEditMemo" name="memo" maxlength="500" rows="4" placeholder="메모를 입력하세요..."></textarea></details>
+            </section>
 
-            <?php if (!empty($executionEnergyGroups)): ?><fieldset class="calendar-energy-links"><legend>실행력 적용</legend><label class="form-label" for="calendarEditEnergyGroup">실행력 그룹</label><select class="input" id="calendarEditEnergyGroup" name="execution_energy_group_id"><?php foreach ($executionEnergyGroups as $group): ?><option value="<?= e((string) $group['id']) ?>" <?= !empty($group['is_default']) ? 'selected' : '' ?>><?= e((string) $group['name']) ?> · <?= $group['effect_type'] === 'recover' ? '+' : '-' ?><?= e((string) $group['energy_value']) ?></option><?php endforeach; ?></select><div class="calendar-energy-override"><label><input type="radio" name="execution_energy_type" value="" checked> 그룹 기준</label><label><input type="radio" name="execution_energy_type" value="consume"> 소모</label><label><input type="radio" name="execution_energy_type" value="recover"> 회복</label><input class="input" id="calendarEditEnergyValue" name="execution_energy_value" type="number" min="5" max="1000" step="5" placeholder="개별 값 (선택)"></div><p class="calendar-form-hint">수정한 값으로 해당 날짜의 실행력을 다시 계산합니다.</p></fieldset><?php endif; ?>
+            <?php if (!empty($executionEnergyGroups)): ?>
+                <details class="calendar-actual-disclosure calendar-energy-disclosure" data-actual-disclosure="energy"><summary><span>실행력</span><span class="calendar-energy-summary"><strong data-energy-summary-main>그룹 기준</strong><small data-energy-summary-detail>변경</small></span></summary><fieldset class="calendar-energy-links"><legend class="sr-only">실행력 상세 설정</legend><label class="form-label" for="calendarEditEnergyGroup">실행력 그룹</label><select class="input" id="calendarEditEnergyGroup" name="execution_energy_group_id"><?php foreach ($executionEnergyGroups as $group): ?><option value="<?= e((string) $group['id']) ?>" data-energy-name="<?= e((string) $group['name']) ?>" data-energy-type="<?= e((string) $group['effect_type']) ?>" data-energy-value="<?= e((string) $group['energy_value']) ?>" <?= !empty($group['is_default']) ? 'selected' : '' ?>><?= e((string) $group['name']) ?> · <?= $group['effect_type'] === 'recover' ? '+' : '-' ?><?= e((string) $group['energy_value']) ?></option><?php endforeach; ?></select><div class="calendar-energy-override"><span>적용 방식</span><label><input type="radio" name="execution_energy_type" value="" checked> 그룹 기준</label><label><input type="radio" name="execution_energy_type" value="consume"> 직접 소모</label><label><input type="radio" name="execution_energy_type" value="recover"> 직접 회복</label><input class="input" id="calendarEditEnergyValue" name="execution_energy_value" type="number" min="5" max="1000" step="5" placeholder="개별 값" hidden></div><p class="calendar-form-hint">수정한 값으로 해당 날짜의 실행력을 다시 계산합니다.</p></fieldset></details>
+            <?php endif; ?>
 
-            <div class="calendar-sheet-actions">
-                <button type="submit" class="btn btn-primary">수정 저장</button>
-                <button type="submit" class="btn btn-ghost" form="calendarEventDeleteForm">일정 삭제</button>
+                </div>
+                <div class="calendar-sheet-actions calendar-actual-actions ui-form-sheet-actions">
+                    <button type="submit" class="btn btn-primary">수정 저장</button>
+                    <button type="submit" class="btn btn-ghost" form="calendarEventDeleteForm">일정 삭제</button>
+                </div>
             </div>
+            <?php if (!empty($calendar['planOptions'])): ?>
+                <div class="ui-form-sheet-view calendar-selection-view" data-actual-view="plan" hidden>
+                    <div class="calendar-sheet-header ui-form-sheet-header"><strong id="calendarEditPlanSelectionTitle">계획 일정 선택</strong><button type="button" class="ui-close-button" data-actual-view-cancel aria-label="계획 선택 닫기">×</button></div>
+                    <div class="ui-form-sheet-body calendar-selection-body">
+                        <div class="calendar-selection-tabs" role="tablist" aria-label="계획 일정 필터"><button type="button" role="tab" aria-selected="true" data-plan-filter="recommended">추천</button><button type="button" role="tab" aria-selected="false" data-plan-filter="all">전체 계획</button></div>
+                        <fieldset class="calendar-plan-links calendar-compact-selection-list" data-edit-plan-group><legend class="sr-only">연결할 계획 일정 선택</legend><label class="calendar-plan-link is-clear-option" hidden><input type="radio" name="daily_plan_item_id" value="" data-plan-summary="연결하기"><span>연결하지 않음</span><small>계획 연결 없음</small></label><?php foreach (($calendar['planOptions'] ?? []) as $option): ?><label class="calendar-plan-link <?= !empty($option['disabled']) ? 'is-disabled' : '' ?>" data-plan-filter-item data-plan-option="<?= e((string) $option['itemId']) ?>" data-plan-disabled="<?= !empty($option['disabled']) ? '1' : '0' ?>"><input type="radio" name="daily_plan_item_id" value="<?= e((string) $option['itemId']) ?>" data-plan-title="<?= e((string) $option['title']) ?>" data-plan-summary="<?= e((string) $option['title']) ?>" data-plan-detail="<?= e((string) $option['timeRange']) ?>" data-plan-start-index="<?= $option['startIndex'] === null ? '' : e((string) $option['startIndex']) ?>" data-plan-end-index="<?= $option['endIndex'] === null ? '' : e((string) $option['endIndex']) ?>" <?= !empty($option['disabled']) ? 'disabled' : '' ?>><span><?= e((string) $option['title']) ?></span><small><?= e((string) $option['timeRange']) ?><?= !empty($option['disabled']) ? ' · 이미 연결됨' : '' ?></small></label><?php endforeach; ?></fieldset>
+                    </div>
+                    <div class="ui-form-sheet-actions calendar-selection-actions"><button type="button" class="btn btn-ghost" data-plan-clear>연결 해제</button><button type="button" class="btn btn-primary" data-actual-view-done>완료</button></div>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($calendar['routines']) && !empty($calendar['canEditRoutines'])): ?>
+                <div class="ui-form-sheet-view calendar-selection-view" data-actual-view="routine" hidden>
+                    <div class="calendar-sheet-header ui-form-sheet-header"><strong id="calendarEditRoutineSelectionTitle">루틴 선택</strong><button type="button" class="ui-close-button" data-actual-view-cancel aria-label="루틴 선택 닫기">×</button></div>
+                    <div class="ui-form-sheet-body calendar-selection-body"><?php if (count($calendar['routines']) >= 8): ?><label class="sr-only" for="calendarEditRoutineSearch">루틴 검색</label><input class="input calendar-selection-search" id="calendarEditRoutineSearch" type="search" placeholder="루틴 검색..." data-routine-search><?php endif; ?><fieldset class="calendar-routine-links calendar-compact-selection-list" data-edit-routine-group><legend class="sr-only">수정 저장과 함께 완료할 미완료 루틴</legend><?php foreach ($calendar['routines'] as $routine): ?><label class="calendar-routine-link" data-routine-filter-item><input type="checkbox" name="routine_ids[]" value="<?= e((string) $routine['id']) ?>"><span><?= e((string) $routine['name']) ?></span><small data-routine-state-label>미완료</small></label><?php endforeach; ?></fieldset></div>
+                    <div class="ui-form-sheet-actions calendar-selection-actions"><button type="button" class="btn btn-ghost" data-routine-clear>초기화</button><button type="button" class="btn btn-primary" data-actual-view-done data-routine-done>완료</button></div>
+                </div>
+            <?php endif; ?>
         </form>
         <form method="post" action="/calendar/event/delete" id="calendarEventDeleteForm" hidden>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="event_id" id="calendarDeleteEventId">
         </form>
@@ -505,8 +529,10 @@ $untimedPlanItems = array_values(array_filter(
     <section class="calendar-sheet" data-plan-item-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planItemSheetTitle">
         <form method="post" action="/calendar/plan-item" id="calendarPlanItemForm">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="schedule_type" id="calendarPlanScheduleType" value="unscheduled">
+            <input type="hidden" name="estimated_duration_minutes" id="calendarPlanEstimatedDuration">
             <div class="calendar-sheet-header">
                 <strong id="planItemSheetTitle">계획 일정 추가</strong>
                 <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
@@ -571,6 +597,7 @@ $untimedPlanItems = array_values(array_filter(
     <section class="calendar-sheet" data-plan-item-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planItemEditSheetTitle">
         <form method="post" action="/calendar/plan-item/update" id="calendarPlanItemEditForm">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="daily_plan_item_id" id="calendarPlanEditItemId">
             <div class="calendar-sheet-header">
@@ -630,6 +657,7 @@ $untimedPlanItems = array_values(array_filter(
         </form>
         <form method="post" action="/calendar/plan-item/delete" id="calendarPlanItemDeleteForm" hidden>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="daily_plan_item_id" id="calendarPlanDeleteItemId">
         </form>
@@ -640,6 +668,7 @@ $untimedPlanItems = array_values(array_filter(
               data-has-daily-plan="<?= !empty($calendar['dailyPlan']) ? '1' : '0' ?>"
               data-has-linked-events="<?= !empty($calendar['hasLinkedActualEvents']) ? '1' : '0' ?>">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <div class="calendar-sheet-header">
                 <strong id="planSettingsTitle">기준 계획</strong>
@@ -675,37 +704,19 @@ $untimedPlanItems = array_values(array_filter(
         </form>
     </section>
 
-    <section class="calendar-popup" data-retrospect-preview hidden aria-modal="true" role="dialog" aria-labelledby="retrospectPreviewTitle">
+    <section class="calendar-popup calendar-retrospect-popup" data-retrospect-preview hidden aria-modal="true" role="dialog" aria-labelledby="retrospectPreviewTitle">
         <div class="calendar-sheet-header">
-            <strong id="retrospectPreviewTitle">이 날짜의 회고</strong>
+            <strong id="retrospectPreviewTitle" data-retrospect-preview-title><?= is_array($retrospectPreview) ? e((string) $retrospectPreview['dateTitle']) . ' 발행 회고' : '최근 발행 회고' ?></strong>
             <button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button>
         </div>
         <?php if (is_array($retrospectPreview)): ?>
-            <?php $previewTexts = $retrospectPreview['texts'] ?? []; ?>
-            <p class="calendar-retrospect-date">
-                <?= e((string) ($retrospectPreview['dateTitle'] ?? '')) ?> <?= e((string) ($retrospectPreview['dateSubTitle'] ?? '')) ?>
-            </p>
-            <div class="calendar-retrospect-summary">
-                <span>계획 <?= e((string) $retrospectPreview['planAchievementRate']) ?>%</span>
-                <span>루틴 <?= e((string) $retrospectPreview['routineAchievementRate']) ?>%</span>
-                <span>실제 <?= e((string) $retrospectPreview['linkedActualTimeLabel']) ?></span>
-            </div>
-            <article class="calendar-retrospect-preview-text">
-                <strong>오늘 하루</strong>
-                <p><?= nl2br(e((string) ($previewTexts['today_review'] ?? ''))) ?: '작성된 내용이 없습니다.' ?></p>
-            </article>
-            <article class="calendar-retrospect-preview-text">
-                <strong>오늘의 생각</strong>
-                <p><?= nl2br(e((string) ($previewTexts['today_thoughts'] ?? ''))) ?: '작성된 내용이 없습니다.' ?></p>
-            </article>
-            <article class="calendar-retrospect-preview-text">
-                <strong>내일의 설계</strong>
-                <p><?= nl2br(e((string) ($previewTexts['tomorrow_plan'] ?? ''))) ?: '작성된 내용이 없습니다.' ?></p>
-            </article>
-            <a class="btn btn-secondary" href="/retrospect?date=<?= e((string) ($retrospectPreview['date'] ?? $calendar['date'])) ?>">회고 전체 보기</a>
+            <nav class="calendar-retrospect-navigation" aria-label="발행 회고 탐색">
+                <button type="button" class="btn btn-secondary" data-retrospect-preview-move="previous" data-report-date="<?= e((string) ($retrospectPreview['adjacent']['previous'] ?? '')) ?>" <?= empty($retrospectPreview['adjacent']['previous']) ? 'disabled' : '' ?>>이전 발행일</button>
+                <button type="button" class="btn btn-secondary" data-retrospect-preview-move="next" data-report-date="<?= e((string) ($retrospectPreview['adjacent']['next'] ?? '')) ?>" <?= empty($retrospectPreview['adjacent']['next']) ? 'disabled' : '' ?>>다음 발행일</button>
+            </nav>
+            <div class="calendar-retrospect-report-scroll" data-retrospect-preview-body><?php $report = $retrospectPreview; $embeddedReport = true; require __DIR__ . '/../retrospect/report-content.php'; ?></div>
         <?php else: ?>
-            <p class="muted">이 날짜에 발행된 회고가 없습니다.</p>
-            <a class="btn btn-primary" href="/retrospect?date=<?= e((string) $calendar['date']) ?>">회고 페이지로 이동</a>
+            <p class="muted">아직 참고할 발행 회고가 없어요. 첫 회고를 발행하면 이곳에서 바로 볼 수 있습니다.</p>
         <?php endif; ?>
     </section>
 </div>

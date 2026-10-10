@@ -9,7 +9,7 @@ The current implementation supports:
 - creating routines with a name, start date, duration, and synchronized inclusive end date
 - initial duration selection from 1 to 60 days in 1-day steps
 - default duration of 7 days; users can start with the shortest practical weekly cycle and extend it later
-- listing routines active today with a weekly summary and cumulative progress
+- listing routines active today with cumulative progress
 - showing an always-visible compact habit-tracker grid on every routine card
 - creating and editing routines from mobile bottom sheets
 - soft-deleting routines from the edit bottom sheet
@@ -83,7 +83,7 @@ Rules:
 
 - Weekly active count is the number of routines active today.
 - Weekly achievement is completed routine-days divided by scheduled routine-days from Monday through today. A routine that started during the week contributes only dates on or after its start date.
-- A routine streak first counts consecutive `O` records ending yesterday. If today is `O`, one day is added immediately; if today is blank or `X`, that latest streak count is retained. The card label is always the compact `연속 n일` form.
+- A routine streak first counts consecutive `O` records ending yesterday. If today is `O`, one day is added immediately; if today is blank or `X`, that latest streak count is retained. User-facing streak feedback begins at three days.
 - The weekly `연속 성공` value is the largest current streak among active routines.
 
 ## Routes
@@ -106,10 +106,12 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - The daily Routine list shows `🔥 N일 연속 완료` below a routine name from three consecutive completed days onward. It reuses the management-page streak calculation and updates the message immediately after today's state toggle.
 - `GET /manage/routines` is the aside Management view and retains routine creation, editing, extension, lifecycle actions, detail, and historical tracking.
 - Both views write daily states through `POST /routine/toggle`; Calendar and Retrospect continue using the same endpoint and `routine_logs` rows.
+- Calendar Actual-event entry lists only active routines that are not complete for the selected date. The selector preserves creation order and does not use `reminder_time` for sorting; selected rows are completed on Actual-event save and do not create a persistent event-to-routine relation.
 
-- The Routine page starts with one three-column weekly summary card: active routines, weekly achievement, and the longest current streak.
+- Routine Management starts directly with the routine list; the former three-column weekly summary is intentionally omitted.
+- The bottom-navigation daily view groups unfinished routines above completed routines in compact tables. Blank and `X` states belong to unfinished; only `O` belongs to completed. Empty groups remain visible with guidance; when all routines are complete, the hopeful completion message appears as plain helper text in the empty unfinished group.
 - Each card shows the routine name, current streak label, optional upper-right linked goal, cumulative count and percentage, progress bar, a compact habit-tracker grid, and compact detail/edit actions.
-- A streak of zero is not rendered. One- and two-day streaks use `연속 n일`; streaks of at least three days use `🔥 연속 n일`. The displayed text never adds an `어제까지` prefix, while the underlying streak calculation remains unchanged.
+- Streak labels are not rendered for zero, one, or two days. At least three consecutive days use `🔥 연속 n일`. The displayed text never adds an `어제까지` prefix, while the underlying streak calculation remains unchanged. Streak labels use the warning/attention color family; completed tracker cells remain green so repetition feedback and completion state stay semantically distinct.
 - Routines of 14 days or less show their full period in the card tracker. Longer routines show 14 cells, normally the previous 10 days, today, and the next 3 days; the window shifts near the start or end so it stays full.
 - Tracker cells intentionally omit visible dates and weekdays. `O` fills a cell, blank and `X` remain quiet neutral cells, future dates use a lighter planned treatment, and the current day is outlined and identified as today.
 - The user toggles today's execution by tapping today's tracker cell, so a separate large status button is not required.
@@ -117,9 +119,10 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - The execution button cycles from blank to `O`, from `O` to `X`, and from `X` back to blank.
 - Routines are shown in the Routine list only while today is inside their active period. If a duration change moves today outside the active period, the routine no longer appears in today's Routine list and today's toggle is not offered.
 - The add and edit forms use bottom sheets to keep the list focused.
+- The edit sheet groups basic information, reminder settings, fixed period information, extension, and lifecycle actions. Its opaque full-width title row and close control remain sticky without exposing scrolling content around the padded sheet edges. Reminder time appears only when reminders are enabled, Save is the clear sticky primary action, and Delete is separated as a destructive action.
 - The add action is fixed near the bottom of the viewport to match the Plan and Goal add interactions.
 - The daily Routine page also has a centered `루틴 추가` floating action matching Retrospect and To-do. Its bottom sheet asks only for a name; the server supplies today as the start date, 7 days as the duration, no Goal, and no reminder. After creation the user stays on the daily Routine page, while detailed settings remain in Routine Management.
-- On Routine Management, the bottom navigator and its overflowing Execution Energy orb stack above the centered Routine-add action so the orb remains readable where the controls meet.
+- On Routine Management, the four-item bottom navigator and separate Execution Energy HUD stay below the centered Routine-add action without overlapping it.
 - The create sheet shows start date, duration, and end date together. Changing duration recalculates the end date, and selecting an end date recalculates duration; server validation repeats this calculation.
 - The add and edit forms include an optional goal select that only lists active goals.
 - Routine cards place the optional connected-goal label in the upper-right header context, constrain its width, and truncate long goal names so the routine name remains primary.

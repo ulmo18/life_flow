@@ -24,6 +24,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - A native scroll gesture must not trigger the actual-event click or empty-cell selection that follows it.
 - Mouse and pen range selection may start immediately, but range selection must never start from an actual-event control or another interactive control.
 - When the selected date is today, the current-time cell updates in place at every 10-minute boundary using the signed-in user's configured IANA time zone; the page does not reload for this visual update.
+- A normal first entry to Today positions the current-time row near 42% of the viewport. Periodic updates never recenter the page, and past/future dates, anchor navigation, manual scroll, and browser Back/Forward restoration skip automatic focus.
 - The Calendar header stays on one row in this order: selected date, previous day, next day, conditional Today, and Retrospect. The Today action is hidden while today is selected. Header actions use 32px visual controls inside 40px touch targets, and tapping the selected date opens the native date picker.
 - A horizontal swipe or pointer drag on the Calendar date header navigates by one day: right for the previous date and left for the next date. Touch, mouse, and pen use the same 48px horizontal threshold so vertical page scrolling and ordinary header-control taps remain unchanged.
 - Date-header drag tracking does not capture the pointer at the parent container. Date picker, previous, next, conditional Today, and latest-published-Retrospect controls therefore retain their native click behavior while completed horizontal drags still navigate.
@@ -31,7 +32,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Calendar bottom sheets should scroll internally when their content exceeds the mobile viewport.
 - Keep the bottom-sheet header and close button reachable while its content scrolls, and keep touch controls out of the page-level grid gesture handling.
 - Focus a sheet input while the opening click or pointer gesture still has user activation, then scroll the focused control into view when the visual viewport becomes shorter.
-- Calendar switches between a Plan schedule tab and an Actual schedule tab without changing the selected date. Each Calendar page entry defaults to the Actual tab instead of restoring the previous tab. The Plan tab edits the date-specific copy; the Actual tab retains actual-event entry and shows the same date-specific Plan blocks as a non-interactive background reference.
+- Calendar switches between a Plan schedule tab and an Actual schedule tab without changing the selected date. The current mode is carried as `mode=plan|actual` through Calendar writes and date navigation so the chosen tab remains fixed while the user works; a page entry without a valid mode defaults to Actual. The Plan tab edits the date-specific copy; the Actual tab retains actual-event entry and shows the same date-specific Plan blocks as a translucent achromatic, non-interactive background reference.
 - Deleting a date-specific Plan block asks for confirmation, then submits the CSRF-protected delete request as JSON when JavaScript is available. The Calendar sheet closes only after the server confirms deletion, the page reloads from the returned Calendar path, and ordinary form submission remains the non-JavaScript fallback. If an actual event is linked, the Plan block is soft-deleted and the actual event remains after its Plan link is cleared.
 - The initial server-rendered Calendar state already marks Plan blocks as the Actual tab's background layer. Calendar page CSS and JavaScript use file modification versions in their URLs so WebView and browser caches fetch changed behavior after deployment.
 - Calendar does not show time-grid gesture instructions or a new untimed-entry button above the grid. The long-press/drag range-selection behavior remains available.
@@ -39,15 +40,20 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Calendar exposes one `계획 추가` action rather than separate timed and time-unspecified actions. General entry opens the Plan form with no time, `시간 정하기` reveals required start/end selectors, and selecting a Plan-grid range opens the same form with time enabled and the range prefilled.
 - Plan creation can copy one saved Plan-block template or use direct input. The copied fields remain editable and become date-specific data; later library edits or deletion do not propagate. If the copied duration exceeds today's range, confirmation is required before discarding the later portion and ending the date-specific copy at `23:50`.
 - Plan importance is shown as four horizontal A/B/C/D radio-style buttons rather than a select menu.
+- Plan and Actual blocks use matching title typography. Plan mode reinforces A/B/C/D importance with progressively stronger visual emphasis in addition to the visible letter badge.
 - Actual-event creation always requires a start and end time. Existing legacy untimed events may remain available only as records that can be placed into a timed range.
 - Actual-event creation and editing include an Execution Energy group or per-event consume/recover override. Ordinary event edits preserve the saved snapshot, while an explicit energy edit recalculates the day. To-do completion snapshots the active default group. Selected Plans affect only the estimated remaining capacity.
 - Today's `오늘의 컨디션` is a radio-choice sheet for sleep, fatigue, mood, stress, and perceived burden. It can only write today's condition and replaces the earlier same-day condition adjustment rather than stacking it.
 - When a mouse or pen selection overlaps an existing block in the active tab, Calendar rejects the range before opening an editor and explains the conflict through Toast. Actual mode checks actual events only, so background Plan references never block actual entry; server-side overlap validation remains authoritative.
-- Calendar event forms show the editable start/end controls once without repeating the selected range underneath them. A Plan-link field is omitted when there is no usable daily Plan item.
+- Calendar event forms show the editable start/end controls once without repeating the selected range underneath them. A Plan-link row is omitted when there is no usable daily Plan item; otherwise `연결하기 ›` or `변경 ›` switches the same sheet to a compact selection view so many Plans do not lengthen the main form.
+- The Actual create/edit sheet prioritizes the approximately ten-second common path in this order: title, connected start/end selectors, compact tag chips, Plan-link summary, additional records, and Execution Energy. It uses the shared structured-sheet anatomy with a fixed header, one scrolling body, and a keyboard-safe action area; it has no drag handle.
+- Plan and Routine rows open compact selection views inside the same Actual sheet instead of stacking another sheet. Plan offers recommended/all views and unlinking. Routine shows only incomplete active routines in stable creation order.
+- Routine choices retain their existing meaning: selected routines are marked complete for the Calendar date when the Actual event is saved. They do not create a new event-to-routine relation. Completed routines are omitted; blank and missed states remain eligible for completion.
+- Editing a timed Actual event may change start and end indexes. Client checks provide immediate feedback, and repository validation inside the update transaction excludes the current event while rejecting overlap with another timed Actual event.
 - Actual-event create and edit sheets may create a new tag inline without closing or resetting the event form. Tag editing and deletion remain in Schedule Tag Management.
 - On pointer-hover devices, an Actual-event tooltip shows the title and at most 80 characters of its memo. It remains hover-only and is not used as a mobile editing surface.
 - Empty Plan and Actual tabs show a compact first-action prompt instead of an initial no-Plan Toast. The Plan prompt disappears when any timed or time-unspecified Plan item exists; the Actual prompt disappears when an Actual block exists.
-- A date-specific Plan item may have no time range. It is not rendered inside either time grid; To-do owns its primary daily-list presentation, while Calendar Plan mode exposes a compact time-unspecified list above the grid. The first row remains visible and a remaining-count toggle controls additional rows. Its `시간 설정` action opens the same Plan edit sheet used by timed grid blocks; saving a time affects only the Plan item and does not mark it complete.
+- A date-specific Plan item may have no time range. It is not rendered inside either time grid; To-do owns its primary daily-list presentation, while Calendar Plan mode exposes a compact time-unspecified list above the grid. The first row remains visible, the heading shows the total as `X개`, and a top-right expand/collapse action controls additional rows. Template-created time-unspecified items retain their expected duration, and titles estimated at one hour or longer reuse the shared highlighter. Its `시간 설정` action opens the same Plan edit sheet used by timed grid blocks; saving a time affects only the Plan item and does not mark it complete.
 - Time-unspecified Plan items remain eligible for Actual-event linking. Choosing a new Plan link copies the Plan title into the Actual title once; subsequent Actual-title changes do not rename the Plan item. The former Actual-side link-processing selector is intentionally removed.
 - Shared confirmation modals opened from calendar sheets must appear above the calendar-local layer.
 - Calendar block title tooltips should remain hover-only and should not appear during mobile touch editing.
@@ -72,7 +78,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 ## Persistence
 - `calendar_days` stores one user/date row. Its legacy `plan_group_id` mirrors the source template group during migration.
 - `daily_plans` stores one mutable date-specific Plan copy per Calendar day.
-- `daily_plan_items` stores copied or directly-created Plan items, including the copied goal link. `start_index` and `end_index` are both null for a time-unspecified item and both populated for a timed block.
+- `daily_plan_items` stores copied or directly-created Plan items, including the copied goal link. `start_index` and `end_index` are both null for a time-unspecified item and both populated for a timed block. `estimated_duration_minutes` optionally retains a template duration while time remains unspecified.
 - `calendar_events` stores timed actual schedule blocks and untimed entries. Timed entries link to `daily_plan_items`; the legacy `plan_template_id` remains transitional compatibility data.
 - `execution_energy_event_settings` stores the selected consume/recover snapshot for an Actual event without changing the event's completion or Plan-link semantics.
 - `calendar_tag_palettes` stores the shared 15-color palette for actual-event tags.
@@ -82,7 +88,7 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - See `docs/calendar-feature-implementation.md` for table, route, and UI details.
 
 ## Routine Entry Point
-- The Calendar floating bottom sheet links to the dedicated current-day Routine page. Actual-event creation may still mark selected routines complete in the same save flow.
+- The Calendar floating bottom sheet does not duplicate the dedicated current-day Routine page. Actual-event creation or editing may still mark selected routines complete in the same save flow without creating an event-to-routine relation.
 - Routine execution toggles from Calendar and Routine page must write to the same `routine_logs` table.
 - Routine execution toggles should update in place with JSON when JavaScript is available, while keeping POST redirect fallback behavior.
 - Calendar uses the shared Routine state control: blank is an empty neutral square, `O` is a filled check, and `X` is a muted cross. A successful toggle changes the control in place without reloading the page.
@@ -91,10 +97,16 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 
 ## Retrospect Entry Point
 - Calendar shows a Retrospect button for the selected date.
-- A submitted report opens in a local preview; a missing report shows an empty message and a link to that date's Retrospect page.
-- If there is no submitted Retrospect report yet, the button is disabled.
+- The Calendar header Retrospect action is independent of the selected Calendar date. It opens the latest submitted report by `report_date` inside an internally scrolling popup and keeps the user on Today. The popup fills the available viewport with equal visual insets, a fixed header, and a body that owns scrolling.
+- If there is no submitted Retrospect report yet, the popup explains that there is no reference report; it does not redirect implicitly.
 - Retrospect owns report creation, draft editing, publishing, history, and report snapshots.
 - Calendar should only render submitted Retrospect snapshots and must not provide Retrospect editing.
+
+## Life Record Entry Point
+
+- Actual-event create and edit sheets expose an optional Life Record section for Sleep, Meal, Snack, Exercise, and Rest; there is no separate Calendar icon dock.
+- The selected Actual event supplies the record date and start/end time. Each linked entry may include a short detail, note, and optional 1–5 perceived-state rating.
+- Life Records use `wellness_entries.calendar_event_id` as a nullable one-to-one link. They remain separate from Schedule Tags and automatic Execution Energy changes so later nutrition and exercise details can expand independently.
 
 ## Toast
 - Toast is a shared UI component.

@@ -74,6 +74,15 @@
   routineEndDate?.addEventListener('change', syncRoutineDurationFromEnd);
   if (routinePeriodInputs) syncRoutineDurationFromEnd();
 
+  document.querySelectorAll('[data-routine-reminder-toggle]').forEach(toggle => {
+    const timeInput = toggle.closest('.routine-reminder-option')?.querySelector('[data-routine-reminder-time]');
+    toggle.addEventListener('change', () => {
+      if (!timeInput) return;
+      timeInput.hidden = !toggle.checked;
+      timeInput.disabled = !toggle.checked;
+    });
+  });
+
   function openSheet(name) {
     layer.hidden = false;
     sheets.forEach(sheet => {

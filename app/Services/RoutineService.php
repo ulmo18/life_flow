@@ -66,11 +66,16 @@ final class RoutineService
     {
         $date = $this->normalizeDate($date);
 
+        $routines = array_filter(
+            $this->routineRepository->listActiveForDate($userId, $date),
+            static fn (array $routine): bool => (int) ($routine['state'] ?? 0) !== 1
+        );
+
         return array_map(static fn (array $routine): array => [
             'id' => (int) $routine['id'],
             'name' => (string) $routine['name'],
             'state' => $routine['state'] === null ? '' : ((int) $routine['state'] === 1 ? 'O' : 'X'),
-        ], $this->routineRepository->listActiveForDate($userId, $date));
+        ], array_values($routines));
     }
 
     public function markDoneForDate(int $userId, int $routineId, string $date): bool
@@ -343,8 +348,8 @@ final class RoutineService
         }
         $todayDone = ($stateMap[$today->format('Y-m-d')] ?? null) === 1;
         $routine['streakCount'] = $yesterdayStreak + ($todayDone ? 1 : 0);
-        $routine['streakLabel'] = $routine['streakCount'] > 0
-            ? ($routine['streakCount'] >= 3 ? '🔥 ' : '') . '연속 ' . $routine['streakCount'] . '일'
+        $routine['streakLabel'] = $routine['streakCount'] >= 3
+            ? '🔥 연속 ' . $routine['streakCount'] . '일'
             : '';
 
         $weekStart = $today->modify('monday this week');

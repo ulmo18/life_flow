@@ -89,6 +89,7 @@ final class Database
             self::ensureSqliteCalendarScheduleType($connection);
             self::ensureSqliteDailyPlans($connection);
             self::ensureSqliteUntimedDailyPlans($connection);
+            self::ensureSqliteDailyPlanEstimatedDuration($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteRetrospectReviewColumns($connection);
             self::ensureSqliteRetrospectExecutionEnergyColumns($connection);
@@ -97,6 +98,7 @@ final class Database
             self::ensureSqliteExecutionEnergy($connection);
             self::ensureSqliteGoalFocusColumns($connection);
             self::ensureSqliteSchemaObjects($connection);
+            self::ensureSqliteWellnessEventLink($connection);
             return;
         }
 
@@ -128,6 +130,21 @@ final class Database
             $connection->exec('ALTER TABLE user ADD COLUMN privacy_agreed_at TEXT NULL');
         }
 
+    }
+
+    private static function ensureSqliteWellnessEventLink(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='wellness_entries' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+
+        $columns = $connection->query('PRAGMA table_info(wellness_entries)');
+        $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        if (!in_array('calendar_event_id', $columnNames, true)) {
+            $connection->exec('ALTER TABLE wellness_entries ADD COLUMN calendar_event_id INTEGER NULL REFERENCES calendar_events(id) ON DELETE SET NULL ON UPDATE CASCADE');
+        }
+        $connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS uq_wellness_calendar_event ON wellness_entries(calendar_event_id)');
     }
 
     private static function ensureSqliteRoutineGoalColumn(PDO $connection): void
@@ -210,6 +227,20 @@ final class Database
         }
 
         self::runSqliteMigration($connection, 'migration.daily_plan_untimed.sqlite.sql');
+    }
+
+    private static function ensureSqliteDailyPlanEstimatedDuration(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_plan_items' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) {
+            return;
+        }
+
+        $columns = $connection->query('PRAGMA table_info(daily_plan_items)');
+        $columnNames = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        if (!in_array('estimated_duration_minutes', $columnNames, true)) {
+            self::runSqliteMigration($connection, 'migration.daily_plan_estimated_duration.sqlite.sql');
+        }
     }
 
     private static function ensureSqliteUntimedRetrospectPlans(PDO $connection): void
