@@ -9,8 +9,9 @@ The current implementation supports:
 - creating routines with a name, start date, duration, and synchronized inclusive end date
 - initial duration selection from 1 to 60 days in 1-day steps
 - default duration of 7 days; users can start with the shortest practical weekly cycle and extend it later
-- listing routines active today with cumulative progress
-- showing an always-visible compact habit-tracker grid on every routine card
+- separating active/future routines from completed, stopped, and naturally ended routines
+- browsing a Monday-first, 42-cell monthly execution calendar on every management card
+- treating 60 accumulated completed days as the habit-formation milestone
 - creating and editing routines from mobile bottom sheets
 - soft-deleting routines from the edit bottom sheet
 - extending active routines by a user-selected number of days, up to 365 total days
@@ -79,17 +80,19 @@ Rules:
 - No row means blank/unstarted, `is_done = 1` means `O`, and `is_done = 0` means `X`.
 - Retrospect can use this table later for consistency feedback.
 
-## Summary Definitions
+## Management Definitions
 
-- Weekly active count is the number of routines active today.
-- Weekly achievement is completed routine-days divided by scheduled routine-days from Monday through today. A routine that started during the week contributes only dates on or after its start date.
+- `GET /manage/routines?status=active` includes active routines whose planned end date has not passed, including routines that start in the future.
+- `GET /manage/routines?status=completed` includes manually completed, stopped, and naturally ended active rows. This tab is labeled `완료·종료 루틴` so stopped records are not hidden by wording.
+- The selected calendar month is carried in `month=YYYY-MM`; state-changing forms preserve the selected status and month on redirect.
+- Habit formation is based on accumulated execution rather than a streak: at least 60 `routine_logs.is_done = 1` rows inside the routine period sets `habitAchieved`.
+- The card summary shows the habit milestone or a streak of at least three days, cumulative completed days, and the selected month's count. It does not show a percentage or progress bar.
 - A routine streak first counts consecutive `O` records ending yesterday. If today is `O`, one day is added immediately; if today is blank or `X`, that latest streak count is retained. User-facing streak feedback begins at three days.
-- The weekly `연속 성공` value is the largest current streak among active routines.
 
 ## Routes
 
 - `GET /routine`: render today's execution-only routine list.
-- `GET /manage/routines`: render routine management, period history, and creation/editing forms.
+- `GET /manage/routines?status=active|completed&month=YYYY-MM`: render status tabs, the selected month's calendar, period history, and creation/editing forms.
 - `POST /routine`: create a routine.
 - `POST /routine/quick`: create a title-only routine from the daily Routine page.
 - `POST /routine/update`: update a routine.
@@ -108,14 +111,12 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - Both views write daily states through `POST /routine/toggle`; Calendar and Retrospect continue using the same endpoint and `routine_logs` rows.
 - Calendar Actual-event entry lists only active routines that are not complete for the selected date. The selector preserves creation order and does not use `reminder_time` for sorting; selected rows are completed on Actual-event save and do not create a persistent event-to-routine relation.
 
-- Routine Management starts directly with the routine list; the former three-column weekly summary is intentionally omitted.
+- Routine Management starts with `활성 루틴` and `완료·종료 루틴` tabs followed by previous/next month controls; the former three-column weekly summary remains omitted.
 - The bottom-navigation daily view groups unfinished routines above completed routines in compact tables. Blank and `X` states belong to unfinished; only `O` belongs to completed. Empty groups remain visible with guidance; when all routines are complete, the hopeful completion message appears as plain helper text in the empty unfinished group.
-- Each card shows the routine name, current streak label, optional upper-right linked goal, cumulative count and percentage, progress bar, a compact habit-tracker grid, and compact detail/edit actions.
+- Each card shows the routine name, lifecycle badge, optional linked goal, compact achievement summary, and a real monthly calendar. Desktop may place two cards per row; mobile keeps one card per row.
 - Streak labels are not rendered for zero, one, or two days. At least three consecutive days use `🔥 연속 n일`. The displayed text never adds an `어제까지` prefix, while the underlying streak calculation remains unchanged. Streak labels use the warning/attention color family; completed tracker cells remain green so repetition feedback and completion state stay semantically distinct.
-- Routines of 14 days or less show their full period in the card tracker. Longer routines show 14 cells, normally the previous 10 days, today, and the next 3 days; the window shifts near the start or end so it stays full.
-- Tracker cells intentionally omit visible dates and weekdays. `O` fills a cell, blank and `X` remain quiet neutral cells, future dates use a lighter planned treatment, and the current day is outlined and identified as today.
-- The user toggles today's execution by tapping today's tracker cell, so a separate large status button is not required.
-- The tracker provides the visible fill-in reward, while the cumulative count and progress bar preserve evidence of success outside the 14-cell window.
+- Card calendars always use Monday-first weekday headings and 42 cells. Leading/trailing cells outside the selected month are placeholders; dates outside the routine period are disabled; future dates are read-only; today retains the existing state toggle.
+- `O` uses a check marker and completion color, `X` uses a visible cross, and today has an outline, so state is never communicated by color alone.
 - The execution button cycles from blank to `O`, from `O` to `X`, and from `X` back to blank.
 - Routines are shown in the Routine list only while today is inside their active period. If a duration change moves today outside the active period, the routine no longer appears in today's Routine list and today's toggle is not offered.
 - The add and edit forms use bottom sheets to keep the list focused.
@@ -126,7 +127,7 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - The create sheet shows start date, duration, and end date together. Changing duration recalculates the end date, and selecting an end date recalculates duration; server validation repeats this calculation.
 - The add and edit forms include an optional goal select that only lists active goals.
 - Routine cards place the optional connected-goal label in the upper-right header context, constrain its width, and truncate long goal names so the routine name remains primary.
-- The detail bottom sheet groups every date from the routine start through its planned end under `YYYY년 M월` headings and places only those dates sequentially into seven columns. It does not add weekday headers, leading calendar blanks, or dates outside the routine period.
+- `기록 관리` opens the period bottom sheet. Every month uses the same Monday-first calendar alignment, weekday headers, and leading/trailing placeholders as the card calendar.
 - Completed dates are emphasized, `X` remains visually muted for correction, blank dates remain neutral, and future dates remain visible as read-only planned cells.
 - Today and past period cells can be changed using the same blank, `O`, `X`, blank cycle.
 - Detail and edit actions are compact secondary buttons while retaining at least a 44px mobile touch target; today's tracker cell remains the card's primary action.
@@ -136,7 +137,8 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - The Calendar routine popup shows only routines active on the selected date.
 - Calendar routine toggles update in place when JavaScript is available and redirect back to the selected calendar date as a fallback.
 - Future Calendar dates do not expose Routine completion controls.
-- Completed and stopped routines leave the active Routine and Calendar views; Retrospect owns their historical feedback.
+- Completed and stopped routines leave daily Routine and Calendar views but remain available in Routine Management's `완료·종료 루틴` tab. Their records are editable from `기록 관리`; lifecycle metadata is read-only except for deletion. Naturally ended active routines may still be extended.
+- Completing day 60 shows an optional celebration Toast and marks the routine as habitized. Consecutive-day milestones at 3, 7, 14, 30, and 60 days use the same restrained Toast variant. The effect respects reduced-motion preferences and does not change persistence logic.
 - A new Calendar event can include active routines for that date. One event save writes the event and marks those routines complete in the same request flow, avoiding a second completion action in the Routine menu.
 
 ## Manual Test Checklist
@@ -150,6 +152,10 @@ All POST routes require CSRF verification. `POST /routine/toggle` keeps redirect
 - Confirm the end-date picker cannot select before the start date or after `start date + 59 days`.
 - Submit a forged end date outside the 60-day range and confirm server validation rejects it.
 - Create a routine by end date and confirm its list progress and detail period use the calculated duration without a schema change.
+- Switch between active and completed tabs and confirm future-start, naturally ended, completed, and stopped routines appear in the intended group.
+- Change months and confirm every card remains a Monday-first 42-cell calendar and mutations return to the same tab/month.
+- Reach 60 accumulated completed days and confirm the summary changes to `습관화 목표 달성` and the celebration Toast appears; remove and restore day 60 and confirm the derived state follows the logs.
+- Enable reduced motion in the OS/browser and confirm the celebration remains readable without particle or pulse motion.
 
 ## Reminder Direction
 

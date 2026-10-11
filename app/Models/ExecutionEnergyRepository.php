@@ -67,74 +67,6 @@ final class ExecutionEnergyRepository
         ]);
     }
 
-    /** @return array<int, array<string, mixed>> */
-    public function listGroups(int $userId, bool $activeOnly = false): array
-    {
-        $sql = 'SELECT * FROM execution_energy_groups WHERE user_id = :user_id';
-        if ($activeOnly) {
-            $sql .= ' AND is_active = 1';
-        }
-        $sql .= ' ORDER BY effect_type ASC, is_default DESC, id ASC';
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute(['user_id' => $userId]);
-
-        return $stmt->fetchAll();
-    }
-
-    /** @param array<string, mixed> $data */
-    public function createGroup(int $userId, array $data): ?int
-    {
-        $stmt = $this->db->prepare(
-            'INSERT INTO execution_energy_groups (user_id, name, effect_type, energy_value, is_default, is_active, created_at, updated_at)
-             VALUES (:user_id, :name, :effect_type, :energy_value, :is_default, :is_active, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)'
-        );
-        $stmt->execute($data + ['is_active' => 1, 'user_id' => $userId]);
-
-        return (int) $this->db->lastInsertId();
-    }
-
-    /** @param array<string, mixed> $data */
-    public function updateGroup(int $userId, int $groupId, array $data): bool
-    {
-        $stmt = $this->db->prepare(
-            'UPDATE execution_energy_groups
-             SET name = :name, effect_type = :effect_type, energy_value = :energy_value,
-                 is_default = :is_default, is_active = :is_active, updated_at = CURRENT_TIMESTAMP
-             WHERE id = :id AND user_id = :user_id'
-        );
-        $stmt->execute($data + ['id' => $groupId, 'user_id' => $userId]);
-
-        return $this->findGroup($userId, $groupId) !== null;
-    }
-
-    /** @return array<string, mixed>|null */
-    public function findGroup(int $userId, int $groupId, bool $allowInactive = true): ?array
-    {
-        $sql = 'SELECT * FROM execution_energy_groups WHERE id = :id AND user_id = :user_id';
-        if (!$allowInactive) {
-            $sql .= ' AND is_active = 1';
-        }
-        $stmt = $this->db->prepare($sql . ' LIMIT 1');
-        $stmt->execute(['id' => $groupId, 'user_id' => $userId]);
-        $row = $stmt->fetch();
-
-        return $row === false ? null : $row;
-    }
-
-    /** @return array<string, mixed>|null */
-    public function findDefaultGroup(int $userId): ?array
-    {
-        $stmt = $this->db->prepare(
-            'SELECT * FROM execution_energy_groups
-             WHERE user_id = :user_id AND is_default = 1 AND is_active = 1
-             ORDER BY id ASC LIMIT 1'
-        );
-        $stmt->execute(['user_id' => $userId]);
-        $row = $stmt->fetch();
-
-        return $row === false ? null : $row;
-    }
-
     /** @return array<string, mixed>|null */
     public function findDay(int $userId, string $date): ?array
     {
@@ -230,6 +162,41 @@ final class ExecutionEnergyRepository
              )'
         );
         $stmt->execute($data + ['calendar_event_id' => $eventId, 'user_id' => $userId]);
+    }
+
+    public function deleteEventSetting(int $userId, int $eventId): void
+    {
+        $stmt = $this->db->prepare(
+            'DELETE FROM execution_energy_event_settings
+             WHERE calendar_event_id = :event_id AND user_id = :user_id'
+        );
+        $stmt->execute(['event_id' => $eventId, 'user_id' => $userId]);
+    }
+
+    public function claimNotice(int $userId, string $date, int $level): bool
+    {
+        $params = ['user_id' => $userId, 'energy_date' => $date, 'notice_level' => $level];
+        $exists = $this->db->prepare(
+            'SELECT 1 FROM execution_energy_notices
+             WHERE user_id = :user_id AND energy_date = :energy_date AND notice_level = :notice_level
+             LIMIT 1'
+        );
+        $exists->execute($params);
+        if ($exists->fetchColumn() !== false) {
+            return false;
+        }
+
+        try {
+            $stmt = $this->db->prepare(
+                'INSERT INTO execution_energy_notices (user_id, energy_date, notice_level, created_at)
+                 VALUES (:user_id, :energy_date, :notice_level, CURRENT_TIMESTAMP)'
+            );
+            $stmt->execute($params);
+        } catch (\PDOException) {
+            return false;
+        }
+
+        return true;
     }
 
 }

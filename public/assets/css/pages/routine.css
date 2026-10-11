@@ -599,3 +599,206 @@ body[data-theme='dark'] .routine-log-row {
 
   .routine-tracker { gap: 2px; }
 }
+
+.routine-management-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: var(--space-3);
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(216, 200, 179, 0.22);
+}
+
+.routine-management-tabs a {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.routine-management-tabs a.is-active {
+  background: var(--color-surface);
+  color: var(--color-primary-text);
+  box-shadow: 0 5px 14px rgba(26, 27, 58, 0.08);
+}
+
+.routine-month-navigation {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  text-align: center;
+}
+
+.routine-month-navigation .btn {
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0;
+  text-decoration: none;
+}
+
+.routine-status-badge {
+  flex: 0 0 auto;
+  display: inline-flex !important;
+  align-items: center;
+  min-height: 23px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(142, 164, 162, 0.16);
+  color: var(--color-text-muted) !important;
+  font-size: 10px !important;
+  font-weight: 900;
+}
+
+.routine-achievement-summary {
+  min-height: 20px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.routine-calendar-weekdays,
+.routine-month-calendar,
+.routine-period-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.routine-calendar-weekdays span {
+  padding: 2px 0;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.routine-month-calendar form,
+.routine-period-grid form {
+  min-width: 0;
+  margin: 0;
+}
+
+.routine-month-cell,
+.routine-period-cell {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: rgba(216, 200, 179, 0.12);
+  color: var(--color-text-muted);
+  font-style: normal;
+}
+
+.routine-month-cell small,
+.routine-period-cell small {
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.routine-month-cell > span,
+.routine-period-cell > i {
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.routine-month-cell.is-done,
+.routine-period-cell.is-done {
+  border-color: rgba(111, 154, 141, 0.48);
+  background: rgba(111, 154, 141, 0.22);
+  color: var(--color-success-text);
+}
+
+.routine-month-cell.is-failed,
+.routine-period-cell.is-failed {
+  border-color: rgba(200, 95, 90, 0.32);
+  color: var(--color-danger-text);
+}
+
+.routine-month-cell.is-today,
+.routine-period-cell.is-today {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(255, 94, 91, 0.12);
+}
+
+button.routine-month-cell,
+button.routine-period-cell {
+  cursor: pointer;
+}
+
+.routine-month-cell.is-future,
+.routine-period-cell.is-future {
+  border-style: dashed;
+  opacity: 0.62;
+}
+
+.routine-month-cell.is-disabled,
+.routine-period-cell.is-disabled {
+  background: transparent;
+  opacity: 0.35;
+}
+
+.routine-month-cell.is-outside,
+.routine-period-cell.is-outside {
+  visibility: hidden;
+}
+
+.routine-period-tracker,
+.routine-period-group,
+.routine-archive-summary {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.routine-period-group + .routine-period-group {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line);
+}
+
+.routine-period-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.routine-archive-summary {
+  padding: var(--space-3) 0;
+}
+
+@media (min-width: 760px) {
+  .routine-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+body[data-theme='dark'] .routine-management-tabs {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+body[data-theme='dark'] .routine-management-tabs a.is-active {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+body[data-theme='dark'] .routine-month-cell,
+body[data-theme='dark'] .routine-period-cell {
+  background: rgba(255, 255, 255, 0.04);
+}

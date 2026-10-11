@@ -18,7 +18,6 @@ $availableTagPalettes = array_values(array_filter(
     static fn(array $palette): bool => empty($palette['isUsed'])
 ));
 $executionEnergy = $calendar['executionEnergy'] ?? [];
-$executionEnergyGroups = $executionEnergy['groups'] ?? [];
 $calendarMode = ($calendarMode ?? 'actual') === 'plan' ? 'plan' : 'actual';
 $untimedPlanItems = array_values(array_filter(
     $calendar['planReminderItems'] ?? [],
@@ -33,6 +32,7 @@ $untimedPlanItems = array_values(array_filter(
     data-current-index="<?= $calendar['currentIndex'] === null ? '' : e((string) $calendar['currentIndex']) ?>"
     data-calendar-mode="<?= e($calendarMode) ?>"
 >
+    <div class="calendar-context-sticky">
     <section class="calendar-header">
         <div
             class="calendar-date-nav"
@@ -60,19 +60,30 @@ $untimedPlanItems = array_values(array_filter(
                 </a>
             <?php endif; ?>
             <button type="button" class="calendar-header-action is-text" data-retrospect-preview-open title="가장 최근에 발행한 회고 보기"><span class="calendar-header-action-visual">회고</span></button>
+            <?php require __DIR__ . '/../../components/daily-context-actions.php'; ?>
         </div>
+        <?php if (is_array($headerGuidance ?? null) && !empty($headerGuidance['message'])): ?>
+            <div class="calendar-mobile-guidance">
+                <?php if (($headerGuidance['kind'] ?? '') === 'retrospect' && !empty($headerGuidance['href'])): ?>
+                    <a href="<?= e((string) $headerGuidance['href']) ?>"><span><?= e((string) $headerGuidance['message']) ?></span><span aria-hidden="true">&rsaquo;</span></a>
+                <?php else: ?>
+                    <button type="button" data-calendar-header-action="<?= e((string) ($headerGuidance['kind'] ?? '')) ?>" data-plan-item-id="<?= e((string) ($headerGuidance['planItemId'] ?? '')) ?>" data-plan-title="<?= e((string) ($headerGuidance['planTitle'] ?? '')) ?>" data-start-index="<?= e((string) ($headerGuidance['startIndex'] ?? '')) ?>" data-end-index="<?= e((string) ($headerGuidance['endIndex'] ?? '')) ?>"><span><?= e((string) $headerGuidance['message']) ?></span><span aria-hidden="true">&rsaquo;</span></button>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
     </section>
+
+    <div class="calendar-mode-tabs" role="tablist" aria-label="캘린더 일정 종류">
+        <button type="button" role="tab" aria-selected="<?= $calendarMode === 'plan' ? 'true' : 'false' ?>" data-calendar-mode="plan">계획 일정</button>
+        <button type="button" role="tab" aria-selected="<?= $calendarMode === 'actual' ? 'true' : 'false' ?>" data-calendar-mode="actual">실제 일정</button>
+    </div>
+    </div>
 
     <?php if ($errorMessage !== ''): ?>
         <span data-toast-message="<?= e($errorMessage) ?>" hidden></span>
     <?php elseif (!empty($flashSuccess)): ?>
         <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
     <?php endif; ?>
-
-    <div class="calendar-mode-tabs" role="tablist" aria-label="캘린더 일정 종류">
-        <button type="button" role="tab" aria-selected="<?= $calendarMode === 'plan' ? 'true' : 'false' ?>" data-calendar-mode="plan">계획 일정</button>
-        <button type="button" role="tab" aria-selected="<?= $calendarMode === 'actual' ? 'true' : 'false' ?>" data-calendar-mode="actual">실제 일정</button>
-    </div>
 
     <?php if (empty($calendar['planReminderItems'])): ?>
         <section class="calendar-empty-prompt" data-calendar-empty-mode="plan" <?= $calendarMode !== 'plan' ? 'hidden' : '' ?>>
@@ -349,7 +360,7 @@ $untimedPlanItems = array_values(array_filter(
             <?php if (!empty($availablePlanOptions)): ?>
                 <button type="button" class="calendar-selection-row" data-actual-view-open="plan">
                     <span>계획과 연결</span>
-                    <span class="calendar-selection-summary"><strong data-plan-link-summary>연결하기</strong><small data-plan-link-detail></small></span>
+                    <span class="calendar-selection-summary" data-plan-link-current hidden><strong data-plan-link-summary></strong><small data-plan-link-detail></small></span>
                     <b data-selection-action>연결하기 ›</b>
                 </button>
             <?php endif; ?>
@@ -370,12 +381,10 @@ $untimedPlanItems = array_values(array_filter(
                 </details>
             </section>
 
-            <?php if (!empty($executionEnergyGroups)): ?>
-                <details class="calendar-actual-disclosure calendar-energy-disclosure ui-progressive-disclosure" data-actual-disclosure="energy">
-                    <summary><span>실행력</span><span class="calendar-energy-summary"><strong data-energy-summary-main>그룹 기준</strong><small data-energy-summary-detail>변경</small></span></summary>
-                    <fieldset class="calendar-energy-links"><legend class="sr-only">실행력 상세 설정</legend><label class="form-label" for="calendarEnergyGroup">실행력 그룹</label><select class="input" id="calendarEnergyGroup" name="execution_energy_group_id"><?php foreach ($executionEnergyGroups as $group): ?><option value="<?= e((string) $group['id']) ?>" data-energy-name="<?= e((string) $group['name']) ?>" data-energy-type="<?= e((string) $group['effect_type']) ?>" data-energy-value="<?= e((string) $group['energy_value']) ?>" <?= !empty($group['is_default']) ? 'selected' : '' ?>><?= e((string) $group['name']) ?> · <?= $group['effect_type'] === 'recover' ? '+' : '-' ?><?= e((string) $group['energy_value']) ?></option><?php endforeach; ?></select><div class="calendar-energy-override"><span>적용 방식</span><label><input type="radio" name="execution_energy_type" value="" checked> 그룹 기준</label><label><input type="radio" name="execution_energy_type" value="consume"> 직접 소모</label><label><input type="radio" name="execution_energy_type" value="recover"> 직접 회복</label><input class="input" name="execution_energy_value" type="number" min="5" max="1000" step="5" placeholder="개별 값" hidden></div><p class="calendar-form-hint">실제 일정 저장 시에만 현재 실행력에 반영됩니다.</p></fieldset>
-                </details>
-            <?php endif; ?>
+            <details class="calendar-actual-disclosure calendar-energy-disclosure ui-progressive-disclosure" data-actual-disclosure="energy">
+                <summary><span>실행력</span><span class="calendar-energy-summary"><strong class="energy-change-badge is-consume" data-energy-summary-main>−25</strong></span></summary>
+                <?php $energyFieldPrefix = 'calendarCreateEnergy'; $energyDefaultType = 'consume'; require __DIR__ . '/_execution-energy-fields.php'; ?>
+            </details>
 
                 </div>
                 <div class="calendar-actual-actions ui-form-sheet-actions"><button type="submit" class="btn btn-primary">일정 저장</button></div>
@@ -438,7 +447,6 @@ $untimedPlanItems = array_values(array_filter(
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="event_id" id="calendarEditEventId">
             <input type="hidden" name="schedule_type" id="calendarEditScheduleType" value="timed">
-            <input type="hidden" name="execution_energy_preserve" id="calendarEditEnergyPreserve" value="0">
             <div class="ui-form-sheet-view" data-actual-view="main">
                 <div class="calendar-sheet-header ui-form-sheet-header">
                     <strong id="eventEditSheetTitle">일정 수정</strong>
@@ -478,7 +486,7 @@ $untimedPlanItems = array_values(array_filter(
             </fieldset>
 
             <?php if (!empty($calendar['planOptions'])): ?>
-                <button type="button" class="calendar-selection-row" data-actual-view-open="plan"><span>계획과 연결</span><span class="calendar-selection-summary"><strong data-plan-link-summary>연결하기</strong><small data-plan-link-detail></small></span><b data-selection-action>연결하기 ›</b></button>
+                <button type="button" class="calendar-selection-row" data-actual-view-open="plan"><span>계획과 연결</span><span class="calendar-selection-summary" data-plan-link-current hidden><strong data-plan-link-summary></strong><small data-plan-link-detail></small></span><b data-selection-action>연결하기 ›</b></button>
             <?php endif; ?>
 
             <section class="calendar-additional-records" aria-labelledby="calendarEditAdditionalTitle">
@@ -490,9 +498,10 @@ $untimedPlanItems = array_values(array_filter(
                 <details class="calendar-actual-disclosure" data-actual-disclosure="memo"><summary><span>메모</span><strong data-actual-summary="memo">메모 없음</strong></summary><label class="sr-only" for="calendarEditMemo">메모</label><textarea class="input calendar-memo-input" id="calendarEditMemo" name="memo" maxlength="500" rows="4" placeholder="메모를 입력하세요..."></textarea></details>
             </section>
 
-            <?php if (!empty($executionEnergyGroups)): ?>
-                <details class="calendar-actual-disclosure calendar-energy-disclosure" data-actual-disclosure="energy"><summary><span>실행력</span><span class="calendar-energy-summary"><strong data-energy-summary-main>그룹 기준</strong><small data-energy-summary-detail>변경</small></span></summary><fieldset class="calendar-energy-links"><legend class="sr-only">실행력 상세 설정</legend><label class="form-label" for="calendarEditEnergyGroup">실행력 그룹</label><select class="input" id="calendarEditEnergyGroup" name="execution_energy_group_id"><?php foreach ($executionEnergyGroups as $group): ?><option value="<?= e((string) $group['id']) ?>" data-energy-name="<?= e((string) $group['name']) ?>" data-energy-type="<?= e((string) $group['effect_type']) ?>" data-energy-value="<?= e((string) $group['energy_value']) ?>" <?= !empty($group['is_default']) ? 'selected' : '' ?>><?= e((string) $group['name']) ?> · <?= $group['effect_type'] === 'recover' ? '+' : '-' ?><?= e((string) $group['energy_value']) ?></option><?php endforeach; ?></select><div class="calendar-energy-override"><span>적용 방식</span><label><input type="radio" name="execution_energy_type" value="" checked> 그룹 기준</label><label><input type="radio" name="execution_energy_type" value="consume"> 직접 소모</label><label><input type="radio" name="execution_energy_type" value="recover"> 직접 회복</label><input class="input" id="calendarEditEnergyValue" name="execution_energy_value" type="number" min="5" max="1000" step="5" placeholder="개별 값" hidden></div><p class="calendar-form-hint">수정한 값으로 해당 날짜의 실행력을 다시 계산합니다.</p></fieldset></details>
-            <?php endif; ?>
+            <details class="calendar-actual-disclosure calendar-energy-disclosure" data-actual-disclosure="energy">
+                <summary><span>실행력</span><span class="calendar-energy-summary"><strong class="energy-change-badge is-none" data-energy-summary-main>0</strong></span></summary>
+                <?php $energyFieldPrefix = 'calendarEditEnergy'; $energyDefaultType = 'none'; require __DIR__ . '/_execution-energy-fields.php'; ?>
+            </details>
 
                 </div>
                 <div class="calendar-sheet-actions calendar-actual-actions ui-form-sheet-actions">

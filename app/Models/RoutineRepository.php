@@ -83,6 +83,66 @@ final class RoutineRepository
         return $stmt->fetchAll();
     }
 
+    /** @return array<int, array<string, mixed>> */
+    public function listForManagement(int $userId, string $today, string $scope): array
+    {
+        $plannedEnd = $this->dateAddExpression('r.start_date', 'r.duration_days - 1');
+        $scopeCondition = $scope === 'completed'
+            ? '(r.status IN (:completed_status, :stopped_status) OR (r.status = :active_status AND :scope_today > ' . $plannedEnd . '))'
+            : '(r.status = :active_status AND :scope_today <= ' . $plannedEnd . ')';
+        $sql = 'SELECT
+                    r.id,
+                    r.user_id,
+                    r.goal_id,
+                    r.name,
+                    r.start_date,
+                    r.duration_days,
+                    r.status,
+                    r.ended_at,
+                    r.reminder_enabled,
+                    r.reminder_time,
+                    r.created_at,
+                    r.updated_at,
+                    g.title AS goal_title,
+                    g.goal_type AS goal_type,
+                    COALESCE(SUM(CASE WHEN rl.is_done = 1 THEN 1 ELSE 0 END), 0) AS done_count,
+                    today_log.is_done AS today_state
+                FROM routines r
+                LEFT JOIN goals g ON g.id = r.goal_id
+                    AND g.user_id = r.user_id
+                    AND g.deleted_at IS NULL
+                LEFT JOIN routine_logs rl ON rl.routine_id = r.id
+                    AND rl.user_id = r.user_id
+                    AND rl.log_date >= r.start_date
+                    AND rl.log_date <= ' . $plannedEnd . '
+                LEFT JOIN routine_logs today_log ON today_log.routine_id = r.id
+                    AND today_log.user_id = r.user_id
+                    AND today_log.log_date = :today
+                WHERE r.user_id = :user_id
+                    AND r.deleted_at IS NULL
+                    AND ' . $scopeCondition . '
+                GROUP BY
+                    r.id, r.user_id, r.goal_id, r.name, r.start_date, r.duration_days,
+                    r.status, r.ended_at, r.reminder_enabled, r.reminder_time,
+                    r.created_at, r.updated_at, g.title, g.goal_type, today_log.is_done
+                ORDER BY r.updated_at DESC, r.id DESC';
+
+        $stmt = $this->db->prepare($sql);
+        $parameters = [
+            'today' => $today,
+            'scope_today' => $today,
+            'user_id' => $userId,
+            'active_status' => 'active',
+        ];
+        if ($scope === 'completed') {
+            $parameters['completed_status'] = 'completed';
+            $parameters['stopped_status'] = 'stopped';
+        }
+        $stmt->execute($parameters);
+
+        return $stmt->fetchAll();
+    }
+
     /** @return array<string, mixed>|null */
     public function findActiveWithDoneCount(int $userId, int $routineId, string $today): ?array
     {
@@ -162,7 +222,7 @@ final class RoutineRepository
                     AND rl.log_date = :log_date
                 WHERE r.user_id = :user_id
                     AND r.deleted_at IS NULL
-                    AND r.status = :status
+                    AND (r.status = :status OR (r.ended_at IS NOT NULL AND :status_date <= r.ended_at))
                     AND :target_date_start >= r.start_date
                     AND :target_date_end <= ' . $this->dateAddExpression('r.start_date', 'r.duration_days - 1') . '
                 ORDER BY r.created_at ASC, r.id ASC';
@@ -172,6 +232,7 @@ final class RoutineRepository
             'log_date' => $date,
             'target_date_start' => $date,
             'target_date_end' => $date,
+            'status_date' => $date,
             'user_id' => $userId,
             'status' => 'active',
         ]);

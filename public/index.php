@@ -101,8 +101,6 @@ $router->get('/execution-energy', [$executionEnergyController, 'index'], ['auth'
 $router->get('/execution-energy/history', [$executionEnergyController, 'history'], ['auth']);
 $router->get('/execution-energy/status', [$executionEnergyController, 'status'], ['auth']);
 $router->post('/execution-energy/profile', [$executionEnergyController, 'updateProfile'], ['auth']);
-$router->post('/execution-energy/group', [$executionEnergyController, 'storeGroup'], ['auth']);
-$router->post('/execution-energy/group/update', [$executionEnergyController, 'updateGroup'], ['auth']);
 $router->post('/execution-energy/morning', [$executionEnergyController, 'saveMorning'], ['auth']);
 $router->get('/calendar', [$calendarController, 'index'], ['auth']);
 $router->post('/calendar/event', [$calendarController, 'storeEvent'], ['auth']);

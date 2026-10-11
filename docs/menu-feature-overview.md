@@ -6,11 +6,13 @@ This document describes the intended roles of the main LifeFlow menus before fea
 Read this file before changing menu behavior, menu navigation, calendar presentation of plan/routine data, or retrospective reporting flows.
 
 ## Navigation
-- The bottom navigator is reserved for daily execution in this order: Retrospect, Routine, To-do, Today. Execution Energy remains available as a separate 52px glass-liquid HUD on the left of the navigator; it opens the usage history without occupying a navigation slot or overlapping the daily floating action.
-- Today opens the current Calendar day. Calendar remains the owner of the day-grid and actual-event editing behavior.
-- The bottom Routine page shows the current user's routines for today and writes execution state to `routine_logs`.
-- The bottom To-do page shows today's `daily_plan_items`, including importance, planned time, and connected Goal.
-- Retrospect, Routine, and To-do use the same centered daily primary floating-action style. Compact header actions such as To-do's Today link and Routine's Management link use the same secondary pill treatment as Retrospect date controls.
+- The bottom navigator is reserved for daily execution in this order: Retrospect, Routine, To-do, Schedule. Execution Energy remains available as a separate 52px glass-liquid HUD on the left of the navigator; it opens the usage history without occupying a navigation slot or overlapping the daily floating action.
+- Schedule opens Calendar at the current day. The route and internal feature name remain `/calendar` and Calendar; `Today` is reserved for controls that return to the current date.
+- The bottom Routine page accepts `?date=YYYY-MM-DD`, starts at today, and shows routines whose execution period includes the selected date. Today and past dates can update execution state in `routine_logs`; future dates are read-only.
+- The bottom To-do page accepts `?date=YYYY-MM-DD` and shows that date's `daily_plan_items`, including importance, planned time, and connected Goal. Add, edit, and complete remain today-only; other dates link to Schedule Plan mode for editing.
+- Routine and To-do share a sticky date context with previous/next-day navigation, a native date picker, a conditional Today return action, and mobile Search/aside access.
+- Retrospect, Routine, and To-do use the same centered daily primary floating-action style. Compact actions such as To-do's selected-date Schedule link and Routine's Management link use the same secondary pill treatment as Retrospect date controls.
+- The daily To-do and Routine pages share the same unfinished/completed group language: a compact heading with an `n개` count, a bordered table, divided rows, and a calm empty message inside each group. To-do rows retain their importance, time, Goal, completion, and overflow actions within that denser structure.
 - The aside groups Plan, Routine Management, Goal, and Execution Energy Management under Management because these structures are configured less frequently.
 - Dashboard remains a standalone aside entry. Memo and Schedule Tag Management are grouped as tools.
 - Settings is reached from the aside header gear, and logout is kept inside Settings rather than the main aside menu.
@@ -42,15 +44,14 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Routine duration is user-selectable from 1 to 60 inclusive days, with 7 days as the default so a user can begin with a short cycle and extend it later. During creation, duration and the inclusive end date stay synchronized; the latest initial end date is the start date plus 59 days.
 - Active routines can be extended by a user-selected number of days up to 365 days, but their start date and duration cannot be shortened after creation.
 - A routine can be completed early or stopped. Its logs remain available to Retrospect after it leaves the active Routine list.
-- Routine Management omits the former weekly summary and starts directly with the structures being managed. Its edit sheet separates basic information, reminder settings, read-only period, extension, completion/stopping, and destructive deletion; the full-width opaque header remains sealed while the body scrolls.
-- The bottom-navigation Routine page groups unfinished routines above completed routines in compact tables. Both groups remain visible, an empty completed group encourages the first completion, and completing every routine shows a hopeful all-done message.
-- Each Routine card is a small always-visible habit tracker: name, streak, cumulative count and progress, a compact execution grid, linked goal, and compact detail/edit actions.
+- Routine Management omits the former weekly summary and separates `활성 루틴` from `완료·종료 루틴`. Active includes future-start records; completed/ended includes manually completed, stopped, and naturally expired records. Both tabs use the same card and calendar presentation for now.
+- The bottom-navigation Routine page groups unfinished routines above completed routines in compact tables for the selected date. Both groups remain visible, an empty completed group encourages the first completion, and completing every routine shows a hopeful all-done message.
+- Each Routine Management card shows name, lifecycle state, linked goal, a concise achievement summary, and a Monday-first 42-cell calendar for the selected month. The former percentage, progress bar, and date-less 14-cell tracker are omitted.
+- Sixty accumulated completed routine days constitutes habit formation; continuity is still shown separately only from a three-day streak. Crossing the 60-day total and selected streak milestones can use the shared restrained celebration Toast.
 - Streak feedback is hidden for zero, one, and two days. From three consecutive completed days onward, both Routine surfaces use the fire-marked compact label (`🔥 연속 n일`) without an `어제까지` prefix.
 - The bottom-navigation Routine page keeps its execution list compact and shows `🔥 n일 연속 완료` beneath the name only from three consecutive completed days onward, including immediate updates after today's toggle.
 - The optional linked goal sits in the card's upper-right context area and truncates before it can crowd out the routine name.
-- The card tracker shows the whole period for routines up to 14 days. Longer routines show a 14-cell window centered on momentum (normally the previous 10 days, today, and the next 3 planned days, shifted at either period boundary).
-- The tracker omits date and weekday labels so completed cells form a simple visual accumulation. Blank and `X` days stay neutral, future cells use a planned style, and today's outlined cell is the direct execution control.
-- Routine detail groups only actual routine dates by `YYYY년 M월` and lays them out sequentially in seven columns. It is a period record grid rather than a weekday-aligned calendar; future cells are visible as plans but remain read-only.
+- `기록 관리` uses the same weekday-aligned monthly calendar for the full routine period. Future and out-of-period cells are read-only, while today and past in-period records retain the existing blank/O/X correction cycle.
 - The Routine detail sheet keeps the routine name and close control sticky while its period record scrolls.
 - Routine should be visible in the calendar in a way that is easy to understand and quick to confirm.
 - Routine data also feeds retrospective reports.
@@ -71,7 +72,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - The popup provides previous/next published-date controls and reuses the same report content as the published Retrospect archive.
 - If a calendar entry overlaps with a plan, the UI should help the user confirm whether the entry is a copy of that plan or a different schedule.
 - Actual calendar entries are used for retrospective reports together with Plan and Routine data.
-- Completing an Actual event applies its saved Execution Energy group (consume or recover) to that day's current value. A Plan item is never current usage; it only contributes to the estimated remaining value.
+- Saving an Actual event applies its per-event Execution Energy change to that day's current value. New events default to a 25-point decrease; the user may choose no change, decrease, or increase and select 10, 25, 50, 75, 100, or a valid custom value. A Plan item is never current usage and contributes only a projected 25-point decrease until completed.
 - The floating action opens a bottom sheet ordered as `오늘의 컨디션`, `계획 템플릿 연결`, `메모 작성`, `계획 일정 추가`, and `실제 일정 추가`. Today To-do and Today Routine entries are omitted because bottom navigation already exposes those pages.
 - `오늘의 컨디션` opens a radio-choice bottom sheet for sleep, fatigue, mood, stress, and perceived burden. Saving replaces that day's earlier condition adjustment; it is not shown as a Calendar-top summary.
 - Fixed schedule tags can be enabled or hidden per user. Hiding a fixed tag removes it from new event choices while preserving its color and all existing event links.
@@ -140,7 +141,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 
 ## To-do
 
-- To-do is today's execution view over `daily_plan_items`; it is not a second persistence model and does not introduce a separate `todos` table.
+- To-do is a date-navigable view over `daily_plan_items`; it is not a second persistence model and does not introduce a separate `todos` table. Today is the execution surface, while past and future dates are read-only views whose Schedule link opens the same date in Plan mode.
 - Timed and time-unspecified items remain in the same table. Both time indexes are populated for a timed item and both are null for a time-unspecified item.
 - A linked, non-deleted `calendar_events` row is the completion evidence for a To-do item.
 - To-do visibly groups unfinished items above completed items. Each group sorts by importance A-D and then planned time.
@@ -158,16 +159,16 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 
 - Execution Energy is a user-controlled self-management estimate, not a health or medical assessment.
 - Its default daily capacity is 500 and values use five-point units between 0 and 1,000.
-- The aside management page owns baseline capacity and reusable consume/recover groups. Groups are edited in a compact table.
+- The aside management page owns the next-day baseline and explains the per-event input model. Reusable consume/recover groups are no longer part of current input.
 - Morning sleep, fatigue, mood, and stress selections adjust only that date's starting value and replace the previous same-day condition adjustment when resaved.
-- Actual Calendar events save a group snapshot when created, including events created by To-do completion. A group can be consume or recover, individual events can override its direction or amount, and explicit energy edits recalculate the day without silently changing snapshots during unrelated event edits.
+- Actual Calendar events default to a 25-point decrease, including events created by To-do completion. Each event can instead record no change, a decrease, or an increase using a preset or custom five-point value. Editing replaces that event's saved setting, deleting removes its contribution, and capacity remains floored at zero.
 - There is no user-facing manual capacity correction. The system records recovery above the daily start value as overflow instead of increasing capacity past the start value.
-- Retrospect stores optional perceived-burden feedback (lower than expected, similar, or higher than expected) separately from the morning condition adjustment; feedback never changes group values automatically.
+- Retrospect stores optional perceived-burden feedback (lower than expected, similar, or higher than expected) separately from the morning condition adjustment; feedback never changes event values automatically.
 - See `docs/execution-energy-feature-implementation.md` for calculation, tables, routes, and deployment migration details.
 
 ## Search
 
-- Search is available from both the header icon and the aside Tool at `GET /search`. The header expands an inline query form and Enter or the labeled search button navigates to the result page.
+- Search is available from the normal header, each mobile daily-page context, and the aside Tool at `GET /search`. Either icon expands the shared inline query form; Enter or the labeled search button navigates to the result page.
 - The first implementation searches active Goals, Routines, Plan blocks, dated To-dos, Actual schedules and their memos, standalone Memos, submitted KPT reports, and Life Records.
 - Users can filter by record type and date range. Results show a type badge, record date, title, matching excerpt, and a link to the owning feature.
 - Queries require at least two characters. Prepared partial-match queries stay compatible with MySQL and SQLite; deleted source records are excluded, while submitted Retrospect snapshots remain searchable as historical documents.

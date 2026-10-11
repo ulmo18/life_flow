@@ -31,7 +31,7 @@ final class CalendarController
         $calendarMode = $this->calendarMode($_GET['mode'] ?? null);
 
         $this->render('pages/calendar/index', [
-            'title' => t('nav.today'),
+            'title' => t('nav.schedule'),
             'calendar' => $calendar,
             'calendarMode' => $calendarMode,
             'headerGuidance' => $calendar['headerGuidance'] ?? null,
@@ -72,7 +72,12 @@ final class CalendarController
             ]);
         }
 
-        $_SESSION['flash_success'] = '일정이 저장되었습니다.';
+        $feedback = $this->calendarService->claimExecutionEnergyFeedback(
+            $this->userId(),
+            (string) ($validation['data']['date'] ?? ''),
+            (array) ($validation['data']['energySetting'] ?? [])
+        );
+        $_SESSION['flash_success'] = '일정이 저장되었습니다.' . ($feedback === null ? '' : ' ' . $feedback);
         $this->redirect($this->calendarPath($validation['data']['date'] ?? null));
     }
 
@@ -108,7 +113,12 @@ final class CalendarController
             ]);
         }
 
-        $_SESSION['flash_success'] = '일정이 수정되었습니다.';
+        $feedback = $this->calendarService->claimExecutionEnergyFeedback(
+            $this->userId(),
+            (string) ($validation['data']['date'] ?? ''),
+            (array) ($validation['data']['energySetting'] ?? [])
+        );
+        $_SESSION['flash_success'] = '일정이 수정되었습니다.' . ($feedback === null ? '' : ' ' . $feedback);
         $this->redirect($this->calendarPath($validation['data']['date'] ?? null));
     }
 

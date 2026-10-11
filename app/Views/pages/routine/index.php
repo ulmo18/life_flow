@@ -23,18 +23,34 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
     <h1 class="sr-only">루틴</h1>
 
     <?php if (!empty($flashSuccess)): ?>
-        <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
+        <span data-toast-message="<?= e((string) $flashSuccess) ?>" data-toast-variant="<?= e((string) ($flashVariant ?? '')) ?>" hidden></span>
     <?php endif; ?>
 
     <?php if (!empty($errors['general'])): ?>
         <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
     <?php endif; ?>
 
-    <section class="routine-list-section" aria-label="루틴 목록">
+    <nav class="routine-management-tabs" aria-label="루틴 상태">
+        <a class="<?= $selectedStatus === 'active' ? 'is-active' : '' ?>" href="/manage/routines?status=active&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'active' ? 'aria-current="page"' : '' ?>>활성 루틴</a>
+        <a class="<?= $selectedStatus === 'completed' ? 'is-active' : '' ?>" href="/manage/routines?status=completed&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'completed' ? 'aria-current="page"' : '' ?>>완료·종료 루틴</a>
+    </nav>
+
+    <div class="routine-month-navigation" aria-label="기록 월 선택">
+        <a class="btn btn-ghost" href="/manage/routines?status=<?= e((string) $selectedStatus) ?>&amp;month=<?= e((string) $previousMonth) ?>" aria-label="이전 달">‹</a>
+        <strong><?= e((string) $monthLabel) ?></strong>
+        <a class="btn btn-ghost" href="/manage/routines?status=<?= e((string) $selectedStatus) ?>&amp;month=<?= e((string) $nextMonth) ?>" aria-label="다음 달">›</a>
+    </div>
+
+    <section class="routine-list-section" aria-label="<?= $selectedStatus === 'active' ? '활성 루틴' : '완료 및 종료 루틴' ?> 목록">
         <?php if (empty($routines)): ?>
             <div class="routine-empty">
-                <strong>아직 만든 루틴이 없습니다.</strong>
-                <p class="muted">1일부터 60일까지 짧은 실천을 시작하고, 필요하면 기간을 연장해보세요.</p>
+                <?php if ($selectedStatus === 'active'): ?>
+                    <strong>현재 진행 중인 루틴이 없습니다.</strong>
+                    <p class="muted">작은 실천을 7일 동안 시작하고 필요할 때 이어가 보세요.</p>
+                <?php else: ?>
+                    <strong>완료하거나 종료한 루틴이 없습니다.</strong>
+                    <p class="muted">마무리한 루틴은 기록과 함께 이곳에 보관됩니다.</p>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <ul class="routine-list">
@@ -46,70 +62,65 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                         <div class="routine-card-main">
                             <div class="routine-card-title">
                                 <strong><?= e((string) $routine['name']) ?></strong>
-                                <span class="routine-streak-label" data-routine-streak="<?= e((string) $routineId) ?>" <?= (string) $routine['streakLabel'] === '' ? 'hidden' : '' ?>><?= e((string) $routine['streakLabel']) ?></span>
+                                <span class="routine-status-badge"><?= e((string) $routine['statusLabel']) ?></span>
                             </div>
                             <?php if (!empty($routine['goalTitle'])): ?>
                                 <span class="routine-goal-label" title="<?= e((string) $routine['goalTitle']) ?>"><span>목표 · <?= e((string) $routine['goalTitle']) ?></span></span>
                             <?php endif; ?>
                         </div>
 
-                        <div class="routine-progress">
-                            <span><b data-routine-done-count="<?= e((string) $routineId) ?>"><?= e((string) $routine['doneCount']) ?></b>/<?= e((string) $routine['durationDays']) ?>일</span>
-                            <span><b data-routine-progress-percent="<?= e((string) $routineId) ?>"><?= e((string) $routine['progressPercent']) ?></b>%</span>
-                        </div>
-                        <div class="routine-progress-track" aria-hidden="true">
-                            <span data-routine-progress-bar="<?= e((string) $routineId) ?>" style="width: <?= e((string) $routine['progressPercent']) ?>%;"></span>
-                        </div>
-                        <div class="routine-tracker-header">
-                            <strong>실천 기록</strong>
-                            <small>오늘 칸을 눌러 채워보세요.</small>
-                        </div>
-                        <div class="routine-tracker" data-routine-tracker="<?= e((string) $routineId) ?>" aria-label="루틴 실천 기록">
-                            <?php foreach ($routine['trackerCells'] as $cell): ?>
+                        <p class="routine-achievement-summary" data-routine-summary="<?= e((string) $routineId) ?>"><?= e((string) $routine['summaryLabel']) ?></p>
+                        <div class="routine-calendar-weekdays" aria-hidden="true"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
+                        <div class="routine-month-calendar" aria-label="<?= e((string) $monthLabel) ?> 실천 기록">
+                            <?php foreach ($routine['calendarCells'] as $cell): ?>
                                 <?php
                                 $cellState = (string) ($cell['state'] ?? '');
                                 $cellClasses = trim(
                                     ($cellState === 'O' ? 'is-done ' : ($cellState === 'X' ? 'is-failed ' : ''))
                                     . (!empty($cell['isToday']) ? 'is-today ' : '')
-                                    . (!empty($cell['isFuture']) ? 'is-future' : '')
+                                    . (!empty($cell['isFuture']) ? 'is-future ' : '')
+                                    . (empty($cell['inMonth']) ? 'is-outside ' : '')
+                                    . (empty($cell['inPeriod']) ? 'is-disabled' : '')
                                 );
                                 $cellLabel = (string) $cell['date'] . ' ' . ($cellState === 'O' ? '완료' : ($cellState === 'X' ? '미완료' : (!empty($cell['isFuture']) ? '예정' : '미기록')));
                                 ?>
-                                <?php if (!empty($cell['isToday'])): ?>
+                                <?php if (!empty($cell['canEdit']) && !empty($cell['isToday'])): ?>
                                     <form method="post" action="/routine/toggle" data-routine-toggle-form>
                                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                                         <input type="hidden" name="return_to" value="manage">
+                                        <input type="hidden" name="return_status" value="<?= e((string) $selectedStatus) ?>">
+                                        <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
                                         <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                                         <input type="hidden" name="date" value="<?= e((string) $cell['date']) ?>">
                                         <button
                                             type="submit"
-                                            class="routine-state-control routine-tracker-cell <?= e($cellClasses) ?>"
+                                            class="routine-month-cell <?= e($cellClasses) ?>"
                                             data-routine-state-button
                                             data-routine-state-cell
-                                            data-routine-state-display="tracker"
+                                            data-routine-state-display="calendar"
                                             data-routine-control-label="오늘 루틴 상태 변경"
                                             data-routine-id="<?= e((string) $routineId) ?>"
                                             data-routine-date="<?= e((string) $cell['date']) ?>"
                                             title="<?= e($cellLabel) ?>"
                                             aria-label="오늘 루틴 상태 변경, <?= e($cellLabel) ?>"
-                                        ><span data-routine-state-marker aria-hidden="true"><?= $cellState === 'O' ? '✓' : ($cellState === 'X' ? '×' : '') ?></span></button>
+                                        ><small><?= e((string) $cell['day']) ?></small><span data-routine-state-marker aria-hidden="true"><?= $cellState === 'O' ? '✓' : ($cellState === 'X' ? '×' : '') ?></span></button>
                                     </form>
                                 <?php else: ?>
                                     <span
-                                        class="routine-tracker-cell <?= e($cellClasses) ?>"
+                                        class="routine-month-cell <?= e($cellClasses) ?>"
                                         data-routine-state-cell
                                         data-routine-id="<?= e((string) $routineId) ?>"
                                         data-routine-date="<?= e((string) $cell['date']) ?>"
                                         title="<?= e($cellLabel) ?>"
                                         aria-label="<?= e($cellLabel) ?>"
-                                    ><span aria-hidden="true"></span></span>
+                                    ><small><?= !empty($cell['inMonth']) ? e((string) $cell['day']) : '' ?></small><span aria-hidden="true"><?= $cellState === 'O' ? '✓' : ($cellState === 'X' ? '×' : '') ?></span></span>
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         </div>
 
                         <div class="routine-card-actions">
-                            <button type="button" class="btn btn-secondary" data-routine-open="detail-<?= e((string) $routineId) ?>">상세</button>
-                            <button type="button" class="btn btn-ghost" data-routine-open="edit-<?= e((string) $routineId) ?>">수정</button>
+                            <button type="button" class="btn btn-secondary" data-routine-open="detail-<?= e((string) $routineId) ?>">기록 관리</button>
+                            <button type="button" class="btn btn-ghost" data-routine-open="edit-<?= e((string) $routineId) ?>">루틴 관리</button>
                         </div>
                     </li>
                 <?php endforeach; ?>
@@ -129,6 +140,8 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
         </div>
         <form class="routine-form" method="post" action="/routine">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="return_status" value="active">
+            <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
 
             <label class="form-label" for="routineName">습관명</label>
             <input class="input" id="routineName" name="name" type="text" maxlength="60" value="<?= e((string) ($old['name'] ?? '')) ?>" required>
@@ -208,13 +221,18 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                     <?php foreach ($routine['periodGroups'] as $month): ?>
                         <section class="routine-period-group" aria-label="<?= e((string) $month['label']) ?> 실천 기록">
                             <strong><?= e((string) $month['label']) ?></strong>
+                            <div class="routine-calendar-weekdays" aria-hidden="true"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
                             <div class="routine-period-grid">
                             <?php foreach ($month['cells'] as $cell): ?>
                                 <?php $state = (string) ($cell['state'] ?? ''); ?>
-                                <?php if (!empty($cell['canEdit'])): ?>
+                                <?php if (empty($cell['inMonth'])): ?>
+                                    <span class="routine-period-cell is-outside" aria-hidden="true"></span>
+                                <?php elseif (!empty($cell['canEdit'])): ?>
                                     <form method="post" action="/routine/toggle" data-routine-toggle-form>
                                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                                         <input type="hidden" name="return_to" value="manage">
+                                        <input type="hidden" name="return_status" value="<?= e((string) $selectedStatus) ?>">
+                                        <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
                                         <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                                         <input type="hidden" name="date" value="<?= e((string) $cell['date']) ?>">
                                         <button
@@ -229,7 +247,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                                         ><small><?= e((string) $cell['day']) ?></small><i aria-hidden="true"><?= $state === 'O' ? '●' : ($state === 'X' ? '×' : '') ?></i></button>
                                     </form>
                                 <?php else: ?>
-                                    <span class="routine-period-cell is-future" title="<?= e((string) $cell['date']) ?> 예정" aria-label="<?= e((string) $cell['date']) ?> 예정">
+                                    <span class="routine-period-cell <?= !empty($cell['inPeriod']) ? 'is-future' : 'is-disabled' ?>" title="<?= e((string) $cell['date']) ?> <?= !empty($cell['inPeriod']) ? '예정' : '기간 외' ?>" aria-label="<?= e((string) $cell['date']) ?> <?= !empty($cell['inPeriod']) ? '예정' : '기간 외' ?>">
                                         <small><?= e((string) $cell['day']) ?></small><i aria-hidden="true"></i>
                                     </span>
                                 <?php endif; ?>
@@ -252,8 +270,18 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                 <strong id="routineEditTitle<?= e((string) $routineId) ?>">루틴 수정</strong>
                 <button type="button" class="ui-close-button" data-routine-close aria-label="닫기">×</button>
             </div>
+            <?php if (empty($routine['canManage'])): ?>
+                <div class="routine-archive-summary">
+                    <span class="routine-status-badge"><?= e((string) $routine['statusLabel']) ?></span>
+                    <strong><?= e((string) $routine['name']) ?></strong>
+                    <p class="muted"><?= e((string) $routine['startDate']) ?> ~ <?= e((string) ($routine['endedAt'] ?: $routine['endDate'])) ?></p>
+                    <p class="muted">완료하거나 중단한 루틴은 기록을 보존하기 위해 수정할 수 없습니다.</p>
+                </div>
+            <?php else: ?>
             <form class="routine-form" method="post" action="/routine/update">
                 <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                <input type="hidden" name="return_status" value="<?= e((string) $selectedStatus) ?>">
+                <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
                 <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
 
                 <fieldset class="routine-edit-section"><legend>기본 정보</legend>
@@ -294,6 +322,8 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                 <?php if ((int) $routine['durationDays'] < 365): ?>
                     <form method="post" action="/routine/extend">
                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                        <input type="hidden" name="return_status" value="<?= e((string) $selectedStatus) ?>">
+                        <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
                         <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                         <label class="form-label" for="routineExtension<?= e((string) $routineId) ?>">기간 연장</label>
                         <div class="routine-extension-row">
@@ -305,20 +335,27 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                 <div class="routine-finish-row">
                     <form method="post" action="/routine/finish" data-confirm="이 루틴을 완료로 마무리할까요? 기록은 회고에 보존됩니다.">
                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                        <input type="hidden" name="return_status" value="<?= e((string) $selectedStatus) ?>">
+                        <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
                         <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                         <input type="hidden" name="status" value="completed">
                         <button type="submit" class="btn btn-secondary">완료로 마무리</button>
                     </form>
                     <form method="post" action="/routine/finish" data-confirm="이 루틴을 중단할까요? 지금까지의 기록은 회고에 보존됩니다.">
                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                        <input type="hidden" name="return_status" value="<?= e((string) $selectedStatus) ?>">
+                        <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
                         <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                         <input type="hidden" name="status" value="stopped">
                         <button type="submit" class="btn btn-ghost">중단</button>
                     </form>
                 </div>
             </div>
+            <?php endif; ?>
             <form id="routineDelete<?= e((string) $routineId) ?>" method="post" action="/routine/delete" data-confirm="루틴을 삭제할까요? 기존 실행 기록은 회고 참고용으로 숨김 처리됩니다.">
                 <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                <input type="hidden" name="return_status" value="<?= e((string) $selectedStatus) ?>">
+                <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
                 <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
                 <button type="submit" class="btn btn-ghost routine-delete-action">루틴 삭제</button>
             </form>

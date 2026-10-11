@@ -12,6 +12,8 @@ final class ExecutionEnergyService
     private const DEFAULT_CAPACITY = 500;
     private const MIN_CAPACITY = 5;
     private const MAX_CAPACITY = 1000;
+    private const DEFAULT_EVENT_VALUE = 25;
+    private const EVENT_PRESETS = [10, 25, 50, 75, 100];
     private const STATE_ADJUSTMENTS = [-50, -25, 0, 25, 50];
 
     private ExecutionEnergyRepository $repository;
@@ -28,7 +30,6 @@ final class ExecutionEnergyService
 
         return [
             'profile' => $profile,
-            'groups' => $this->repository->listGroups($userId),
         ];
     }
 
@@ -37,8 +38,6 @@ final class ExecutionEnergyService
     {
         $date = $this->normalizeDate($requestedDate);
         $profile = $this->ensureProfile($userId);
-        $groups = $this->repository->listGroups($userId, true);
-        $defaultGroup = $this->repository->findDefaultGroup($userId) ?? $groups[0] ?? null;
         $day = $this->repository->findDay($userId, $date)
             ?? $this->repository->createDay($userId, $date, (int) $profile['base_capacity']);
         $startCapacity = max(self::MIN_CAPACITY, $this->roundToFive(
@@ -48,22 +47,11 @@ final class ExecutionEnergyService
         $timeline = [];
 
         foreach ($activities as $activity) {
-            if (!$this->isValidUnit((int) ($activity['energy_value'] ?? 0)) && is_array($defaultGroup)) {
-                $this->saveEventSetting($userId, (int) $activity['id'], [
-                    'group' => $defaultGroup,
-                    'overrideType' => '',
-                    'overrideValue' => null,
-                ]);
-                $activity['group_name_snapshot'] = $defaultGroup['name'];
-                $activity['effect_type'] = $defaultGroup['effect_type'];
-                $activity['energy_value'] = $defaultGroup['energy_value'];
+            $effectType = (string) ($activity['effect_type'] ?? '');
+            $value = (int) ($activity['energy_value'] ?? 0);
+            if (!in_array($effectType, ['consume', 'recover'], true) || !$this->isValidUnit($value)) {
+                continue;
             }
-            $effectType = in_array((string) ($activity['effect_type'] ?? ''), ['consume', 'recover'], true)
-                ? (string) $activity['effect_type']
-                : (string) ($defaultGroup['effect_type'] ?? 'consume');
-            $value = $this->isValidUnit((int) ($activity['energy_value'] ?? 0))
-                ? (int) $activity['energy_value']
-                : (int) ($defaultGroup['energy_value'] ?? 50);
             $timeline[] = [
                 'kind' => 'activity',
                 'timeIndex' => (int) ($activity['end_index'] ?? 144),
@@ -71,7 +59,7 @@ final class ExecutionEnergyService
                 'title' => (string) $activity['title'],
                 'effectType' => $effectType,
                 'value' => $value,
-                'groupName' => (string) ($activity['group_name_snapshot'] ?? $defaultGroup['name'] ?? '일반 활동'),
+                'groupName' => (string) ($activity['group_name_snapshot'] ?? '직접 설정'),
             ];
         }
         usort($timeline, static fn (array $left, array $right): int => [
@@ -106,10 +94,7 @@ final class ExecutionEnergyService
 
         $predictedCapacity = $capacity;
         foreach ($this->repository->listRemainingPlanItems($userId, $date) as $plan) {
-            $projectedValue = (int) ($defaultGroup['energy_value'] ?? 50);
-            $predictedCapacity = ($defaultGroup['effect_type'] ?? 'consume') === 'recover'
-                ? min($startCapacity, $predictedCapacity + $projectedValue)
-                : max(0, $predictedCapacity - $projectedValue);
+            $predictedCapacity = max(0, $predictedCapacity - self::DEFAULT_EVENT_VALUE);
         }
 
         return [
@@ -126,8 +111,6 @@ final class ExecutionEnergyService
             'percent' => (int) round(($capacity / $startCapacity) * 100),
             'conditionApplied' => (int) $day['morning_adjustment'] !== 0 || $this->hasMorningSelection($day),
             'morningAdjustment' => (int) $day['morning_adjustment'],
-            'groups' => $groups,
-            'defaultGroup' => $defaultGroup,
             'timeline' => $timeline,
             'feedbackMessage' => $this->buildFeedbackMessage(
                 $day,
@@ -178,37 +161,6 @@ final class ExecutionEnergyService
     }
 
     /** @param array<string, mixed> $input */
-    public function validateGroupInput(array $input): array
-    {
-        $name = trim((string) ($input['name'] ?? ''));
-        $type = (string) ($input['effect_type'] ?? 'consume');
-        $value = filter_var($input['energy_value'] ?? null, FILTER_VALIDATE_INT);
-        $errors = [];
-        if ($name === '' || mb_strlen($name) > 60) $errors['name'] = '그룹 이름은 1~60자로 입력해주세요.';
-        if (!in_array($type, ['consume', 'recover'], true)) $errors['effect_type'] = '그룹 유형을 선택해주세요.';
-        if ($value === false || !$this->isValidUnit((int) $value)) $errors['energy_value'] = '실행력 값은 5~1000 사이의 5단위 값으로 입력해주세요.';
-
-        return ['ok' => $errors === [], 'errors' => $errors, 'data' => [
-            'name' => $name, 'effect_type' => $type, 'energy_value' => $value === false ? 50 : (int) $value,
-            'is_default' => !empty($input['is_default']) ? 1 : 0, 'is_active' => !empty($input['is_active']) ? 1 : 0,
-        ]];
-    }
-
-    /** @param array<string, mixed> $data */
-    public function createGroup(int $userId, array $data): ?int
-    {
-        if ((int) $data['is_default'] === 1) $this->clearDefaultGroups($userId);
-        return $this->repository->createGroup($userId, $data);
-    }
-
-    /** @param array<string, mixed> $data */
-    public function updateGroup(int $userId, int $groupId, array $data): bool
-    {
-        if ((int) $data['is_default'] === 1) $this->clearDefaultGroups($userId);
-        return $this->repository->updateGroup($userId, $groupId, $data);
-    }
-
-    /** @param array<string, mixed> $input */
     public function validateMorningInput(array $input): array
     {
         $states = [];
@@ -255,40 +207,59 @@ final class ExecutionEnergyService
     /** @param array<string, mixed> $input */
     public function validateEventSetting(int $userId, array $input): array
     {
-        $groupId = filter_var($input['execution_energy_group_id'] ?? null, FILTER_VALIDATE_INT);
-        $overrideType = (string) ($input['execution_energy_type'] ?? '');
-        $overrideValue = trim((string) ($input['execution_energy_value'] ?? ''));
-        $group = $groupId !== false && $groupId > 0 ? $this->repository->findGroup($userId, (int) $groupId, false) : null;
+        $effectType = (string) ($input['execution_energy_type'] ?? 'consume');
+        $amount = (string) ($input['execution_energy_amount'] ?? (string) self::DEFAULT_EVENT_VALUE);
         $errors = [];
-        if ($groupId !== false && $groupId > 0 && $group === null) $errors['execution_energy_group_id'] = '사용할 수 없는 실행력 그룹입니다.';
-        if ($overrideValue !== '') {
-            $value = filter_var($overrideValue, FILTER_VALIDATE_INT);
-            if (!in_array($overrideType, ['consume', 'recover'], true) || $value === false || !$this->isValidUnit((int) $value)) {
-                $errors['execution_energy_value'] = '개별 실행력 값은 5~1000 사이의 5단위 값으로 입력해주세요.';
-            }
-        } elseif (in_array($overrideType, ['consume', 'recover'], true) && is_array($group)) {
-            $overrideValue = (string) $group['energy_value'];
+
+        if (!in_array($effectType, ['none', 'consume', 'recover'], true)) {
+            $errors['execution_energy_type'] = '실행력 변화를 다시 선택해주세요.';
+            $effectType = 'consume';
         }
+
+        $value = self::DEFAULT_EVENT_VALUE;
+        if ($effectType !== 'none') {
+            if ($amount === 'custom') {
+                $customValue = filter_var($input['execution_energy_custom_value'] ?? null, FILTER_VALIDATE_INT);
+                if ($customValue === false || !$this->isValidUnit((int) $customValue)) {
+                    $errors['execution_energy_value'] = '직접 입력 변화량은 5~1000 사이의 5단위로 입력해주세요.';
+                } else {
+                    $value = (int) $customValue;
+                }
+            } else {
+                $presetValue = filter_var($amount, FILTER_VALIDATE_INT);
+                if ($presetValue === false || !in_array((int) $presetValue, self::EVENT_PRESETS, true)) {
+                    $errors['execution_energy_value'] = '실행력 변화량을 다시 선택해주세요.';
+                } else {
+                    $value = (int) $presetValue;
+                }
+            }
+        }
+
         return ['ok' => $errors === [], 'errors' => $errors, 'data' => [
-            'group' => $group,
-            'overrideType' => $overrideType,
-            'overrideValue' => $overrideValue === '' ? null : (int) $overrideValue,
-            'preserveExisting' => (string) ($input['execution_energy_preserve'] ?? '') === '1',
+            'effectType' => $effectType,
+            'value' => $effectType === 'none' ? 0 : $value,
         ]];
     }
 
     /** @param array<string, mixed> $setting */
     public function saveEventSetting(int $userId, int $eventId, array $setting): void
     {
-        $group = $setting['group'] ?? $this->repository->findDefaultGroup($userId);
-        if (!is_array($group)) return;
-        $isOverride = $setting['overrideValue'] !== null;
+        $effectType = (string) ($setting['effectType'] ?? 'consume');
+        $value = (int) ($setting['value'] ?? self::DEFAULT_EVENT_VALUE);
+        if ($effectType === 'none') {
+            $this->repository->deleteEventSetting($userId, $eventId);
+            return;
+        }
+        if (!in_array($effectType, ['consume', 'recover'], true) || !$this->isValidUnit($value)) {
+            return;
+        }
+
         $this->repository->upsertEventSetting($userId, $eventId, [
-            'group_id_snapshot' => (int) $group['id'],
-            'group_name_snapshot' => (string) $group['name'],
-            'effect_type' => $isOverride ? (string) $setting['overrideType'] : (string) $group['effect_type'],
-            'energy_value' => $isOverride ? (int) $setting['overrideValue'] : (int) $group['energy_value'],
-            'is_override' => $isOverride ? 1 : 0,
+            'group_id_snapshot' => null,
+            'group_name_snapshot' => '직접 설정',
+            'effect_type' => $effectType,
+            'energy_value' => $value,
+            'is_override' => 1,
         ]);
     }
 
@@ -296,10 +267,30 @@ final class ExecutionEnergyService
     {
         $this->ensureProfile($userId);
         $this->saveEventSetting($userId, $eventId, [
-            'group' => $this->repository->findDefaultGroup($userId),
-            'overrideType' => '',
-            'overrideValue' => null,
+            'effectType' => 'consume',
+            'value' => self::DEFAULT_EVENT_VALUE,
         ]);
+    }
+
+    public function claimMilestoneFeedback(int $userId, string $date): ?string
+    {
+        $date = $this->normalizeDate($date);
+        $percent = (int) $this->getDayData($userId, $date)['percent'];
+        $level = $percent <= 0 ? 0 : ($percent <= 25 ? 25 : ($percent <= 50 ? 50 : null));
+        if ($level === null) {
+            return null;
+        }
+
+        foreach ([50, 25, 0] as $passedLevel) {
+            if ($percent <= $passedLevel) {
+                $claimed = $this->repository->claimNotice($userId, $date, $passedLevel);
+                if ($passedLevel === $level && !$claimed) {
+                    return null;
+                }
+            }
+        }
+
+        return $this->milestoneFeedbackMessage($level);
     }
 
     private function ensureProfile(int $userId): array
@@ -313,23 +304,7 @@ final class ExecutionEnergyService
             ]);
             $profile = $this->repository->findProfile($userId) ?? [];
         }
-        if ($this->repository->listGroups($userId) === []) {
-            foreach ([['가벼운 활동', 'consume', 25, 0], ['일반 활동', 'consume', 50, 1], ['집중·부담 활동', 'consume', 100, 0], ['고부담 활동', 'consume', 150, 0], ['짧은 휴식', 'recover', 25, 0], ['충분한 휴식', 'recover', 50, 0]] as [$name, $type, $value, $default]) {
-                $this->repository->createGroup($userId, ['name' => $name, 'effect_type' => $type, 'energy_value' => $value, 'is_default' => $default]);
-            }
-        }
         return $profile;
-    }
-
-    private function clearDefaultGroups(int $userId): void
-    {
-        foreach ($this->repository->listGroups($userId) as $group) {
-            if ((int) $group['is_default'] !== 1) continue;
-            $this->repository->updateGroup($userId, (int) $group['id'], [
-                'name' => (string) $group['name'], 'effect_type' => (string) $group['effect_type'],
-                'energy_value' => (int) $group['energy_value'], 'is_default' => 0, 'is_active' => (int) $group['is_active'],
-            ]);
-        }
     }
 
     private function normalizeDate(?string $date): string
@@ -382,13 +357,24 @@ final class ExecutionEnergyService
             'higher' => '예상보다 부담이 컸어요. 다음 계획은 실행력 한 단계를 낮춰 잡아보세요.',
             'lower' => '예상보다 여유가 있었어요. 비슷한 일정의 실행력 값을 조금 낮춰볼 수 있어요.',
             'similar' => '예상과 실제 부담이 비슷했어요. 현재 기준을 다음 계획에도 활용해 보세요.',
-            default => $overConsumed > 0
-                ? '시작 실행력보다 더 많이 사용했어요. 다음에는 회복 일정을 먼저 확보해 보세요.'
-                : ($predictedCapacity <= ($startCapacity * 0.25)
-                    ? '남은 계획까지 진행하면 실행력이 크게 줄 수 있어요. 우선순위나 휴식 시간을 확인해 보세요.'
-                    : ($currentCapacity >= ($startCapacity * 0.5)
-                        ? '아직 절반 이상의 실행력이 남아 있어요. 가장 중요한 다음 한 가지에 집중해 보세요.'
-                        : '오늘 사용량을 확인하고 남은 계획을 가볍게 조정해 보세요.')),
+            default => $currentCapacity <= 0 || $overConsumed > 0
+                ? $this->milestoneFeedbackMessage(0)
+                : ($currentCapacity <= ($startCapacity * 0.25)
+                    ? $this->milestoneFeedbackMessage(25)
+                    : ($currentCapacity <= ($startCapacity * 0.5)
+                        ? $this->milestoneFeedbackMessage(50)
+                        : ($predictedCapacity <= ($startCapacity * 0.25)
+                            ? '남은 계획까지 진행하면 실행력이 크게 줄 수 있어요. 우선순위나 휴식 시간을 확인해 보세요.'
+                            : '아직 절반 이상의 실행력이 남아 있어요. 가장 중요한 다음 한 가지에 집중해 보세요.'))),
+        };
+    }
+
+    private function milestoneFeedbackMessage(int $level): string
+    {
+        return match ($level) {
+            0 => '오늘의 실행력을 계획에 충분히 사용했어요. 완료한 일을 응원하며, 이제 잠시 회복해도 괜찮아요.',
+            25 => '오늘 계획을 많이 실행했어요. 남은 실행력은 꼭 마무리하고 싶은 계획에 사용해 보세요.',
+            default => '오늘 계획을 차근차근 실행하고 있어요. 남은 계획도 지금의 흐름대로 이어가 보세요.',
         };
     }
 }

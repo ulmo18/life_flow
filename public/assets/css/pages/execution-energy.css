@@ -46,103 +46,11 @@
   cursor: pointer;
 }
 
-.energy-group-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.energy-group-table {
-  width: 100%;
-  min-width: 580px;
-  border-collapse: collapse;
-  background: var(--color-surface);
-}
-
-.energy-group-table th,
-.energy-group-table td {
-  border-bottom: 1px solid var(--border);
-  padding: 8px;
-  text-align: left;
-  vertical-align: middle;
-}
-
-.energy-group-table tr:last-child td {
-  border-bottom: 0;
-}
-
-.energy-group-table th {
-  color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.energy-group-table td .input {
-  min-width: 0;
-  width: 100%;
-}
-
-.energy-group-table td:nth-child(1) { min-width: 155px; }
-.energy-group-table td:nth-child(2) { width: 86px; }
-.energy-group-table td:nth-child(3) { width: 84px; }
-.energy-group-table td:nth-child(4),
-.energy-group-table td:nth-child(5) { width: 48px; text-align: center; }
-.energy-group-table td:last-child { width: 68px; }
-
-.energy-group-checkbox {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.energy-group-checkbox input {
-  width: 18px;
-  height: 18px;
-}
-
-.energy-group-table .btn,
-.energy-group-create .btn {
-  min-height: 36px;
-  padding: 0 10px;
-  white-space: nowrap;
-}
-
-.energy-group-create {
-  display: grid;
-  grid-template-columns: minmax(140px, 1fr) 92px 82px auto auto;
-  gap: 8px;
-  align-items: end;
-  border-top: 1px dashed var(--border);
-  padding-top: 14px;
-}
-
-.energy-group-create label:not(.energy-group-checkbox) {
-  display: grid;
-  gap: 5px;
-  color: var(--color-text-muted);
-  font-size: 11px;
-  font-weight: 800;
-}
+.energy-input-guide p + p { padding-top: 10px; border-top: 1px solid var(--border); }
 
 @media (max-width: 639px) {
   .energy-management-card {
     padding: 14px;
   }
 
-  .energy-group-create {
-    grid-template-columns: minmax(0, 1fr) 86px 74px;
-  }
-
-  .energy-group-create .energy-group-checkbox {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
-
-  .energy-group-create .btn {
-    grid-column: 1 / -1;
-  }
 }

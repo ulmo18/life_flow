@@ -705,5 +705,5 @@ CREATE TABLE IF NOT EXISTS execution_energy_notices (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY(user_id, energy_date, notice_level),
   FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE ON UPDATE CASCADE,
-  CHECK (notice_level IN (25, 50))
+  CHECK (notice_level IN (0, 25, 50))
 );

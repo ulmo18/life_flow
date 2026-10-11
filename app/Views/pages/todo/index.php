@@ -3,35 +3,32 @@
 <?php
 $pendingItems = $todo['pendingItems'] ?? [];
 $completedItems = $todo['completedItems'] ?? [];
-$renderTodoItems = static function (array $items): void {
+$renderTodoItems = static function (array $items) use ($canEdit): void {
     foreach ($items as $item):
         $isCompleted = !empty($item['isCompleted']);
         $isUnscheduled = $item['startIndex'] === null;
         ?>
-        <li class="todo-item <?= $isCompleted ? 'is-completed' : '' ?> <?= !empty($item['isLongDuration']) ? 'is-long-duration' : '' ?>" data-todo-item="<?= e((string) $item['id']) ?>">
-            <div class="todo-item-copy">
+        <tr class="todo-item <?= $isCompleted ? 'is-completed' : '' ?> <?= !empty($item['isLongDuration']) ? 'is-long-duration' : '' ?>" data-todo-item="<?= e((string) $item['id']) ?>">
+            <td><div class="todo-item-copy">
                 <div class="todo-item-title">
                     <span class="todo-importance" aria-label="중요도 <?= e((string) $item['importance']) ?>"><?= e((string) $item['importance']) ?></span>
                     <strong class="<?= !empty($item['isLongDuration']) ? 'duration-highlight' : '' ?>"><?= e((string) $item['title']) ?></strong>
                     <?php if (!empty($item['isLongDuration'])): ?><span class="sr-only">1시간 이상 계획</span><?php endif; ?>
                 </div>
-                <span class="todo-time"><?= e((string) $item['timeRange']) ?></span>
+                <div class="todo-item-meta"><span class="todo-time"><?= e((string) $item['timeRange']) ?></span><?php if (!$isCompleted && $isUnscheduled): ?><button type="button" class="todo-time-link" data-todo-edit-proxy>시간 설정</button><?php endif; ?></div>
                 <?php if ($item['goalTitle'] !== null): ?>
                     <small><?= e(t('todo.goal', ['goal' => $item['goalTitle']])) ?></small>
                 <?php endif; ?>
-            </div>
-            <div class="todo-item-actions">
-                <?php if (!$isCompleted && $isUnscheduled): ?>
-                    <button type="button" class="btn btn-secondary todo-time-action" data-todo-edit-proxy>시간 설정</button>
-                <?php endif; ?>
+            </div></td>
+            <?php if ($canEdit): ?><td><div class="todo-item-actions">
                 <?php if (!$isCompleted): ?>
-                    <button type="button" class="btn btn-primary" data-todo-complete
+                    <button type="button" class="btn btn-primary todo-complete-action" data-todo-complete
                         data-item-id="<?= e((string) $item['id']) ?>"
                         data-start-index="<?= $item['startIndex'] === null ? '' : e((string) $item['startIndex']) ?>"
                         data-end-index="<?= $item['endIndex'] === null ? '' : e((string) $item['endIndex']) ?>"
                     ><?= e(t('todo.complete')) ?></button>
                 <?php endif; ?>
-                <div class="todo-item-menu">
+                <?php if ($canEdit): ?><div class="todo-item-menu">
                     <button type="button" class="todo-menu-toggle" data-todo-menu-toggle aria-haspopup="menu" aria-expanded="false" aria-label="<?= e((string) $item['title']) ?> 메뉴 열기">⋮</button>
                     <div class="todo-menu-popover" role="menu" data-todo-menu hidden>
                         <button type="button" role="menuitem" data-todo-edit-open
@@ -45,41 +42,40 @@ $renderTodoItems = static function (array $items): void {
                             data-linked="<?= $isCompleted ? '1' : '0' ?>"
                         >할 일 수정</button>
                     </div>
-                </div>
-            </div>
-        </li>
+                </div><?php endif; ?>
+            </div></td><?php endif; ?>
+        </tr>
     <?php endforeach;
 };
 ?>
 
 <main class="page todo-page" data-todo-page data-message-fallback="<?= e(t('todo.invalid')) ?>">
-    <div class="todo-heading">
-        <div><h1><?= e(t('todo.title')) ?></h1><p class="muted"><?= e((string) $todo['date']) ?></p></div>
-        <a class="btn btn-secondary compact-header-action" href="/calendar"><?= e(t('nav.today')) ?></a>
-    </div>
+    <?php $dailyDateContext = ['title' => t('todo.title'), 'path' => '/todo', 'date' => $todo['date'], 'prevDate' => $prevDate, 'nextDate' => $nextDate, 'todayDate' => $todayDate, 'isToday' => $isToday, 'inputId' => 'todoDate']; require __DIR__ . '/../../components/daily-date-navigation.php'; ?>
+    <div class="todo-tools"><a class="btn btn-secondary compact-header-action" href="/calendar?date=<?= e((string) $todo['date']) ?>&mode=plan"><?= $isToday ? e(t('nav.schedule')) : '일정에서 보기·수정' ?></a></div>
 
     <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
     <?php if (!empty($errors['general'])): ?><span data-toast-message="<?= e((string) $errors['general']) ?>" hidden></span><?php endif; ?>
 
     <section class="todo-group" aria-labelledby="todoPendingTitle">
-        <div class="todo-group-heading"><h2 id="todoPendingTitle">미완료</h2><span><?= e((string) count($pendingItems)) ?></span></div>
+        <header class="todo-group-heading"><h2 id="todoPendingTitle">미완료 할 일</h2><span><?= e((string) count($pendingItems)) ?>개</span></header>
+        <div class="todo-table-wrap">
         <?php if ($pendingItems === []): ?>
-            <div class="todo-group-empty">
-                <strong><?= empty($completedItems) ? e(t('todo.empty')) : '오늘의 할 일을 모두 완료했어요.' ?></strong>
-                <?php if (empty($completedItems)): ?><p><?= e(t('todo.empty_help')) ?></p><button class="btn btn-primary" type="button" data-todo-create-open>할 일 추가</button><?php endif; ?>
-            </div>
-        <?php else: ?><ul class="todo-list"><?php $renderTodoItems($pendingItems); ?></ul><?php endif; ?>
+            <p class="todo-group-empty"><?= empty($completedItems) ? ($isToday ? e(t('todo.empty_help')) : e(t('todo.empty'))) : ($isToday ? '오늘의 할 일을 모두 완료했어요. 이 흐름을 이어가 보세요.' : '선택한 날짜의 할 일을 모두 완료했어요.') ?></p>
+        <?php else: ?><table class="todo-table"><caption class="sr-only">미완료 할 일 목록</caption><tbody><?php $renderTodoItems($pendingItems); ?></tbody></table><?php endif; ?>
+        </div>
     </section>
 
     <section class="todo-group" aria-labelledby="todoCompletedTitle">
-        <div class="todo-group-heading"><h2 id="todoCompletedTitle">완료</h2><span><?= e((string) count($completedItems)) ?></span></div>
+        <header class="todo-group-heading"><h2 id="todoCompletedTitle">완료 할 일</h2><span><?= e((string) count($completedItems)) ?>개</span></header>
+        <div class="todo-table-wrap">
         <?php if ($completedItems === []): ?>
             <p class="todo-group-empty">완료한 할 일이 여기에 차곡차곡 쌓여요. 하나씩 시작해봐요.</p>
-        <?php else: ?><ul class="todo-list"><?php $renderTodoItems($completedItems); ?></ul><?php endif; ?>
+        <?php else: ?><table class="todo-table"><caption class="sr-only">완료한 할 일 목록</caption><tbody><?php $renderTodoItems($completedItems); ?></tbody></table><?php endif; ?>
+        </div>
     </section>
 </main>
 
-<button class="btn btn-primary daily-floating-action" type="button" data-todo-create-open>할 일 추가</button>
+<?php if ($canEdit): ?><button class="btn btn-primary daily-floating-action" type="button" data-todo-create-open>할 일 추가</button><?php endif; ?>
 
 <div class="todo-layer" data-todo-create-layer hidden>
     <button type="button" class="todo-overlay" data-todo-create-close aria-label="닫기"></button>

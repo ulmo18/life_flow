@@ -26,7 +26,7 @@ Daily Retrospect also provides optional Execution Energy pacing feedback. The ed
 - Memo rows show the user-time-zone creation time and a one-line ellipsis. Selecting a Memo opens its full read-only content in a dedicated Memo detail sheet.
 - Routine, Schedule, and Memo details use separate titled layers. A record click explicitly hides every sibling detail panel before showing exactly one; author CSS also preserves the `hidden` state.
 - The Execution Energy card shows the selected condition values, baseline, condition adjustment, and daily starting capacity. Current and predicted capacity are omitted because the bottom orb/history owns current state. Daily consume/recover totals and feedback remain review context.
-- Schedule detail includes the Actual event's saved energy group, consume/recover direction, and value. Published Actual snapshots retain these fields. Existing MySQL databases apply `migration.retrospect_execution_energy.mysql.sql`; SQLite fallback upgrades missing columns during connection startup, with the companion SQL retained for controlled upgrades.
+- Schedule detail includes the Actual event's saved no-change/decrease/increase result and value. Published Actual snapshots retain legacy group labels when present, but new records use the event-level direct-setting snapshot. Existing MySQL databases apply `migration.retrospect_execution_energy.mysql.sql`; SQLite fallback upgrades missing columns during connection startup, with the companion SQL retained for controlled upgrades.
 
 ### Empty states
 

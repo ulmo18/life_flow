@@ -264,7 +264,7 @@ final class CalendarService
             $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
             (string) $data['memo']
         );
-        if ($updated && empty($data['energySetting']['preserveExisting'])) {
+        if ($updated) {
             $this->executionEnergyService->saveEventSetting(
                 $userId,
                 (int) $data['eventId'],
@@ -286,6 +286,16 @@ final class CalendarService
         }
 
         return $updated;
+    }
+
+    /** @param array<string, mixed> $energySetting */
+    public function claimExecutionEnergyFeedback(int $userId, string $date, array $energySetting): ?string
+    {
+        if (($energySetting['effectType'] ?? '') !== 'consume') {
+            return null;
+        }
+
+        return $this->executionEnergyService->claimMilestoneFeedback($userId, $date);
     }
 
     public function deleteActualEvent(int $userId, int $eventId): bool

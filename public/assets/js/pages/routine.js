@@ -118,8 +118,8 @@
       if (marker) {
         marker.textContent = state === 'O' ? '●' : (state === 'X' ? '×' : '');
       }
-    } else if (display === 'tracker') {
-      const marker = button.querySelector('span');
+    } else if (display === 'tracker' || display === 'calendar') {
+      const marker = button.querySelector('[data-routine-state-marker]') || button.querySelector('span');
       if (marker) {
         marker.textContent = state === 'O' ? '✓' : (state === 'X' ? '×' : '');
       }
@@ -151,6 +151,10 @@
     document.querySelectorAll(`[data-routine-streak="${routine.id}"]`).forEach(element => {
       element.textContent = routine.streakLabel || '';
       element.hidden = !routine.streakLabel;
+    });
+
+    document.querySelectorAll(`[data-routine-summary="${routine.id}"]`).forEach(element => {
+      element.textContent = routine.summaryLabel || '';
     });
 
   }
@@ -209,7 +213,10 @@
     updatePageSummary(payload.pageSummary);
 
     if (toast && typeof toast.show === 'function') {
-      toast.show(payload.message || '루틴 상태를 변경했습니다.');
+      toast.show(payload.message || '루틴 상태를 변경했습니다.', {
+        variant: payload.celebration ? 'celebration' : '',
+        duration: payload.celebration ? 6000 : 5000,
+      });
     }
   }
 

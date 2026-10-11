@@ -49,6 +49,7 @@ Back up the database, then apply these one-time migrations after their prerequis
 15. `sql/migration.wellness_entries.mysql.sql` — requires `user` and `calendar_events`; creates Sleep, Meal, Snack, Exercise, and Rest records used by Calendar and Search.
 16. `sql/migration.wellness_event_link.mysql.sql` — apply only when migration 15 was already deployed; adds the nullable unique Actual-event link used by schedule-bound Life Records.
 17. `sql/migration.daily_plan_estimated_duration.mysql.sql` — requires `daily_plan_items`; adds the optional expected duration used to highlight long time-unspecified Plan items.
+18. `sql/migration.execution_energy_zero_notice.mysql.sql` — requires `execution_energy_notices`; expands its milestone constraint from 25/50 to 0/25/50.
 
 The Routine validation trigger migration depends on the lifecycle columns; the other feature migrations are independent. The order above is the recommended release order for repeatable deployments. Record each applied migration because the `ALTER TABLE` statements are not intended to be rerun.
 
@@ -69,6 +70,7 @@ MySQL application connections set the session timezone to `+00:00`. Before deplo
 - `app/Core/Database.php` adds Retrospect Goal snapshot columns and reapplies the schema to create the Memo snapshot table; `sql/migration.add_retrospect_review.sqlite.sql` is available for controlled upgrades.
 - `app/Core/Database.php` creates the Execution Energy tables when `execution_energy_profiles` is missing; `sql/migration.add_execution_energy.sqlite.sql` is available for controlled manual migration.
 - Existing SQLite Execution Energy tables receive the missing `burden_feedback` column automatically; `sql/migration.add_execution_energy_feedback.sqlite.sql` is available for controlled manual migration.
+- Existing SQLite Execution Energy notices automatically apply `sql/migration.execution_energy_zero_notice.sqlite.sql` when the old 25/50-only milestone constraint is detected.
 - Existing SQLite Retrospect Actual snapshots receive missing Execution Energy columns automatically; `sql/migration.retrospect_execution_energy.sqlite.sql` remains available for controlled manual migration.
 - Reapplying `sql/schema.sqlite.sql` creates the Retrospect milestone snapshot table; `sql/migration.retrospect_report_milestones.sqlite.sql` is available for controlled manual migration.
 - Reapplying `sql/schema.sqlite.sql` creates `wellness_entries`; `sql/migration.wellness_entries.sqlite.sql` is available for controlled manual migration. Existing standalone tables receive `calendar_event_id` and its unique index automatically; `sql/migration.wellness_event_link.sqlite.sql` is the matching controlled migration.
@@ -95,3 +97,12 @@ Get-Content -Raw -Encoding utf8 sql/migration.daily_plan_estimated_duration.mysq
 ```
 
 - Record which migrations were applied. These `ALTER TABLE` migrations are not intended to be rerun.
+
+## Execution Energy 0% milestone
+
+Execution Energy feedback now records 50%, 25%, and 0% remaining-capacity milestones. Existing databases that already contain `execution_energy_notices` must update its check constraint:
+
+- MySQL/MariaDB: `sql/migration.execution_energy_zero_notice.mysql.sql`
+- SQLite: `sql/migration.execution_energy_zero_notice.sqlite.sql`
+
+SQLite fallback performs this compatibility migration automatically when the old 25/50-only constraint is detected.

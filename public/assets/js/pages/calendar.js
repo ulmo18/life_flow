@@ -29,11 +29,8 @@
   const editStartInput = document.getElementById('calendarEditStartIndex');
   const editEndInput = document.getElementById('calendarEditEndIndex');
   const editTimeFields = document.querySelector('[data-calendar-edit-time-fields]');
-  const createEnergyGroup = document.getElementById('calendarEnergyGroup');
-  const createEnergyValue = eventForm?.querySelector('input[name="execution_energy_value"]');
-  const editEnergyGroup = document.getElementById('calendarEditEnergyGroup');
-  const editEnergyValue = document.getElementById('calendarEditEnergyValue');
-  const editEnergyPreserve = document.getElementById('calendarEditEnergyPreserve');
+  const createEnergyCustomValue = document.getElementById('calendarCreateEnergyCustomValue');
+  const editEnergyCustomValue = document.getElementById('calendarEditEnergyCustomValue');
   const createWellnessFields = eventForm?.querySelector('[data-wellness-fields]');
   const editWellnessFields = document.getElementById('calendarEventEditForm')?.querySelector('[data-wellness-fields]');
   const planPicker = document.querySelector('.calendar-plan-picker');
@@ -312,11 +309,9 @@
     eventForm.querySelectorAll('input[name="routine_ids[]"]:not(:disabled)').forEach(input => {
       input.checked = false;
     });
-    if (createEnergyGroup) {
-      createEnergyGroup.value = createEnergyGroup.querySelector('option[selected]')?.value || createEnergyGroup.options[0]?.value || '';
-    }
-    checkRadio(eventForm, 'execution_energy_type', '');
-    if (createEnergyValue) createEnergyValue.value = '';
+    checkRadio(eventForm, 'execution_energy_type', 'consume');
+    checkRadio(eventForm, 'execution_energy_amount', '25');
+    if (createEnergyCustomValue) createEnergyCustomValue.value = '';
     setWellnessFields(createWellnessFields, {}, !isUnscheduled);
     updatePlanRecommendations(eventForm, selectedStart, selectedEnd);
     resetActualDisclosures(eventForm);
@@ -346,12 +341,14 @@
     const summary = form?.querySelector('[data-plan-link-summary]');
     const detail = form?.querySelector('[data-plan-link-detail]');
     const action = form?.querySelector('[data-selection-action]');
+    const current = form?.querySelector('[data-plan-link-current]');
     const selected = group.querySelector('input[name="daily_plan_item_id"]:checked');
     if (!summary) return;
     const hasPlan = Boolean(selected?.value);
     summary.textContent = hasPlan
       ? (selected.dataset.planSummary || selected.closest('.calendar-plan-link')?.querySelector('span')?.textContent?.trim() || '연결된 계획')
-      : '연결하기';
+      : '';
+    if (current) current.hidden = !hasPlan;
     if (detail) detail.textContent = hasPlan ? (selected.dataset.planDetail || '') : '';
     if (action) action.textContent = hasPlan ? '변경 ›' : '연결하기 ›';
   }
@@ -381,20 +378,52 @@
       memoSummary.textContent = content === '' ? '메모 없음' : (content.length > 24 ? `${content.slice(0, 24)}…` : content);
     }
 
-    const energyGroup = form.querySelector('select[name="execution_energy_group_id"]');
-    const energyType = form.querySelector('input[name="execution_energy_type"]:checked')?.value || '';
-    const energyValue = form.querySelector('input[name="execution_energy_value"]');
+    const energyType = form.querySelector('input[name="execution_energy_type"]:checked')?.value || 'none';
+    const energyAmount = form.querySelector('input[name="execution_energy_amount"]:checked')?.value || '25';
+    const customValue = form.querySelector('input[name="execution_energy_custom_value"]');
+    const amountPanel = form.querySelector('[data-energy-amount-panel]');
+    const customField = form.querySelector('[data-energy-custom]');
     const energyMain = form.querySelector('[data-energy-summary-main]');
-    const energyDetail = form.querySelector('[data-energy-summary-detail]');
-    const selectedGroup = energyGroup?.selectedOptions?.[0];
-    if (energyMain && selectedGroup) {
-      const isOverride = energyType === 'consume' || energyType === 'recover';
-      const effectType = isOverride ? energyType : (selectedGroup.dataset.energyType || 'consume');
-      const value = isOverride ? (energyValue?.value || '—') : (selectedGroup.dataset.energyValue || '—');
-      const name = isOverride ? '개별 설정' : (selectedGroup.dataset.energyName || selectedGroup.textContent.trim());
-      energyMain.textContent = `${name} ${effectType === 'recover' ? '+' : '−'}${value}`;
-      energyDetail.textContent = isOverride ? '개별 설정 · 변경' : '그룹 기준 적용 · 변경';
-      if (energyValue) energyValue.hidden = !isOverride;
+    const energyFields = form.querySelector('[data-energy-fields]');
+    const energyHint = form.querySelector('[data-energy-hint]');
+    const customPrefix = form.querySelector('[data-energy-custom-prefix]');
+    const hasChange = energyType === 'consume' || energyType === 'recover';
+    const isCustom = energyAmount === 'custom';
+    const sign = energyType === 'recover' ? '+' : '−';
+    if (energyFields) energyFields.dataset.energyDirection = energyType;
+    if (amountPanel) amountPanel.hidden = !hasChange;
+    if (customField) customField.hidden = !hasChange || !isCustom;
+    form.querySelectorAll('[data-energy-amount-option]').forEach(option => {
+      const value = option.dataset.energyAmountValue || '';
+      option.textContent = `${sign}${value}`;
+      const input = option.previousElementSibling;
+      if (input instanceof HTMLInputElement) {
+        input.setAttribute('aria-label', `실행력 ${value} ${energyType === 'recover' ? '증가' : '감소'}`);
+      }
+    });
+    if (customPrefix) customPrefix.textContent = sign;
+    if (customValue) {
+      customValue.disabled = !hasChange || !isCustom;
+      customValue.required = hasChange && isCustom;
+      customValue.setAttribute('aria-label', `실행력 ${energyType === 'recover' ? '증가' : '감소'} 변화량 직접 입력`);
+    }
+    if (energyMain) {
+      const value = isCustom ? customValue?.value : energyAmount;
+      energyMain.textContent = hasChange ? `${sign}${value || '…'}` : '0';
+      energyMain.classList.toggle('is-consume', energyType === 'consume');
+      energyMain.classList.toggle('is-recover', energyType === 'recover');
+      energyMain.classList.toggle('is-none', !hasChange);
+      energyMain.setAttribute('aria-label', hasChange && value
+        ? `실행력 ${value} ${energyType === 'recover' ? '회복' : '사용'}`
+        : (hasChange ? '실행력 변화량 입력 필요' : '실행력 변화 없음'));
+    }
+    if (energyHint) {
+      const value = isCustom ? customValue?.value : energyAmount;
+      energyHint.textContent = !hasChange
+        ? '이 일정은 실행력에 영향을 주지 않습니다.'
+        : value
+          ? `이 일정은 실행력을 ${sign}${value} ${energyType === 'recover' ? '회복합니다.' : '사용합니다.'}`
+          : '변화량을 입력하면 실행력 변화를 확인할 수 있습니다.';
     }
   }
 
@@ -545,17 +574,21 @@
     checkRadio(form, 'daily_plan_item_id', button.dataset.eventDailyPlanItemId || '');
     syncPlanLinkSummary(editPlanGroup);
     form.dataset.originalPlanId = button.dataset.eventDailyPlanItemId || '';
-    if (editEnergyGroup) {
-      const savedGroupId = button.dataset.eventEnergyGroupId || '';
-      editEnergyGroup.value = Array.from(editEnergyGroup.options).some(option => option.value === savedGroupId)
-        ? savedGroupId
-        : (editEnergyGroup.querySelector('option[selected]')?.value || editEnergyGroup.options[0]?.value || '');
-    }
-    const isEnergyOverride = button.dataset.eventEnergyOverride === '1';
-    if (editEnergyPreserve) editEnergyPreserve.value = button.dataset.eventEnergyValue ? '1' : '0';
-    checkRadio(form, 'execution_energy_type', isEnergyOverride ? (button.dataset.eventEnergyType || 'consume') : '');
-    if (editEnergyValue) {
-      editEnergyValue.value = isEnergyOverride ? (button.dataset.eventEnergyValue || '') : '';
+    const savedEnergyType = ['consume', 'recover'].includes(button.dataset.eventEnergyType || '')
+      ? button.dataset.eventEnergyType
+      : 'none';
+    const savedEnergyValue = button.dataset.eventEnergyValue || '';
+    const presetValues = ['10', '25', '50', '75', '100'];
+    checkRadio(form, 'execution_energy_type', savedEnergyType);
+    checkRadio(
+      form,
+      'execution_energy_amount',
+      savedEnergyType === 'none' ? '25' : (presetValues.includes(savedEnergyValue) ? savedEnergyValue : 'custom')
+    );
+    if (editEnergyCustomValue) {
+      editEnergyCustomValue.value = savedEnergyType !== 'none' && !presetValues.includes(savedEnergyValue)
+        ? savedEnergyValue
+        : '';
     }
     setWellnessFields(editWellnessFields, {
       type: button.dataset.eventWellnessType || '',
@@ -961,13 +994,6 @@
     form.addEventListener('change', refresh);
     refresh();
   });
-  document.getElementById('calendarEventEditForm')?.querySelectorAll(
-    'select[name="execution_energy_group_id"], input[name="execution_energy_type"], input[name="execution_energy_value"]'
-  ).forEach(input => {
-    input.addEventListener('change', () => {
-      if (editEnergyPreserve) editEnergyPreserve.value = '0';
-    });
-  });
   setCalendarMode(page.dataset.calendarMode || 'actual');
 
   document.getElementById('calendarPlanItemDeleteForm')?.addEventListener('submit', async event => {
@@ -1074,9 +1100,6 @@
   document.querySelectorAll('[data-actual-event-open]').forEach(button => {
     button.addEventListener('click', () => {
       openEventSheet(null, null, 'timed', true);
-      if (createEnergyGroup && button.dataset.energyRecoveryGroupId) {
-        createEnergyGroup.value = button.dataset.energyRecoveryGroupId;
-      }
     });
   });
 

@@ -295,6 +295,13 @@ final class Database
             if (!in_array('burden_feedback', $columnNames, true)) {
                 $connection->exec('ALTER TABLE execution_energy_days ADD COLUMN burden_feedback TEXT NULL');
             }
+            $noticeTable = $connection->query(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='execution_energy_notices' LIMIT 1"
+            );
+            $noticeTableSql = $noticeTable !== false ? (string) ($noticeTable->fetchColumn() ?: '') : '';
+            if ($noticeTableSql !== '' && preg_match('/notice_level\s+IN\s*\(\s*0\s*,\s*25\s*,\s*50\s*\)/i', $noticeTableSql) !== 1) {
+                self::runSqliteMigration($connection, 'migration.execution_energy_zero_notice.sqlite.sql');
+            }
             return;
         }
 

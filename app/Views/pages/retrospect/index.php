@@ -32,11 +32,14 @@ if (isset($burdenLabels[(string) ($energyDay['burden_feedback'] ?? '')])) $condi
     <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
     <?php if (!empty($errors['general'])): ?><div class="msg msg-error"><?= e((string) $errors['general']) ?></div><?php endif; ?>
 
-    <nav class="retrospect-view-switch" aria-label="회고 보기">
-        <a href="/retrospect?date=<?= e($date) ?>" <?= $selectedView === 'daily' ? 'aria-current="page"' : '' ?>>일일 회고</a>
-        <a href="/retrospect?view=history" <?= $selectedView === 'history' ? 'aria-current="page"' : '' ?>>발행 이력</a>
-        <a href="/retrospect?view=goals" <?= $selectedView === 'goals' ? 'aria-current="page"' : '' ?>>목표 회고</a>
-    </nav>
+    <div class="retrospect-primary-context">
+        <nav class="retrospect-view-switch" aria-label="회고 보기">
+            <a href="/retrospect?date=<?= e($date) ?>" <?= $selectedView === 'daily' ? 'aria-current="page"' : '' ?>>일일 회고</a>
+            <a href="/retrospect?view=history" <?= $selectedView === 'history' ? 'aria-current="page"' : '' ?>>발행 이력</a>
+            <a href="/retrospect?view=goals" <?= $selectedView === 'goals' ? 'aria-current="page"' : '' ?>>목표 회고</a>
+        </nav>
+        <?php require __DIR__ . '/../../components/daily-context-actions.php'; ?>
+    </div>
 
     <?php if ($selectedView === 'history'): ?>
         <section class="retrospect-history" aria-labelledby="retrospectHistoryTitle">

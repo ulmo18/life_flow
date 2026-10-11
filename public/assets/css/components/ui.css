@@ -129,6 +129,51 @@ body[data-theme='dark'] .ui-panel-header {
   line-height: 1;
 }
 
+/* Shared read-only Execution Energy value language. */
+.energy-change-badge,
+.energy-change {
+  display: inline-flex;
+  min-width: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 7px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.energy-change-badge.is-consume,
+.energy-change.is-consume {
+  background: #fde3e0;
+  color: #a93c37;
+}
+
+.energy-change-badge.is-recover,
+.energy-change.is-recover {
+  background: #dff2e4;
+  color: #267345;
+}
+
+.energy-change-badge.is-none,
+.energy-change.is-none {
+  background: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
+  color: var(--color-text-muted);
+}
+
+body[data-theme='dark'] .energy-change-badge.is-consume,
+body[data-theme='dark'] .energy-change.is-consume {
+  background: rgba(255, 117, 111, 0.16);
+  color: #ffaaa5;
+}
+
+body[data-theme='dark'] .energy-change-badge.is-recover,
+body[data-theme='dark'] .energy-change.is-recover {
+  background: rgba(92, 190, 120, 0.16);
+  color: #8ddd9f;
+}
+
 /*
  * Shared input-sheet primitives.
  *

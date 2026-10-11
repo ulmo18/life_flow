@@ -1,26 +1,32 @@
 .todo-page { display: grid; gap: var(--space-5); padding-bottom: 92px; }
+.todo-tools { display: flex; justify-content: flex-end; }
 .todo-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .todo-heading h1 { margin: 0; }
 .todo-heading p { margin: var(--space-1) 0 0; }
-.todo-list { list-style: none; display: grid; gap: 0; margin: 0; padding: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.todo-group { display: grid; gap: var(--space-3); }
-.todo-group-heading { display: flex; align-items: center; gap: 8px; }
+.todo-group { display: grid; gap: 7px; }
+.todo-group-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
 .todo-group-heading h2 { margin: 0; font-size: 16px; }
-.todo-group-heading span { display: inline-grid; min-width: 24px; height: 24px; place-items: center; border-radius: 999px; background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 12px; font-weight: 900; }
-.todo-group-empty { display: grid; justify-items: start; gap: 10px; margin: 0; padding: var(--space-4); color: var(--color-text-muted); }
-.todo-group-empty p { margin: 0; }
-.todo-item { position: relative; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 2px; border-bottom: 1px solid var(--border); }
-.todo-item:last-child { border-bottom: 0; }
+.todo-group-heading span { color: var(--color-text-muted); font-size: 12px; font-weight: 900; }
+.todo-table-wrap { overflow: visible; border: 1px solid var(--border); border-radius: 15px; background: var(--color-surface); }
+.todo-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.todo-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.todo-table tr:last-child td { border-bottom: 0; }
+.todo-table td:last-child { width: 116px; }
+.todo-group-empty { margin: 0; padding: 16px; color: var(--color-text-muted); font-size: 12px; font-weight: 400; text-align: center; }
+.todo-item { position: relative; }
 .todo-item-copy { min-width: 0; display: grid; gap: var(--space-1); }
 .todo-item-title { min-width: 0; display: flex; align-items: center; gap: var(--space-2); }
-.todo-item-title strong { overflow-wrap: anywhere; }
+.todo-item-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-importance { flex: 0 0 auto; display: inline-grid; width: 24px; height: 24px; place-items: center; border-radius: 8px; background: var(--color-surface-soft); color: var(--color-primary-text); font-size: 12px; font-weight: 900; }
 .todo-time, .todo-item-copy small { color: var(--color-text-muted); font-size: 12px; }
+.todo-item-meta { display: flex; align-items: center; gap: 8px; }
+.todo-time-link { min-height: 28px; border: 1px solid var(--color-control-line); border-radius:999px; background: transparent; padding: 0 8px; color: var(--color-primary-text); font: inherit; font-size: 11px; font-weight: 900; cursor: pointer; }
+.todo-time-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .todo-item.is-completed .todo-item-copy { opacity: .62; }
 .todo-item.is-completed .todo-item-title strong { text-decoration: line-through; }
 .todo-item-actions { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .todo-item-actions .btn { min-height: 38px; padding: 0 12px; }
-.todo-time-action { white-space: nowrap; }
+.todo-complete-action { white-space: nowrap; }
 .todo-item-menu { position: relative; flex: 0 0 auto; }
 .todo-menu-toggle { width: 38px; height: 38px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
 .todo-menu-toggle:hover,
@@ -63,7 +69,8 @@
 body[data-theme='dark'] .todo-sheet { background: var(--color-surface); }
 
 @media (max-width: 639px) {
-  .todo-item { align-items: flex-start; }
-  .todo-item-actions { flex-wrap: wrap; }
-  .todo-item-actions .btn { padding-right: 10px; padding-left: 10px; }
+  .todo-table td { padding: 9px 10px; }
+  .todo-table td:last-child { width: 104px; padding-left: 4px; }
+  .todo-item-actions { gap: 4px; }
+  .todo-item-actions .btn { min-height: 36px; padding-right: 9px; padding-left: 9px; font-size: 12px; }
 }

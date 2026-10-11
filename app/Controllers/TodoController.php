@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Csrf;
 use App\Services\TodoService;
+use DateTimeImmutable;
 
 final class TodoController
 {
@@ -18,10 +19,18 @@ final class TodoController
 
     public function index(): void
     {
-        $todo = $this->todoService->getTodayData($this->userId());
+        $date = $this->normalizeDate(is_string($_GET['date'] ?? null) ? (string) $_GET['date'] : '');
+        $today = date('Y-m-d');
+        $todo = $this->todoService->getDateData($this->userId(), $date);
         $this->render('pages/todo/index', [
             'title' => t('todo.title'),
             'todo' => $todo,
+            'todayDate' => $today,
+            'prevDate' => (new DateTimeImmutable($date))->modify('-1 day')->format('Y-m-d'),
+            'nextDate' => (new DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d'),
+            'isToday' => $date === $today,
+            'isFuture' => $date > $today,
+            'canEdit' => $date === $today,
             'csrfToken' => Csrf::token(),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
@@ -99,6 +108,18 @@ final class TodoController
     private function userId(): int
     {
         return (int) ($_SESSION['user_id'] ?? 0);
+    }
+
+    private function normalizeDate(string $date): string
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1) {
+            $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+            if ($parsed instanceof DateTimeImmutable && $parsed->format('Y-m-d') === $date) {
+                return $date;
+            }
+        }
+
+        return date('Y-m-d');
     }
 
     private function isJsonRequest(): bool

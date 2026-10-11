@@ -70,28 +70,6 @@ final class ExecutionEnergyController
         $this->redirect('/execution-energy');
     }
 
-    public function storeGroup(): void
-    {
-        $validation = $this->energyService->validateGroupInput($_POST);
-        if (!Csrf::verify($_POST['_csrf_token'] ?? null) || !$validation['ok'] || $this->energyService->createGroup($this->userId(), $validation['data']) === null) {
-            $this->redirectWithErrors('/execution-energy', $validation['errors'] ?: ['general' => '실행력 그룹을 저장하지 못했습니다.']);
-        }
-        $_SESSION['flash_success'] = '실행력 그룹을 추가했습니다.';
-        $this->redirect('/execution-energy');
-    }
-
-    public function updateGroup(): void
-    {
-        $groupId = filter_var($_POST['group_id'] ?? null, FILTER_VALIDATE_INT);
-        $validation = $this->energyService->validateGroupInput($_POST);
-        if (!Csrf::verify($_POST['_csrf_token'] ?? null) || $groupId === false || $groupId <= 0 || !$validation['ok']
-            || !$this->energyService->updateGroup($this->userId(), (int) $groupId, $validation['data'])) {
-            $this->redirectWithErrors('/execution-energy', $validation['errors'] ?: ['general' => '실행력 그룹을 수정하지 못했습니다.']);
-        }
-        $_SESSION['flash_success'] = '실행력 그룹을 수정했습니다.';
-        $this->redirect('/execution-energy');
-    }
-
     public function saveMorning(): void
     {
         $date = is_string($_POST['date'] ?? null) ? (string) $_POST['date'] : date('Y-m-d');

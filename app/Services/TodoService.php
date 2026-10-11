@@ -24,8 +24,17 @@ final class TodoService
     /** @return array{date: string, items: array<int, array<string, mixed>>} */
     public function getTodayData(int $userId): array
     {
-        $date = date('Y-m-d');
-        $day = $this->calendarRepository->getOrCreateDay($userId, $date);
+        return $this->getDateData($userId, date('Y-m-d'));
+    }
+
+    /** @return array<string, mixed> */
+    public function getDateData(int $userId, string $date): array
+    {
+        $date = $this->normalizeDate($date);
+        $day = $this->calendarRepository->findDay($userId, $date);
+        $dayItems = $day === null
+            ? []
+            : $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']);
         $items = array_map(function (array $item): array {
             $isTimed = $item['start_index'] !== null && $item['end_index'] !== null;
             $durationMinutes = $isTimed
@@ -46,7 +55,7 @@ final class TodoService
                 'isLongDuration' => $durationMinutes !== null && $durationMinutes >= 60,
                 'isCompleted' => $item['linked_event_id'] !== null,
             ];
-        }, $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']));
+        }, $dayItems);
 
         $importanceRank = ['A' => 0, 'B' => 1, 'C' => 2, 'D' => 3];
         usort($items, static function (array $left, array $right) use ($importanceRank): int {
@@ -70,7 +79,7 @@ final class TodoService
             'items' => $items,
             'pendingItems' => array_values(array_filter($items, static fn(array $item): bool => !$item['isCompleted'])),
             'completedItems' => array_values(array_filter($items, static fn(array $item): bool => $item['isCompleted'])),
-            'goalOptions' => $this->goalService->activeGoalOptions($userId),
+            'goalOptions' => $date === date('Y-m-d') ? $this->goalService->activeGoalOptions($userId) : [],
         ];
     }
 
@@ -128,8 +137,13 @@ final class TodoService
         }
 
         $this->executionEnergyService->saveDefaultEventSetting($userId, $eventId);
+        $feedback = $this->executionEnergyService->claimMilestoneFeedback($userId, $date);
 
-        return ['ok' => true, 'eventId' => $eventId, 'message' => t('todo.completed_message')];
+        return [
+            'ok' => true,
+            'eventId' => $eventId,
+            'message' => t('todo.completed_message') . ($feedback === null ? '' : ' ' . $feedback),
+        ];
     }
 
     /** @return array{ok: bool, message: string} */
@@ -205,5 +219,17 @@ final class TodoService
         return $index === 144
             ? '24:00'
             : sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10);
+    }
+
+    private function normalizeDate(string $date): string
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1) {
+            $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+            if ($parsed instanceof \DateTimeImmutable && $parsed->format('Y-m-d') === $date) {
+                return $date;
+            }
+        }
+
+        return date('Y-m-d');
     }
 }

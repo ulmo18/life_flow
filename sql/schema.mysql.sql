@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS `execution_energy_notices` (
   `user_id` BIGINT UNSIGNED NOT NULL, `energy_date` DATE NOT NULL, `notice_level` TINYINT UNSIGNED NOT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`user_id`, `energy_date`, `notice_level`),
   CONSTRAINT `fk_execution_energy_notices_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `chk_execution_energy_notices_level` CHECK (`notice_level` IN (25, 50))
+  CONSTRAINT `chk_execution_energy_notices_level` CHECK (`notice_level` IN (0, 25, 50))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `user_device` (

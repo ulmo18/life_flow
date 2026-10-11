@@ -31,7 +31,7 @@
                 </a>
                 <a class="bottom-nav-item" href="/calendar" <?= ($currentPath ?? '') === '/calendar' ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">▦</span>
-                    <span><?= e(t('nav.today')) ?></span>
+                    <span><?= e(t('nav.schedule')) ?></span>
                 </a>
             </nav>
         </div>
@@ -81,7 +81,8 @@
         </form>
     </section>
 </div>
-<script src="/assets/js/components/toast.js"></script>
+<?php $toastJsPath = dirname(__DIR__, 3) . '/public/assets/js/components/toast.js'; $toastJsVersion = is_file($toastJsPath) ? filemtime($toastJsPath) : false; ?>
+<script src="/assets/js/components/toast.js<?= $toastJsVersion === false ? '' : '?v=' . e((string) $toastJsVersion) ?>"></script>
 <?php
 $uiJsPath = dirname(__DIR__, 3) . '/public/assets/js/components/ui.js';
 $uiJsVersion = is_file($uiJsPath) ? filemtime($uiJsPath) : false;
@@ -89,7 +90,8 @@ $uiJsVersion = is_file($uiJsPath) ? filemtime($uiJsPath) : false;
 <script src="/assets/js/components/ui.js<?= $uiJsVersion === false ? '' : '?v=' . e((string) $uiJsVersion) ?>"></script>
 <script src="/assets/js/components/android-bridge.js"></script>
 <?php if ($showAppChrome ?? false): ?>
-    <script src="/assets/js/components/app-layout.js"></script>
+    <?php $appLayoutJsPath = dirname(__DIR__, 3) . '/public/assets/js/components/app-layout.js'; $appLayoutJsVersion = is_file($appLayoutJsPath) ? filemtime($appLayoutJsPath) : false; ?>
+    <script src="/assets/js/components/app-layout.js<?= $appLayoutJsVersion === false ? '' : '?v=' . e((string) $appLayoutJsVersion) ?>"></script>
     <script src="/assets/js/components/execution-energy-orb.js"></script>
 <?php endif; ?>
 <?php foreach (($pageScripts ?? []) as $scriptPath): ?>

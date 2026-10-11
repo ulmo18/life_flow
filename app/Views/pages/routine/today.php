@@ -2,24 +2,19 @@
 <?php
 $unfinishedRoutines = array_values(array_filter($routines, static fn(array $routine): bool => (string) ($routine['state'] ?? '') !== 'O'));
 $completedRoutines = array_values(array_filter($routines, static fn(array $routine): bool => (string) ($routine['state'] ?? '') === 'O'));
-$renderRoutineRows = static function (array $items) use ($csrfToken, $date): void {
+$renderRoutineRows = static function (array $items) use ($csrfToken, $date, $canEdit): void {
     foreach ($items as $routine): $state = (string) ($routine['state'] ?? ''); $streakCount = (int) ($routine['streakCount'] ?? 0); ?>
         <tr data-routine-today-row data-routine-state="<?= e($state) ?>">
             <td><strong><?= e((string) $routine['name']) ?></strong><small data-routine-today-streak <?= $streakCount < 3 ? 'hidden' : '' ?>>🔥 <?= e((string) $streakCount) ?>일 연속 완료</small></td>
-            <td><form method="post" action="/routine/toggle" data-routine-today-toggle><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="return_to" value="routine"><input type="hidden" name="date" value="<?= e((string) $date) ?>"><input type="hidden" name="routine_id" value="<?= e((string) $routine['id']) ?>"><button type="submit" class="routine-state-control <?= $state === 'O' ? 'is-done' : ($state === 'X' ? 'is-failed' : '') ?>" data-state="<?= e($state) ?>" aria-label="<?= e((string) $routine['name']) ?>"><span data-routine-state-marker aria-hidden="true"><?= $state === 'O' ? '✓' : ($state === 'X' ? '×' : '') ?></span></button></form></td>
+            <td><form method="post" action="/routine/toggle" data-routine-today-toggle><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="return_to" value="routine"><input type="hidden" name="date" value="<?= e((string) $date) ?>"><input type="hidden" name="routine_id" value="<?= e((string) $routine['id']) ?>"><button type="submit" class="routine-state-control <?= $state === 'O' ? 'is-done' : ($state === 'X' ? 'is-failed' : '') ?>" data-state="<?= e($state) ?>" aria-label="<?= e((string) $routine['name']) ?>" <?= !$canEdit ? 'disabled' : '' ?>><span data-routine-state-marker aria-hidden="true"><?= $state === 'O' ? '✓' : ($state === 'X' ? '×' : '') ?></span></button></form></td>
         </tr>
     <?php endforeach;
 };
 ?>
 
 <main class="page routine-today-page">
-    <div class="routine-today-heading">
-        <div>
-            <h1><?= e(t('routine.today_title')) ?></h1>
-            <p class="muted"><?= e((string) $date) ?></p>
-        </div>
-        <a class="btn btn-secondary compact-header-action" href="/manage/routines"><?= e(t('routine.manage_link')) ?></a>
-    </div>
+    <?php $dailyDateContext = ['title' => t('routine.today_title'), 'path' => '/routine', 'date' => $date, 'prevDate' => $prevDate, 'nextDate' => $nextDate, 'todayDate' => $todayDate, 'isToday' => $isToday, 'inputId' => 'routineDate']; require __DIR__ . '/../../components/daily-date-navigation.php'; ?>
+    <div class="routine-today-tools"><a class="btn btn-secondary compact-header-action" href="/manage/routines"><?= e(t('routine.manage_link')) ?></a></div>
 
     <?php if (!empty($flashSuccess)): ?>
         <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
@@ -34,12 +29,12 @@ $renderRoutineRows = static function (array $items) use ($csrfToken, $date): voi
             <a class="btn btn-primary" href="/manage/routines"><?= e(t('routine.manage_link')) ?></a>
         </section>
     <?php else: ?>
-        <section class="routine-today-group" data-routine-group="unfinished"><header><strong>미완료 루틴</strong><span data-routine-group-count><?= e((string) count($unfinishedRoutines)) ?>개</span></header><div class="routine-today-table-wrap"><table><tbody data-routine-group-body><?php $renderRoutineRows($unfinishedRoutines); ?></tbody></table><p data-routine-group-empty <?= !empty($unfinishedRoutines) ? 'hidden' : '' ?>>오늘의 루틴을 모두 완성했어요. 이 흐름이 내일의 힘이 될 거예요.</p></div></section>
+        <section class="routine-today-group" data-routine-group="unfinished"><header><strong>미완료 루틴</strong><span data-routine-group-count><?= e((string) count($unfinishedRoutines)) ?>개</span></header><div class="routine-today-table-wrap"><table><tbody data-routine-group-body><?php $renderRoutineRows($unfinishedRoutines); ?></tbody></table><p data-routine-group-empty <?= !empty($unfinishedRoutines) ? 'hidden' : '' ?>><?= $isToday ? '오늘의 루틴을 모두 완성했어요. 이 흐름이 내일의 힘이 될 거예요.' : '선택한 날짜의 루틴을 모두 완료했어요.' ?></p></div></section>
         <section class="routine-today-group" data-routine-group="completed"><header><strong>완료 루틴</strong><span data-routine-group-count><?= e((string) count($completedRoutines)) ?>개</span></header><div class="routine-today-table-wrap"><table><tbody data-routine-group-body><?php $renderRoutineRows($completedRoutines); ?></tbody></table><p data-routine-group-empty <?= !empty($completedRoutines) ? 'hidden' : '' ?>>첫 루틴을 완료하며 오늘의 흐름을 시작해보세요.</p></div></section>
     <?php endif; ?>
 </main>
 
-<button class="btn btn-primary daily-floating-action" type="button" data-routine-quick-open>루틴 추가</button>
+<?php if ($isToday): ?><button class="btn btn-primary daily-floating-action" type="button" data-routine-quick-open>루틴 추가</button><?php endif; ?>
 
 <div class="routine-quick-layer" data-routine-quick-layer hidden>
     <button type="button" class="routine-quick-overlay" data-routine-quick-close aria-label="닫기"></button>
