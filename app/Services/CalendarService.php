@@ -38,11 +38,15 @@ final class CalendarService
         $selectedPlanGroupId = isset($day['plan_group_id']) ? (int) $day['plan_group_id'] : null;
         $actualEvents = $this->calendarRepository->getActualEvents($userId, (int) $day['id']);
         $dailyPlan = $this->calendarRepository->getDailyPlanForDay($userId, (int) $day['id']);
-        $planBlocks = $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']);
+        $planItems = $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']);
+        $planBlocksEnabled = $this->calendarRepository->supportsDailyPlanBlocks();
+        $planBlocks = $planBlocksEnabled
+            ? $this->calendarRepository->getDailyPlanBlocksForDay($userId, (int) $day['id'])
+            : $planItems;
         $usedPlanItemIds = $this->calendarRepository->getUsedDailyPlanItemIds($userId, (int) $day['id']);
         $dateMeta = $this->buildDateMeta($date);
         $tagData = $this->calendarTagService->getTagPageData($userId);
-        $planReminderItems = $this->buildPlanReminderItems($planBlocks, $usedPlanItemIds);
+        $planReminderItems = $this->buildPlanReminderItems($planItems, $usedPlanItemIds);
         $planSegments = $this->buildSegmentsFromBlocks($planBlocks, 'plan');
         $actualSegments = $this->buildSegmentsFromEvents($actualEvents);
 
@@ -62,13 +66,17 @@ final class CalendarService
             'dayId' => (int) $day['id'],
             'selectedPlanGroupId' => $selectedPlanGroupId,
             'dailyPlan' => $dailyPlan,
+            'planBlocksEnabled' => $planBlocksEnabled,
             'planGroups' => $this->calendarRepository->listPlanGroups($userId),
             'goalOptions' => $this->goalService->activeGoalOptions($userId),
             'calendarTags' => $tagData['tags'],
             'tagPalettes' => $tagData['palettes'],
             'blockTemplates' => $this->planService->getBlockTemplates($userId),
             'planReminderItems' => $planReminderItems,
-            'planOptions' => $this->buildPlanOptions($planBlocks, $usedPlanItemIds),
+            // The placement source list must contain every date-specific activity,
+            // independently from Actual links or the optional block schema.
+            'planActivityItems' => $this->buildPlanReminderItems($planItems, []),
+            'planOptions' => $this->buildPlanOptions($planItems, $usedPlanItemIds),
             'planSegments' => $planSegments,
             'actualSegments' => $actualSegments,
             'unscheduledEvents' => $this->buildUnscheduledEvents($actualEvents),
@@ -288,6 +296,63 @@ final class CalendarService
         return $updated;
     }
 
+    /** @param array<string, mixed> $input */
+    public function validateActualRangeInput(array $input, bool $requireEventId = false, bool $requireBlockId = false): array
+    {
+        $date = $this->normalizeDate((string) ($input['date'] ?? ''));
+        $eventId = filter_var($input['event_id'] ?? null, FILTER_VALIDATE_INT);
+        $blockId = filter_var($input['daily_plan_block_id'] ?? null, FILTER_VALIDATE_INT);
+        $startIndex = filter_var($input['start_index'] ?? null, FILTER_VALIDATE_INT);
+        $endIndex = filter_var($input['end_index'] ?? null, FILTER_VALIDATE_INT);
+        $errors = [];
+
+        if ($requireEventId && ($eventId === false || $eventId <= 0)) {
+            $errors['general'] = '수정할 실제 일정을 찾을 수 없습니다.';
+        }
+        if ($requireBlockId && ($blockId === false || $blockId <= 0)) {
+            $errors['general'] = '복사할 계획 블록을 찾을 수 없습니다.';
+        }
+        if ($startIndex === false || $endIndex === false || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) {
+            $errors['time'] = '시간 범위가 올바르지 않습니다.';
+        }
+
+        return [
+            'ok' => $errors === [],
+            'errors' => $errors,
+            'data' => [
+                'date' => $date,
+                'eventId' => $eventId === false ? 0 : (int) $eventId,
+                'blockId' => $blockId === false ? 0 : (int) $blockId,
+                'startIndex' => $startIndex === false ? null : (int) $startIndex,
+                'endIndex' => $endIndex === false ? null : (int) $endIndex,
+            ],
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public function copyDailyPlanBlockToActual(int $userId, array $data): ?int
+    {
+        return $this->calendarRepository->createActualFromDailyPlanBlock(
+            $userId,
+            (string) $data['date'],
+            (int) $data['blockId'],
+            (int) $data['startIndex'],
+            (int) $data['endIndex']
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    public function resizeActualEvent(int $userId, array $data): bool
+    {
+        return $this->calendarRepository->updateActualEventTimeRange(
+            $userId,
+            (int) $data['eventId'],
+            (string) $data['date'],
+            (int) $data['startIndex'],
+            (int) $data['endIndex']
+        );
+    }
+
     /** @param array<string, mixed> $energySetting */
     public function claimExecutionEnergyFeedback(int $userId, string $date, array $energySetting): ?string
     {
@@ -399,6 +464,55 @@ final class CalendarService
     public function deleteDailyPlanItem(int $userId, int $itemId): bool
     {
         return $this->calendarRepository->deleteDailyPlanItem($userId, $itemId);
+    }
+
+    /** @param array<string, mixed> $input */
+    public function validateDailyPlanBlockInput(array $input, bool $requireBlockId = false): array
+    {
+        $date = $this->normalizeDate((string) ($input['date'] ?? ''));
+        $itemId = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $blockId = filter_var($input['daily_plan_block_id'] ?? null, FILTER_VALIDATE_INT);
+        $startIndex = filter_var($input['start_index'] ?? null, FILTER_VALIDATE_INT);
+        $endIndex = filter_var($input['end_index'] ?? null, FILTER_VALIDATE_INT);
+        $errors = [];
+        if ($itemId === false || $itemId <= 0) $errors['general'] = '계획 활동을 찾을 수 없습니다.';
+        if ($requireBlockId && ($blockId === false || $blockId <= 0)) $errors['general'] = '계획 블록을 찾을 수 없습니다.';
+        if ($startIndex === false || $endIndex === false || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) {
+            $errors['time'] = '계획 시간 범위가 올바르지 않습니다.';
+        }
+
+        return [
+            'ok' => $errors === [],
+            'errors' => $errors,
+            'data' => [
+                'date' => $date,
+                'itemId' => $itemId === false ? 0 : (int) $itemId,
+                'blockId' => $blockId === false ? 0 : (int) $blockId,
+                'startIndex' => $startIndex === false ? null : (int) $startIndex,
+                'endIndex' => $endIndex === false ? null : (int) $endIndex,
+            ],
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public function createDailyPlanBlock(int $userId, array $data): ?int
+    {
+        return $this->calendarRepository->createDailyPlanBlock(
+            $userId, (int) $data['itemId'], (int) $data['startIndex'], (int) $data['endIndex']
+        );
+    }
+
+    /** @param array<string, mixed> $data */
+    public function updateDailyPlanBlock(int $userId, array $data): bool
+    {
+        return $this->calendarRepository->updateDailyPlanBlock(
+            $userId, (int) $data['blockId'], (int) $data['startIndex'], (int) $data['endIndex']
+        );
+    }
+
+    public function deleteDailyPlanBlock(int $userId, int $blockId): bool
+    {
+        return $this->calendarRepository->deleteDailyPlanBlock($userId, $blockId);
     }
 
     private function normalizeDate(?string $date): string
@@ -685,11 +799,14 @@ final class CalendarService
                     'title' => (string) $block['title'],
                     'type' => $type,
                     'itemId' => (int) $block['daily_plan_item_id'],
+                    'blockId' => isset($block['daily_plan_block_id']) ? (int) $block['daily_plan_block_id'] : null,
                     'goalId' => $block['goal_id'] === null ? null : (int) $block['goal_id'],
                     'goalTitle' => $block['goal_title'] ?? null,
                     'startIndex' => (int) $block['start_index'],
                     'endIndex' => (int) $block['end_index'],
-                    'isLinked' => $block['linked_event_id'] !== null,
+                    'isLinked' => array_key_exists('is_linked', $block)
+                        ? (bool) $block['is_linked']
+                        : $block['linked_event_id'] !== null,
                     'importance' => $importance,
                     'importanceBadge' => $importance,
                 ]);
@@ -716,6 +833,7 @@ final class CalendarService
                     'title' => (string) $event['title'],
                     'type' => 'actual',
                     'dailyPlanItemId' => $event['daily_plan_item_id'] === null ? null : (int) $event['daily_plan_item_id'],
+                    'blockId' => $event['daily_plan_block_id'] === null ? null : (int) $event['daily_plan_block_id'],
                     'planTitle' => $event['plan_title'] ?? null,
                     'tagId' => $event['calendar_tag_id'] === null ? null : (int) $event['calendar_tag_id'],
                     'tagName' => $event['tag_name'] ?? null,

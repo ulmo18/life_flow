@@ -90,9 +90,11 @@ final class Database
             self::ensureSqliteDailyPlans($connection);
             self::ensureSqliteUntimedDailyPlans($connection);
             self::ensureSqliteDailyPlanEstimatedDuration($connection);
+            self::ensureSqliteDailyPlanBlocks($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteRetrospectReviewColumns($connection);
             self::ensureSqliteRetrospectExecutionEnergyColumns($connection);
+            self::ensureSqliteRetrospectPlanBlockSnapshot($connection);
             self::ensureSqliteUntimedRetrospectPlans($connection);
             self::ensureSqlitePlanBlockTemplates($connection);
             self::ensureSqliteExecutionEnergy($connection);
@@ -243,6 +245,58 @@ final class Database
         }
     }
 
+    private static function ensureSqliteDailyPlanBlocks(PDO $connection): void
+    {
+        $blockTable = $connection->query(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='daily_plan_blocks' LIMIT 1"
+        );
+        $hasBlockTable = $blockTable !== false && $blockTable->fetchColumn() !== false;
+        $eventColumns = $connection->query('PRAGMA table_info(calendar_events)');
+        $eventColumnNames = $eventColumns !== false ? array_column($eventColumns->fetchAll(), 'name') : [];
+        $hasBlockColumn = in_array('daily_plan_block_id', $eventColumnNames, true);
+
+        if (!$hasBlockTable && !$hasBlockColumn) {
+            self::runSqliteMigration($connection, 'migration.daily_plan_blocks.sqlite.sql');
+            return;
+        }
+
+        if (!$hasBlockTable) {
+            self::ensureSqliteSchemaObjects($connection);
+        }
+        if (!$hasBlockColumn) {
+            $connection->exec('ALTER TABLE calendar_events ADD COLUMN daily_plan_block_id INTEGER NULL');
+        }
+
+        $connection->exec('CREATE INDEX IF NOT EXISTS idx_daily_plan_blocks_item_order ON daily_plan_blocks(daily_plan_item_id, sort_order)');
+        $connection->exec('CREATE INDEX IF NOT EXISTS idx_calendar_events_daily_plan_block_id ON calendar_events(daily_plan_block_id)');
+        self::backfillSqliteDailyPlanBlocks($connection);
+    }
+
+    private static function backfillSqliteDailyPlanBlocks(PDO $connection): void
+    {
+        $connection->exec(
+            'INSERT INTO daily_plan_blocks (daily_plan_item_id, start_index, end_index, sort_order, created_at, updated_at)
+             SELECT dpi.id, dpi.start_index, dpi.end_index, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+             FROM daily_plan_items dpi
+             WHERE dpi.deleted_at IS NULL
+               AND dpi.start_index IS NOT NULL
+               AND dpi.end_index IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM daily_plan_blocks dpb WHERE dpb.daily_plan_item_id = dpi.id
+               )'
+        );
+        $connection->exec(
+            'UPDATE calendar_events
+             SET daily_plan_block_id = (
+               SELECT dpb.id FROM daily_plan_blocks dpb
+               WHERE dpb.daily_plan_item_id = calendar_events.daily_plan_item_id
+               ORDER BY dpb.sort_order ASC, dpb.id ASC
+               LIMIT 1
+             )
+             WHERE daily_plan_item_id IS NOT NULL AND daily_plan_block_id IS NULL'
+        );
+    }
+
     private static function ensureSqliteUntimedRetrospectPlans(PDO $connection): void
     {
         $columns = $connection->query('PRAGMA table_info(retrospect_report_plan_items)');
@@ -378,6 +432,17 @@ final class Database
             if (!in_array($column, $columnNames, true)) {
                 $connection->exec('ALTER TABLE retrospect_report_actual_items ADD COLUMN ' . $column . ' ' . $definition);
             }
+        }
+    }
+
+    private static function ensureSqliteRetrospectPlanBlockSnapshot(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='retrospect_report_actual_items' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) return;
+        $columns = $connection->query('PRAGMA table_info(retrospect_report_actual_items)');
+        $names = $columns === false ? [] : array_column($columns->fetchAll(), 'name');
+        if (!in_array('daily_plan_block_id_snapshot', $names, true)) {
+            $connection->exec('ALTER TABLE retrospect_report_actual_items ADD COLUMN daily_plan_block_id_snapshot INTEGER NULL');
         }
     }
 

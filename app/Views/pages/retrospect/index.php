@@ -10,6 +10,9 @@ $report = $retrospect['report'] ?? null;
 $isSubmitted = is_array($report) && (string) ($report['status'] ?? '') === 'submitted';
 $texts = $retrospect['texts'] ?? ['today_review' => '', 'today_thoughts' => '', 'tomorrow_plan' => ''];
 $recordComposition = $retrospect['recordComposition'] ?? ['total' => 0, 'routine' => 0, 'plan' => 0, 'actual' => 0, 'memo' => 0];
+$timeSummary = $retrospect['summary'] ?? [];
+$activityComparisons = $retrospect['activityComparisons'] ?? [];
+$unplannedActualItems = $retrospect['unplannedActualItems'] ?? [];
 $settings = $retrospect['settings'] ?? [];
 $todayDate = (string) ($retrospect['todayDate'] ?? date('Y-m-d'));
 $selectedView = (string) ($selectedView ?? 'daily');
@@ -104,6 +107,29 @@ if (isset($burdenLabels[(string) ($energyDay['burden_feedback'] ?? '')])) $condi
                 <?php endif; ?>
             </section>
             <section class="retrospect-energy-feedback" aria-label="하루 시작 실행력"><div><strong>시작 실행력 <?= e((string) ($executionEnergy['startCapacity'] ?? 0)) ?></strong><span>기본 <?= e((string) ($energyDay['base_capacity_snapshot'] ?? 500)) ?> · 보정 <?= (int) ($executionEnergy['morningAdjustment'] ?? 0) >= 0 ? '+' : '' ?><?= e((string) ($executionEnergy['morningAdjustment'] ?? 0)) ?></span></div><p><?= $conditionParts === [] ? '오늘의 컨디션을 입력하지 않아 기본 실행력으로 시작했어요.' : e(implode(' · ', $conditionParts)) ?></p><small>오늘 소모 <?= e((string) ($executionEnergy['consumed'] ?? 0)) ?> · 회복 <?= e((string) ($executionEnergy['recovered'] ?? 0)) ?> · <?= e((string) ($executionEnergy['feedbackMessage'] ?? '')) ?></small></section>
+
+            <section class="retrospect-plan-actual-card" aria-labelledby="planActualComparisonTitle">
+                <header><div><small>기록된 시간 기준</small><h2 id="planActualComparisonTitle">계획과 실제 비교</h2></div><a class="btn btn-secondary" href="/calendar?date=<?= e($date) ?>">일정 수정</a></header>
+                <div class="retrospect-time-summary">
+                    <span><small>계획</small><b><?= e((string) ($timeSummary['plannedMinutes'] ?? 0)) ?>분</b></span>
+                    <span><small>실제</small><b><?= e((string) ($timeSummary['actualMinutes'] ?? 0)) ?>분</b></span>
+                    <span><small>계획 연결</small><b><?= e((string) ($timeSummary['linkedActualMinutes'] ?? 0)) ?>분</b></span>
+                    <span><small>계획 외</small><b><?= e((string) ($timeSummary['unplannedActualMinutes'] ?? 0)) ?>분</b></span>
+                </div>
+                <?php if ($activityComparisons === [] && $unplannedActualItems === []): ?>
+                    <p class="retrospect-empty">비교할 계획 또는 실제 기록이 없습니다.</p>
+                <?php else: ?>
+                    <div class="retrospect-comparison-list">
+                        <?php foreach ($activityComparisons as $activity): ?>
+                            <details class="retrospect-comparison-item">
+                                <summary><span><strong><?= e((string) $activity['title']) ?></strong><small>계획 <?= e((string) $activity['plannedMinutes']) ?>분 · 실제 <?= e((string) $activity['actualMinutes']) ?>분</small></span><b class="<?= (int) $activity['differenceMinutes'] < 0 ? 'is-negative' : 'is-positive' ?>"><?= (int) $activity['differenceMinutes'] > 0 ? '+' : '' ?><?= e((string) $activity['differenceMinutes']) ?>분</b></summary>
+                                <div class="retrospect-comparison-detail"><div><small>계획 블록</small><?php foreach ($activity['plans'] as $plan): ?><p><?= e((string) $plan['timeRange']) ?> · <?= !empty($plan['hasActual']) ? '실제 기록 연결' : '실제 기록 없음' ?></p><?php endforeach; ?></div><div><small>실제 기록</small><?php if (empty($activity['actuals'])): ?><p>실제 기록 없음</p><?php else: ?><?php foreach ($activity['actuals'] as $actual): ?><p><?= e((string) $actual['timeRange']) ?> · <?= e((string) $actual['title']) ?></p><?php endforeach; ?><?php endif; ?></div></div>
+                            </details>
+                        <?php endforeach; ?>
+                        <?php if ($unplannedActualItems !== []): ?><details class="retrospect-comparison-item is-unplanned"><summary><span><strong>계획 외 실제 활동</strong><small><?= e((string) count($unplannedActualItems)) ?>개 기록</small></span><b><?= e((string) ($timeSummary['unplannedActualMinutes'] ?? 0)) ?>분</b></summary><div class="retrospect-comparison-detail"><div><small>실제 기록</small><?php foreach ($unplannedActualItems as $actual): ?><p><?= e((string) $actual['timeRange']) ?> · <?= e((string) $actual['title']) ?></p><?php endforeach; ?></div></div></details><?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </section>
 
             <section class="retrospect-daily-card">
                 <div class="retrospect-record-tabs" role="tablist" aria-label="하루 기록"><button type="button" role="tab" aria-selected="true" data-record-tab="routine">루틴 <b><?= e((string) count($retrospect['routineItems'])) ?></b></button><button type="button" role="tab" aria-selected="false" data-record-tab="schedule">일정 <b><?= e((string) count($retrospect['scheduleItems'])) ?></b></button><button type="button" role="tab" aria-selected="false" data-record-tab="memo">메모 <b><?= e((string) count($retrospect['memoItems'])) ?></b></button></div>

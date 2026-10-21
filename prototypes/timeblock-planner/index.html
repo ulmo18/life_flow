@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LifeFlow · 타임블로킹 시제품</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="prototype-shell">
+    <header class="prototype-header">
+      <div><p class="eyebrow">LifeFlow prototype</p><h1>드래그 타임블로킹</h1></div>
+      <p class="guide" data-guide>활동을 시간표에 놓고, 마우스로 범위를 정한 뒤 클릭해 계획을 완성하세요.</p>
+    </header>
+
+    <section class="planner" aria-label="타임블로킹 시제품">
+      <aside class="activity-panel">
+        <div class="panel-heading"><div><p class="eyebrow">원본 활동</p><h2>오늘의 목록</h2></div><span class="source-count" data-source-count>5개</span></div>
+        <div class="tabs" role="tablist" aria-label="활동 분류">
+          <button type="button" role="tab" aria-selected="true" data-tab="today">오늘 할 일</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="frequent">자주 쓰는 할 일</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="routine">루틴</button>
+        </div>
+        <div class="activity-list" data-activity-list></div>
+        <form class="quick-add" data-add-form>
+          <label for="activityTitle">제목만 빠르게 추가</label>
+          <div><input id="activityTitle" maxlength="40" placeholder="예: 이메일 정리" required><button type="submit">추가</button></div>
+        </form>
+        <p class="mobile-selection" data-mobile-selection>모바일: 목록에서 활동을 먼저 선택하세요.</p>
+      </aside>
+
+      <section class="timeline-panel">
+        <div class="panel-heading timeline-heading"><div><p class="eyebrow">오늘의 계획</p><h2>10분 단위 시간표</h2></div><output class="plan-total" data-plan-total>0개 블록 · 0분</output></div>
+        <div class="drag-status" data-drag-status aria-live="polite">활동을 선택하거나 드래그해 배치해 보세요.</div>
+        <div class="timeline-scroll" data-timeline-scroll>
+          <div class="timeline" data-timeline aria-label="00시부터 24시까지의 시간표"></div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <dialog class="block-dialog" data-block-dialog>
+    <form method="dialog">
+      <div class="dialog-heading"><div><p class="eyebrow">계획 블록</p><h2 data-dialog-title></h2></div><button class="icon-button" value="cancel" aria-label="닫기">×</button></div>
+      <dl><div><dt>출처</dt><dd data-dialog-source></dd></div><div><dt>시간</dt><dd data-dialog-time></dd></div><div><dt>소요 시간</dt><dd data-dialog-duration></dd></div></dl>
+      <div class="dialog-actions"><button value="cancel">닫기</button><button class="danger" value="delete" data-delete-block>블록 삭제</button></div>
+    </form>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>

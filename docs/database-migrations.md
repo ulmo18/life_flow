@@ -50,6 +50,7 @@ Back up the database, then apply these one-time migrations after their prerequis
 16. `sql/migration.wellness_event_link.mysql.sql` — apply only when migration 15 was already deployed; adds the nullable unique Actual-event link used by schedule-bound Life Records.
 17. `sql/migration.daily_plan_estimated_duration.mysql.sql` — requires `daily_plan_items`; adds the optional expected duration used to highlight long time-unspecified Plan items.
 18. `sql/migration.execution_energy_zero_notice.mysql.sql` — requires `execution_energy_notices`; expands its milestone constraint from 25/50 to 0/25/50.
+19. `sql/migration.daily_plan_blocks.mysql.sql` — requires `daily_plan_items` and `calendar_events`; adds the one-to-many time-block table and nullable Actual block link. Apply its DDL once. Its timed-Plan and Actual-link backfill statements are safe to rerun and preserve `daily_plan_item_id`.
 
 The Routine validation trigger migration depends on the lifecycle columns; the other feature migrations are independent. The order above is the recommended release order for repeatable deployments. Record each applied migration because the `ALTER TABLE` statements are not intended to be rerun.
 
@@ -76,6 +77,7 @@ MySQL application connections set the session timezone to `+00:00`. Before deplo
 - Reapplying `sql/schema.sqlite.sql` creates `wellness_entries`; `sql/migration.wellness_entries.sqlite.sql` is available for controlled manual migration. Existing standalone tables receive `calendar_event_id` and its unique index automatically; `sql/migration.wellness_event_link.sqlite.sql` is the matching controlled migration.
 - Reapplying `sql/schema.sqlite.sql` creates `calendar_tag_preferences`; `sql/migration.calendar_tag_preferences.sqlite.sql` is available for controlled manual migration.
 - `app/Core/Database.php` automatically adds `daily_plan_items.estimated_duration_minutes`; `sql/migration.daily_plan_estimated_duration.sqlite.sql` is available for controlled manual migration.
+- `app/Core/Database.php` automatically adds `daily_plan_blocks` and `calendar_events.daily_plan_block_id`, then backfills one block for each timed legacy Plan item. `sql/migration.daily_plan_blocks.sqlite.sql` is available for controlled manual migration; its data backfill is idempotent.
 - The matching `*.sqlite.sql` files remain available for controlled manual migrations.
 - Do not delete SQLite compatibility or fallback code even when production uses MySQL; it remains part of local and fallback support.
 

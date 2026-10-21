@@ -641,6 +641,7 @@ body[data-theme='dark'] .cell.current-cell {
 }
 
 .actual-event {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1596,6 +1597,70 @@ body[data-theme=dark] .calendar-energy-links[data-energy-direction="recover"] .c
 
 /* Coral remains the action color; readable text tokens carry its meaning on light surfaces. */
 .calendar-page.is-rest-day .calendar-date-picker-button { color: var(--color-danger-text); }
+
+.calendar-plan-sources { display:grid; gap:10px; margin:0 0 12px; padding:12px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--color-surface); }
+.calendar-plan-sources > div:first-child { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.calendar-plan-sources small { color:var(--color-text-muted); font-size:12px; }
+.calendar-plan-source-list { display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
+.calendar-plan-source { display:inline-flex; flex:0 0 auto; align-items:center; gap:6px; min-height:40px; border:1px solid var(--border); border-radius:999px; padding:7px 10px; background:var(--color-surface); color:var(--color-text); font:inherit; font-size:13px; cursor:pointer; touch-action:none; }
+.calendar-plan-source.is-selected { border-color:var(--color-primary); box-shadow:inset 0 0 0 1px var(--color-primary); background:color-mix(in srgb,var(--color-primary) 10%,var(--color-surface)); }
+.cell.plan-placement-preview { background:color-mix(in srgb,var(--color-primary) 19%,var(--color-surface)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-primary) 42%,transparent); }
+.cell.plan-resize-preview { background:color-mix(in srgb,var(--color-primary) 13%,var(--color-surface)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-primary) 54%,transparent); }
+
+/* Day-flow timetable port: labels, 144 selectable cells, and event layers use one shared geometry. */
+.calendar-workspace { display:grid; grid-template-columns:minmax(190px,240px) minmax(0,1fr); gap:14px; align-items:start; }
+.calendar-activity-panel { min-width:0; }
+.calendar-activity-panel .calendar-plan-sources { margin:0; position:sticky; top:112px; }
+.calendar-activity-panel .calendar-plan-source-list { display:grid; overflow:visible; }
+.calendar-activity-panel .calendar-plan-source { justify-content:flex-start; width:100%; border-radius:10px; }
+.calendar-timetable-pair { display:grid; grid-template-columns:repeat(2,minmax(320px,1fr)); gap:14px; min-width:0; }
+.calendar-timetable-panel { --calendar-row-height:42px; min-width:0; max-height:min(74vh,1120px); overflow:auto; border-radius:14px; }
+.calendar-timetable-heading { position:sticky; top:0; z-index:8; display:flex; align-items:center; justify-content:space-between; min-height:50px; padding:8px 11px; border-bottom:1px solid rgba(216,200,179,.72); background:var(--color-surface); }
+.calendar-timetable-heading div { display:grid; gap:2px; }
+.calendar-timetable-heading small { color:var(--color-text-muted); font-size:10px; font-weight:900; letter-spacing:.08em; }
+.calendar-timetable-heading strong { font-size:14px; }
+.calendar-timetable-heading > span { color:var(--color-text-muted); font-size:12px; font-weight:800; }
+.calendar-timetable-panel .daygrid { min-width:360px; }
+.calendar-minute-labels { display:grid; grid-template-columns:48px repeat(6,minmax(0,1fr)); height:26px; border-bottom:1px solid rgba(216,200,179,.58); background:rgba(247,239,228,.72); color:var(--color-text-muted); font-size:10px; line-height:26px; text-align:center; }
+.calendar-timetable-panel .daygrid-row { height:var(--calendar-row-height); grid-template-columns:48px minmax(0,1fr); }
+.calendar-timetable-panel .hour-label { justify-content:flex-end; padding-right:7px; }
+.calendar-timetable-panel .event-layer { left:48px; top:26px; bottom:auto; height:calc(24 * var(--calendar-row-height)); }
+.calendar-timetable-panel .event { top:calc(var(--row) * var(--calendar-row-height) + 3px); height:calc(var(--calendar-row-height) - 6px); }
+.calendar-timetable-panel .actual-layer { z-index:2; }
+.calendar-timetable-panel .cell { min-width:0; }
+.calendar-timetable-panel .cell.plan-placement-preview { background:color-mix(in srgb,var(--color-primary) 19%,var(--color-surface)); }
+
+@media (min-width:768px) {
+  .calendar-mode-tabs { display:none; }
+  .calendar-empty-prompt[data-calendar-empty-mode] { display:none; }
+}
+
+@media (max-width:1100px) {
+  .calendar-workspace { grid-template-columns:1fr; }
+  .calendar-activity-panel .calendar-plan-sources { position:static; }
+  .calendar-activity-panel .calendar-plan-source-list { display:flex; overflow:auto; }
+  .calendar-activity-panel .calendar-plan-source { width:auto; }
+}
+
+@media (max-width:767px) {
+  .calendar-workspace { display:block; }
+  .calendar-activity-panel { margin-bottom:10px; }
+  .calendar-timetable-pair { display:block; }
+  .calendar-timetable-panel { max-height:calc(100vh - 210px); }
+  .calendar-page[data-calendar-mode='plan'] .calendar-timetable-panel.is-actual,
+  .calendar-page[data-calendar-mode='actual'] .calendar-timetable-panel.is-plan { display:none; }
+}
+.plan-block-resize-handle { position:absolute; z-index:2; top:0; bottom:0; width:11px; cursor:ew-resize; touch-action:none; }
+.plan-block-resize-handle.is-start { left:0; }
+.plan-block-resize-handle.is-end { right:0; }
+.actual-block-resize-handle { position:absolute; z-index:2; top:0; bottom:0; width:11px; cursor:ew-resize; touch-action:none; }
+.actual-block-resize-handle.is-start { left:0; }
+.actual-block-resize-handle.is-end { right:0; }
+.actual-event.is-resizing { outline:2px solid var(--color-primary); outline-offset:1px; }
+.cell.actual-selection-preview { background:color-mix(in srgb,var(--color-info-accent) 18%,var(--color-surface)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-info-accent) 58%,transparent); }
+.cell.actual-resize-preview,
+.cell.actual-copy-preview { background:color-mix(in srgb,var(--color-primary) 15%,var(--color-surface)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-primary) 58%,transparent); }
+.plan-event.is-resizing { outline:2px solid var(--color-primary); outline-offset:1px; }
 .calendar-untimed-toggle,
 .calendar-fab-quick-actions .is-primary,
 .calendar-fab-plan-item:hover strong,

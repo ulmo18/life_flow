@@ -80,6 +80,8 @@ final class RetrospectService
             'summary' => $snapshot['summary'],
             'planItems' => $snapshot['planItems'],
             'actualItems' => $snapshot['actualItems'],
+            'activityComparisons' => $snapshot['activityComparisons'],
+            'unplannedActualItems' => $snapshot['unplannedActualItems'],
             'scheduleItems' => $scheduleItems,
             'routineItems' => $routineItems,
             'memoItems' => $memoItems,
@@ -170,6 +172,8 @@ final class RetrospectService
             'summary' => $snapshot['summary'],
             'planItems' => $snapshot['planItems'],
             'actualItems' => $snapshot['actualItems'],
+            'activityComparisons' => $snapshot['activityComparisons'],
+            'unplannedActualItems' => $snapshot['unplannedActualItems'],
             'scheduleItems' => $this->buildScheduleItems($snapshot['planItems'], $snapshot['actualItems'], 'time'),
             'routineItems' => $routineItems,
             'memoItems' => $memoItems,
@@ -482,10 +486,15 @@ final class RetrospectService
                 'linkedActualMinutes' => 0,
                 'linkedActualCount' => 0,
                 'linkedActualTimeLabel' => '0분',
+                'plannedMinutes' => 0,
+                'actualMinutes' => 0,
+                'unplannedActualMinutes' => 0,
             ],
             'planItems' => [],
             'actualItems' => [],
             'routineItems' => [],
+            'activityComparisons' => [],
+            'unplannedActualItems' => [],
         ];
     }
 
@@ -495,20 +504,9 @@ final class RetrospectService
         $planBlocks = $this->formatPlanItems($this->retrospectRepository->listPlanBlocksForDay($userId, $date));
         $actualItems = $this->formatActualItems($this->retrospectRepository->listActualEventsForDay($userId, $date, $sort));
         $routineItems = $this->formatRoutineItems($this->retrospectRepository->listRoutinesForDate($userId, $date));
-        $linkedTemplateIds = [];
-        $linkedActualMinutes = 0;
-        $linkedActualCount = 0;
-
-        foreach ($actualItems as $item) {
-            if ($item['is_linked'] && $item['plan_template_id'] !== null) {
-                $linkedTemplateIds[(int) $item['plan_template_id']] = true;
-                $linkedActualMinutes += (int) $item['durationMinutes'];
-                $linkedActualCount++;
-            }
-        }
-
+        $comparison = $this->buildPlanActualComparison($planBlocks, $actualItems);
         foreach ($planBlocks as &$item) {
-            $item['is_linked'] = isset($linkedTemplateIds[(int) $item['plan_template_id']]);
+            $item['is_linked'] = isset($comparison['linkedPlanBlockIds'][(int) $item['plan_block_id']]);
         }
         unset($item);
 
@@ -536,13 +534,18 @@ final class RetrospectService
                 'routineTotalCount' => count($routineItems),
                 'routineDoneCount' => $routineDone,
                 'routineAchievementRate' => $this->percentage($routineDone, count($routineItems)),
-                'linkedActualMinutes' => $linkedActualMinutes,
-                'linkedActualCount' => $linkedActualCount,
-                'linkedActualTimeLabel' => $this->formatMinutes($linkedActualMinutes),
+                'linkedActualMinutes' => $comparison['linkedActualMinutes'],
+                'linkedActualCount' => $comparison['linkedActualCount'],
+                'linkedActualTimeLabel' => $this->formatMinutes($comparison['linkedActualMinutes']),
+                'plannedMinutes' => $comparison['plannedMinutes'],
+                'actualMinutes' => $comparison['actualMinutes'],
+                'unplannedActualMinutes' => $comparison['unplannedActualMinutes'],
             ],
             'planItems' => $planBlocks,
             'actualItems' => $actualItems,
             'routineItems' => $routineItems,
+            'activityComparisons' => $comparison['activities'],
+            'unplannedActualItems' => $comparison['unplannedActuals'],
         ];
     }
 
@@ -561,13 +564,28 @@ final class RetrospectService
             'linkedActualMinutes' => (int) $report['linked_actual_minutes'],
             'linkedActualCount' => (int) $report['linked_actual_count'],
             'linkedActualTimeLabel' => $this->formatMinutes((int) $report['linked_actual_minutes']),
+            'plannedMinutes' => 0,
+            'actualMinutes' => 0,
+            'unplannedActualMinutes' => 0,
         ];
+
+        $plans = $this->formatSnapshotPlanItems($this->retrospectRepository->listPlanItems($reportId));
+        $actuals = $this->formatSnapshotActualItems($this->retrospectRepository->listActualItems($reportId, $sort));
+        $comparison = $this->buildPlanActualComparison($plans, $actuals);
+        $summary['plannedMinutes'] = $comparison['plannedMinutes'];
+        $summary['actualMinutes'] = $comparison['actualMinutes'];
+        $summary['unplannedActualMinutes'] = $comparison['unplannedActualMinutes'];
+        $summary['linkedActualMinutes'] = $comparison['linkedActualMinutes'];
+        $summary['linkedActualCount'] = $comparison['linkedActualCount'];
+        $summary['linkedActualTimeLabel'] = $this->formatMinutes($comparison['linkedActualMinutes']);
 
         return [
             'summary' => $summary,
-            'planItems' => $this->formatSnapshotPlanItems($this->retrospectRepository->listPlanItems($reportId)),
-            'actualItems' => $this->formatSnapshotActualItems($this->retrospectRepository->listActualItems($reportId, $sort)),
+            'planItems' => $plans,
+            'actualItems' => $actuals,
             'routineItems' => $this->formatSnapshotRoutineItems($this->retrospectRepository->listRoutineItems($reportId)),
+            'activityComparisons' => $comparison['activities'],
+            'unplannedActualItems' => $comparison['unplannedActuals'],
         ];
     }
 
@@ -610,6 +628,7 @@ final class RetrospectService
                 'start_index' => $start,
                 'end_index' => $end,
                 'plan_template_id' => $item['plan_template_id'] === null ? null : (int) $item['plan_template_id'],
+                'dailyPlanBlockId' => $item['daily_plan_block_id'] === null ? null : (int) $item['daily_plan_block_id'],
                 'plan_importance' => $item['plan_importance'] === null ? null : $this->normalizeImportance((string) $item['plan_importance']),
                 'tag_name' => (string) ($item['tag_name'] ?? '태그 없음'),
                 'tag_color' => $tagColor,
@@ -655,6 +674,7 @@ final class RetrospectService
             $isTimed = $item['start_index'] !== null && $item['end_index'] !== null;
             return [
                 'plan_template_id' => (int) ($item['plan_template_id'] ?? 0),
+                'plan_block_id' => $item['plan_block_id'] === null ? 0 : (int) $item['plan_block_id'],
                 'title' => (string) $item['title_snapshot'],
                 'start_index' => $isTimed ? (int) $item['start_index'] : null,
                 'end_index' => $isTimed ? (int) $item['end_index'] : null,
@@ -689,6 +709,7 @@ final class RetrospectService
                 'tag_text_color' => $this->contrastTextColor($tagColor),
                 'plan_importance' => $importance,
                 'plan_template_id' => $item['plan_template_id_snapshot'] === null ? null : (int) $item['plan_template_id_snapshot'],
+                'dailyPlanBlockId' => $item['daily_plan_block_id_snapshot'] === null ? null : (int) $item['daily_plan_block_id_snapshot'],
                 'is_linked' => (int) $item['is_linked'] === 1,
                 'durationMinutes' => ($end - $start) * 10,
                 'durationLabel' => $this->formatMinutes(($end - $start) * 10),
@@ -784,6 +805,96 @@ final class RetrospectService
         unset($item);
 
         return $items;
+    }
+
+    /**
+     * Groups by the copied daily-plan-item id, while preferring an exact
+     * daily-plan-block id when an Actual was copied from a specific block.
+     * Each Actual enters this pass once, even when both legacy and block links exist.
+     *
+     * @param array<int, array<string, mixed>> $plans
+     * @param array<int, array<string, mixed>> $actuals
+     * @return array<string, mixed>
+     */
+    private function buildPlanActualComparison(array $plans, array $actuals): array
+    {
+        $activities = [];
+        $planByBlock = [];
+        foreach ($plans as $plan) {
+            $activityId = (int) ($plan['plan_template_id'] ?? 0);
+            if ($activityId <= 0) continue;
+            if (!isset($activities[$activityId])) {
+                $activities[$activityId] = [
+                    'activityId' => $activityId,
+                    'title' => (string) $plan['title'],
+                    'plannedMinutes' => 0,
+                    'actualMinutes' => 0,
+                    'differenceMinutes' => 0,
+                    'plans' => [],
+                    'actuals' => [],
+                ];
+            }
+            $duration = $plan['start_index'] === null || $plan['end_index'] === null
+                ? 0 : ((int) $plan['end_index'] - (int) $plan['start_index']) * 10;
+            $plan['durationMinutes'] = $duration;
+            $activities[$activityId]['plannedMinutes'] += $duration;
+            $activities[$activityId]['plans'][] = $plan;
+            $blockId = (int) ($plan['plan_block_id'] ?? 0);
+            if ($blockId > 0) $planByBlock[$blockId] = $activityId;
+        }
+
+        $unplannedActuals = [];
+        $linkedActualMinutes = 0;
+        $linkedActualCount = 0;
+        foreach ($actuals as $actual) {
+            $activityId = null;
+            $blockId = (int) ($actual['dailyPlanBlockId'] ?? 0);
+            if ($blockId > 0 && isset($planByBlock[$blockId])) {
+                $activityId = $planByBlock[$blockId];
+            } else {
+                $legacyItemId = (int) ($actual['plan_template_id'] ?? 0);
+                if ($legacyItemId > 0 && isset($activities[$legacyItemId])) $activityId = $legacyItemId;
+            }
+            if ($activityId === null) {
+                $unplannedActuals[] = $actual;
+                continue;
+            }
+            $activities[$activityId]['actualMinutes'] += (int) $actual['durationMinutes'];
+            $activities[$activityId]['actuals'][] = $actual;
+            $linkedActualMinutes += (int) $actual['durationMinutes'];
+            $linkedActualCount++;
+        }
+
+        $linkedPlanBlockIds = [];
+        foreach ($activities as &$activity) {
+            $activity['differenceMinutes'] = $activity['actualMinutes'] - $activity['plannedMinutes'];
+            foreach ($activity['plans'] as &$plan) {
+                $plan['hasActual'] = false;
+                $blockId = (int) ($plan['plan_block_id'] ?? 0);
+                foreach ($activity['actuals'] as $actual) {
+                    $actualBlockId = (int) ($actual['dailyPlanBlockId'] ?? 0);
+                    if (($actualBlockId > 0 && $actualBlockId === $blockId)
+                        || ($actualBlockId === 0 && (int) ($actual['plan_template_id'] ?? 0) === $activity['activityId'])) {
+                        $plan['hasActual'] = true;
+                        $linkedPlanBlockIds[$blockId] = true;
+                        break;
+                    }
+                }
+            }
+            unset($plan);
+        }
+        unset($activity);
+
+        return [
+            'activities' => array_values($activities),
+            'unplannedActuals' => $unplannedActuals,
+            'plannedMinutes' => array_sum(array_column($activities, 'plannedMinutes')),
+            'actualMinutes' => array_sum(array_map(static fn(array $actual): int => (int) $actual['durationMinutes'], $actuals)),
+            'linkedActualMinutes' => $linkedActualMinutes,
+            'linkedActualCount' => $linkedActualCount,
+            'unplannedActualMinutes' => array_sum(array_map(static fn(array $actual): int => (int) $actual['durationMinutes'], $unplannedActuals)),
+            'linkedPlanBlockIds' => $linkedPlanBlockIds,
+        ];
     }
 
     /** @param array<int, array<string, mixed>> $plans

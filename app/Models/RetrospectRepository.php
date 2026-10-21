@@ -11,10 +11,40 @@ use Throwable;
 final class RetrospectRepository
 {
     private PDO $db;
+    private ?bool $dailyPlanBlocksSupported = null;
+    private ?bool $actualBlockSnapshotSupported = null;
 
     public function __construct()
     {
         $this->db = Database::connection();
+    }
+
+    private function supportsDailyPlanBlocks(): bool
+    {
+        if ($this->dailyPlanBlocksSupported !== null) return $this->dailyPlanBlocksSupported;
+        if ($this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $table = $this->db->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'daily_plan_blocks' LIMIT 1");
+            $columns = $this->db->query('PRAGMA table_info(calendar_events)');
+            $names = $columns === false ? [] : array_column($columns->fetchAll(), 'name');
+            return $this->dailyPlanBlocksSupported = $table !== false && $table->fetchColumn() !== false
+                && in_array('daily_plan_block_id', $names, true);
+        }
+        $table = $this->db->query("SHOW TABLES LIKE 'daily_plan_blocks'");
+        $column = $this->db->query("SHOW COLUMNS FROM calendar_events LIKE 'daily_plan_block_id'");
+        return $this->dailyPlanBlocksSupported = $table !== false && $table->fetchColumn() !== false
+            && $column !== false && $column->fetchColumn() !== false;
+    }
+
+    private function supportsActualBlockSnapshot(): bool
+    {
+        if ($this->actualBlockSnapshotSupported !== null) return $this->actualBlockSnapshotSupported;
+        if ($this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $columns = $this->db->query('PRAGMA table_info(retrospect_report_actual_items)');
+            $names = $columns === false ? [] : array_column($columns->fetchAll(), 'name');
+            return $this->actualBlockSnapshotSupported = in_array('daily_plan_block_id_snapshot', $names, true);
+        }
+        $column = $this->db->query("SHOW COLUMNS FROM retrospect_report_actual_items LIKE 'daily_plan_block_id_snapshot'");
+        return $this->actualBlockSnapshotSupported = $column !== false && $column->fetchColumn() !== false;
     }
 
     /** @return array<string, mixed>|null */
@@ -240,8 +270,11 @@ final class RetrospectRepository
             ? 'tag_name_snapshot ASC, start_index ASC, id ASC'
             : 'start_index ASC, end_index ASC, id ASC';
 
+        $blockColumn = $this->supportsActualBlockSnapshot()
+            ? 'daily_plan_block_id_snapshot'
+            : 'NULL AS daily_plan_block_id_snapshot';
         return $this->fetchItems(
-            'SELECT *
+            'SELECT *, ' . $blockColumn . '
              FROM retrospect_report_actual_items
              WHERE report_id = :report_id
              ORDER BY ' . $orderBy,
@@ -431,25 +464,33 @@ final class RetrospectRepository
             return [];
         }
 
+        $blockJoin = $this->supportsDailyPlanBlocks()
+            ? 'INNER JOIN daily_plan_blocks dpb ON dpb.daily_plan_item_id = dpi.id'
+            : '';
+        $blockId = $this->supportsDailyPlanBlocks() ? 'dpb.id' : 'dpi.id';
+        $startIndex = $this->supportsDailyPlanBlocks() ? 'dpb.start_index' : 'dpi.start_index';
+        $endIndex = $this->supportsDailyPlanBlocks() ? 'dpb.end_index' : 'dpi.end_index';
+        $sortOrder = $this->supportsDailyPlanBlocks() ? 'dpb.sort_order' : 'dpi.sort_order';
         $stmt = $this->db->prepare(
             'SELECT
-                dpi.id AS plan_block_id,
+                ' . $blockId . ' AS plan_block_id,
                 dp.source_plan_group_id AS plan_group_id,
                 dpi.id AS plan_template_id,
                 dpi.goal_id,
-                dpi.start_index,
-                dpi.end_index,
-                dpi.sort_order,
+                ' . $startIndex . ' AS start_index,
+                ' . $endIndex . ' AS end_index,
+                ' . $sortOrder . ' AS sort_order,
                 dpi.title,
                 dpi.importance,
                 g.title AS goal_title
              FROM daily_plan_items dpi
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+              ' . $blockJoin . '
              LEFT JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id
              WHERE dp.calendar_day_id = :calendar_day_id
                 AND dp.user_id = :user_id
                 AND dpi.deleted_at IS NULL
-             ORDER BY dpi.sort_order ASC, dpi.start_index ASC'
+              ORDER BY ' . $sortOrder . ' ASC, ' . $startIndex . ' ASC'
         );
         $stmt->execute([
             'calendar_day_id' => (int) $day['id'],
@@ -471,6 +512,9 @@ final class RetrospectRepository
             ? 'ct.sort_order ASC, ct.name ASC, ce.start_index ASC, ce.id ASC'
             : 'ce.start_index ASC, ce.end_index ASC, ce.id ASC';
 
+        $blockColumn = $this->supportsDailyPlanBlocks()
+            ? 'ce.daily_plan_block_id'
+            : 'NULL AS daily_plan_block_id';
         $stmt = $this->db->prepare(
             'SELECT
                 ce.id,
@@ -480,6 +524,7 @@ final class RetrospectRepository
                 ce.start_index,
                 ce.end_index,
                 ce.daily_plan_item_id AS plan_template_id,
+                ' . $blockColumn . ',
                 ce.calendar_tag_id,
                 dpi.importance AS plan_importance,
                 ct.name AS tag_name,
@@ -825,23 +870,24 @@ final class RetrospectRepository
     /** @param array<int, array<string, mixed>> $items */
     private function insertActualItems(int $reportId, array $items): void
     {
+        $hasBlockSnapshot = $this->supportsActualBlockSnapshot();
         $sql = 'INSERT INTO retrospect_report_actual_items (
                     report_id, calendar_day_id, calendar_event_id, title_snapshot,
                     memo_snapshot, start_index, end_index, tag_name_snapshot, tag_color_snapshot,
-                    plan_template_id_snapshot, plan_importance_snapshot,
+                    plan_template_id_snapshot' . ($hasBlockSnapshot ? ', daily_plan_block_id_snapshot' : '') . ', plan_importance_snapshot,
                     energy_group_name_snapshot, energy_effect_type_snapshot, energy_value_snapshot,
                     is_linked, sort_order, created_at
                 ) VALUES (
                     :report_id, :calendar_day_id, :calendar_event_id, :title_snapshot,
                     :memo_snapshot, :start_index, :end_index, :tag_name_snapshot, :tag_color_snapshot,
-                    :plan_template_id_snapshot, :plan_importance_snapshot,
+                    :plan_template_id_snapshot' . ($hasBlockSnapshot ? ', :daily_plan_block_id_snapshot' : '') . ', :plan_importance_snapshot,
                     :energy_group_name_snapshot, :energy_effect_type_snapshot, :energy_value_snapshot,
                     :is_linked, :sort_order, CURRENT_TIMESTAMP
                 )';
         $stmt = $this->db->prepare($sql);
 
         foreach ($items as $item) {
-            $stmt->execute([
+            $params = [
                 'report_id' => $reportId,
                 'calendar_day_id' => $item['calendar_day_id'],
                 'calendar_event_id' => $item['id'],
@@ -858,7 +904,9 @@ final class RetrospectRepository
                 'energy_value_snapshot' => $item['energy_value'] ?? null,
                 'is_linked' => !empty($item['is_linked']) ? 1 : 0,
                 'sort_order' => $item['sort_order'],
-            ]);
+            ];
+            if ($hasBlockSnapshot) $params['daily_plan_block_id_snapshot'] = $item['dailyPlanBlockId'] ?? null;
+            $stmt->execute($params);
         }
     }
 

@@ -23,6 +23,7 @@ $untimedPlanItems = array_values(array_filter(
     $calendar['planReminderItems'] ?? [],
     static fn(array $item): bool => ($item['scheduleType'] ?? '') === 'unscheduled'
 ));
+$planActivityItems = $calendar['planActivityItems'] ?? [];
 ?>
 
 <main
@@ -31,6 +32,7 @@ $untimedPlanItems = array_values(array_filter(
     data-timezone="<?= e(date_default_timezone_get()) ?>"
     data-current-index="<?= $calendar['currentIndex'] === null ? '' : e((string) $calendar['currentIndex']) ?>"
     data-calendar-mode="<?= e($calendarMode) ?>"
+    data-plan-blocks-enabled="<?= !empty($calendar['planBlocksEnabled']) ? '1' : '0' ?>"
 >
     <div class="calendar-context-sticky">
     <section class="calendar-header">
@@ -142,8 +144,31 @@ $untimedPlanItems = array_values(array_filter(
         </section>
     <?php endif; ?>
 
-    <section class="daygrid-wrap" aria-label="일간 캘린더">
+    <section class="calendar-workspace" aria-label="Daily plan and actual schedule">
+        <aside class="calendar-activity-panel">
+    <?php if ($planActivityItems !== []): ?>
+        <section class="calendar-plan-sources" data-calendar-empty-mode="plan" <?= $calendarMode !== 'plan' ? 'hidden' : '' ?> aria-label="계획에 배치할 할 일">
+            <div><strong>할 일 배치</strong><small>할 일을 계획 시간표로 끌어 시작 위치에 놓으세요.</small></div>
+            <div class="calendar-plan-source-list">
+                <?php foreach ($planActivityItems as $item): ?>
+                    <button type="button" class="calendar-plan-source" data-plan-block-source
+                        data-plan-item-id="<?= e((string) $item['itemId']) ?>"
+                        data-plan-title="<?= e((string) $item['title']) ?>"
+                        <?= empty($calendar['planBlocksEnabled']) ? 'disabled aria-disabled="true"' : '' ?>>
+                        <span class="calendar-importance-badge importance-<?= e(strtolower((string) $item['importance'])) ?>"><?= e((string) $item['importanceBadge']) ?></span>
+                        <strong><?= e((string) $item['title']) ?></strong>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
+        </aside>
+        <div class="calendar-timetable-pair" data-calendar-timetable-pair>
+    <section class="daygrid-wrap calendar-timetable-panel is-plan" aria-label="계획 시간표">
+        <header class="calendar-timetable-heading"><div><small>PLAN</small><strong>계획 시간표</strong></div><span><?= e((string) count($calendar['planSegments'] ?? [])) ?>개</span></header>
         <div class="daygrid" id="daygrid">
+            <div class="calendar-minute-labels" aria-hidden="true"><span></span><span>00</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
             <?php for ($hour = 0; $hour < 24; $hour++): ?>
                 <div class="daygrid-row">
                     <div class="hour-label"><?= sprintf('%02d:00', $hour) ?></div>
@@ -162,6 +187,10 @@ $untimedPlanItems = array_values(array_filter(
 
             <div class="event-layer <?= $calendarMode === 'actual' ? 'is-background' : '' ?>" id="planLayer">
                 <?php foreach (($calendar['planSegments'] ?? []) as $segment): ?>
+                    <?php
+                    $isFirstPlanSegment = (int) $segment['row'] === intdiv((int) $segment['startIndex'], 6);
+                    $isLastPlanSegment = (int) $segment['row'] === intdiv((int) $segment['endIndex'] - 1, 6);
+                    ?>
                     <button
                         type="button"
                         class="event plan-event importance-<?= e(strtolower((string) $segment['importance'])) ?>"
@@ -169,6 +198,7 @@ $untimedPlanItems = array_values(array_filter(
                         data-ui-tooltip="<?= e((string) $segment['title']) ?>"
                         data-plan-item-open
                         data-plan-item-id="<?= e((string) $segment['itemId']) ?>"
+                        data-plan-block-id="<?= $segment['blockId'] === null ? '' : e((string) $segment['blockId']) ?>"
                         data-plan-item-title="<?= e((string) $segment['title']) ?>"
                         data-plan-item-importance="<?= e((string) $segment['importance']) ?>"
                         data-plan-item-goal-id="<?= $segment['goalId'] === null ? '' : e((string) $segment['goalId']) ?>"
@@ -179,17 +209,43 @@ $untimedPlanItems = array_values(array_filter(
                     >
                         <span class="calendar-importance-badge is-neutral"><?= e((string) ($segment['importanceBadge'] ?? 'D')) ?></span>
                         <span class="event-title"><?= e((string) $segment['title']) ?></span>
+                        <?php if ($segment['blockId'] !== null && $isFirstPlanSegment): ?>
+                            <span class="plan-block-resize-handle is-start" data-plan-block-resize="start" aria-hidden="true"></span>
+                        <?php endif; ?>
+                        <?php if ($segment['blockId'] !== null && $isLastPlanSegment): ?>
+                            <span class="plan-block-resize-handle is-end" data-plan-block-resize="end" aria-hidden="true"></span>
+                        <?php endif; ?>
                     </button>
                 <?php endforeach; ?>
             </div>
 
-            <div class="event-layer actual-layer" id="actualLayer" <?= $calendarMode !== 'actual' ? 'hidden' : '' ?>>
+        </div>
+    </section>
+
+    <section class="daygrid-wrap calendar-timetable-panel is-actual" aria-label="실제 시간표">
+        <header class="calendar-timetable-heading"><div><small>ACTUAL</small><strong>실제 시간표</strong></div><span><?= e((string) count($calendar['actualSegments'] ?? [])) ?>개</span></header>
+        <div class="daygrid actual-daygrid" id="actualDaygrid">
+            <div class="calendar-minute-labels" aria-hidden="true"><span></span><span>00</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
+            <?php for ($hour = 0; $hour < 24; $hour++): ?>
+                <div class="daygrid-row">
+                    <div class="hour-label"><?= sprintf('%02d:00', $hour) ?></div>
+                    <div class="cells">
+                        <?php for ($i = 0; $i < 6; $i++): ?>
+                            <?php $index = ($hour * 6) + $i; ?>
+                            <div class="cell <?= $calendar['currentIndex'] === $index ? 'current-cell' : '' ?>" data-index="<?= e((string) $index) ?>" data-time="<?= sprintf('%02d:%02d', $hour, $i * 10) ?>"></div>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+            <?php endfor; ?>
+            <div class="event-layer actual-layer" id="actualLayer">
                 <?php foreach (($calendar['actualSegments'] ?? []) as $segment): ?>
                     <?php
                     $tooltipMemo = trim((string) ($segment['memo'] ?? ''));
                     $tooltipMemo = mb_strlen($tooltipMemo) > 80
                         ? mb_substr($tooltipMemo, 0, 80) . '…'
                         : $tooltipMemo;
+                    $isFirstActualSegment = (int) $segment['row'] === intdiv((int) $segment['startIndex'], 6);
+                    $isLastActualSegment = (int) $segment['row'] === intdiv((int) $segment['endIndex'] - 1, 6);
                     ?>
                     <div
                         class="event actual-event-form"
@@ -204,6 +260,7 @@ $untimedPlanItems = array_values(array_filter(
                             data-event-id="<?= e((string) $segment['id']) ?>"
                             data-event-title="<?= e((string) $segment['title']) ?>"
                             data-event-daily-plan-item-id="<?= $segment['dailyPlanItemId'] === null ? '' : e((string) $segment['dailyPlanItemId']) ?>"
+                            data-event-daily-plan-block-id="<?= $segment['blockId'] === null ? '' : e((string) $segment['blockId']) ?>"
                             data-event-tag-id="<?= $segment['tagId'] === null ? '' : e((string) $segment['tagId']) ?>"
                             data-event-memo="<?= e((string) $segment['memo']) ?>"
                             data-event-start-index="<?= e((string) $segment['startIndex']) ?>"
@@ -222,11 +279,37 @@ $untimedPlanItems = array_values(array_filter(
                                 <span class="calendar-tag-dot" aria-hidden="true"></span>
                             <?php endif; ?>
                             <span class="event-title"><?= e((string) $segment['title']) ?></span>
+                            <?php if ($isFirstActualSegment): ?>
+                                <span class="actual-block-resize-handle is-start" data-actual-block-resize="start" aria-hidden="true"></span>
+                            <?php endif; ?>
+                            <?php if ($isLastActualSegment): ?>
+                                <span class="actual-block-resize-handle is-end" data-actual-block-resize="end" aria-hidden="true"></span>
+                            <?php endif; ?>
                         </button>
                     </div>
                 <?php endforeach; ?>
             </div>
         </div>
+    </section>
+
+        </div>
+    </section>
+
+    <section class="calendar-sheet" data-plan-block-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planBlockEditSheetTitle">
+        <form method="post" action="/calendar/plan-block/update" id="calendarPlanBlockEditForm">
+            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
+            <input type="hidden" name="daily_plan_item_id" id="calendarPlanBlockItemId">
+            <input type="hidden" name="daily_plan_block_id" id="calendarPlanBlockId">
+            <div class="calendar-sheet-header"><strong id="planBlockEditSheetTitle">계획 블록 수정</strong><button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button></div>
+            <p class="calendar-sheet-time" data-plan-block-title></p>
+            <div class="calendar-time-fields">
+                <label for="calendarPlanBlockStart"><span>시작 시간</span><select class="input" name="start_index" id="calendarPlanBlockStart"><?php for ($index = 0; $index < 144; $index++): ?><option value="<?= $index ?>"><?= sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
+                <label for="calendarPlanBlockEnd"><span>종료 시간</span><select class="input" name="end_index" id="calendarPlanBlockEnd"><?php for ($index = 1; $index <= 144; $index++): ?><option value="<?= $index ?>"><?= $index === 144 ? '24:00' : sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
+            </div>
+            <div class="calendar-sheet-actions"><button type="submit" class="btn btn-primary">수정 저장</button><button type="submit" class="btn btn-ghost" form="calendarPlanBlockDeleteForm">계획 블록 삭제</button></div>
+        </form>
+        <form method="post" action="/calendar/plan-block/delete" id="calendarPlanBlockDeleteForm" hidden><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>"><input type="hidden" name="daily_plan_block_id" id="calendarPlanBlockDeleteId"></form>
     </section>
 
     <div class="calendar-fab <?= !empty($calendar['isToday']) && empty($calendar['actualSegments']) && empty($calendar['unscheduledEvents']) ? 'is-waiting' : '' ?>" data-calendar-fab>

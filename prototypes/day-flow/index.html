@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>하루흐름 · 통합 시제품</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <div><p class="eyebrow">LIFEFLOW PROTOTYPE</p><h1>하루흐름</h1></div>
+      <button id="reset-button" class="button ghost" type="button">오늘 데이터 초기화</button>
+    </header>
+    <nav class="screen-tabs" aria-label="화면 전환">
+      <button class="screen-tab is-active" type="button" data-screen="plan">계획하기</button>
+      <button class="screen-tab" type="button" data-screen="actual">실제 기록하기</button>
+      <button class="screen-tab" type="button" data-screen="retrospect">회고하기</button>
+    </nav>
+    <p id="status-message" class="status" aria-live="polite">활동을 시간표로 끌어 계획을 추가하세요.</p>
+
+    <section id="plan-screen" class="screen">
+      <aside class="activity-card">
+        <div class="card-heading"><div><p class="eyebrow">ACTIVITY</p><h2>할 일</h2></div></div>
+        <div class="source-tabs" role="tablist">
+          <button type="button" class="source-tab is-active" data-source="today">오늘</button>
+          <button type="button" class="source-tab" data-source="frequent">자주</button>
+          <button type="button" class="source-tab" data-source="routine">루틴</button>
+        </div>
+        <div id="activity-list" class="activity-list"></div>
+        <form id="activity-form" class="inline-form">
+          <label class="sr-only" for="activity-title">새 활동</label>
+          <input id="activity-title" maxlength="30" placeholder="새 활동 입력" required>
+          <button class="button" type="submit">추가</button>
+        </form>
+      </aside>
+      <section class="schedule-card">
+        <div class="card-heading"><div><p class="eyebrow">PLAN</p><h2>오늘 계획</h2></div><span id="plan-count" class="count"></span></div>
+        <div id="plan-grid" class="time-grid interactive-grid" aria-label="계획 시간표"></div>
+      </section>
+    </section>
+
+    <section id="actual-screen" class="screen is-hidden">
+      <section class="schedule-card">
+        <div class="card-heading"><div><p class="eyebrow">PLAN</p><h2>계획 일정</h2></div><span class="read-only">읽기 전용</span></div>
+        <div id="actual-plan-grid" class="time-grid" aria-label="계획 일정 시간표"></div>
+      </section>
+      <section class="schedule-card">
+        <div class="card-heading"><div><p class="eyebrow">ACTUAL</p><h2>실제 기록</h2></div><span id="actual-count" class="count"></span></div>
+        <div id="actual-grid" class="time-grid interactive-grid" aria-label="실제 일정 시간표"></div>
+      </section>
+    </section>
+
+    <section id="retrospect-screen" class="retrospect-screen is-hidden">
+      <section class="retrospect-card">
+        <div class="card-heading"><div><p class="eyebrow">TODAY'S REVIEW</p><h2>오늘의 시간 요약</h2></div></div>
+        <p class="retrospect-note">완료 여부가 아닌, 현재 기록된 시간 기준의 비교입니다.</p>
+        <div id="retrospect-summary" class="summary-grid"></div>
+      </section>
+      <section class="retrospect-card">
+        <div class="card-heading"><div><p class="eyebrow">PLAN &amp; ACTUAL</p><h2>계획과 실제 비교</h2></div></div>
+        <div id="retrospect-comparison" class="comparison-list"></div>
+      </section>
+      <section class="retrospect-card">
+        <div class="card-heading"><div><p class="eyebrow">KPT</p><h2>오늘의 회고</h2></div></div>
+        <form id="kpt-form" class="kpt-form">
+          <label for="kpt-keep">Keep <span>오늘 잘했던 점, 계속 유지할 행동</span></label>
+          <textarea id="kpt-keep" rows="4" placeholder="잘한 점을 적어보세요."></textarea>
+          <label for="kpt-problem">Problem <span>오늘 겪은 문제, 계획대로 진행되지 않은 원인</span></label>
+          <textarea id="kpt-problem" rows="4" placeholder="문제를 적어보세요."></textarea>
+          <label for="kpt-try">Try <span>내일 시도할 개선 사항</span></label>
+          <textarea id="kpt-try" rows="4" placeholder="내일의 시도를 적어보세요."></textarea>
+          <div class="kpt-actions"><span id="kpt-saved-status" class="muted"></span><button class="button" type="submit">KPT 저장</button></div>
+        </form>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="actual-dialog" class="event-dialog">
+    <form id="actual-form" method="dialog">
+      <h2 id="dialog-title">실제 일정 기록</h2>
+      <p id="dialog-range" class="dialog-range"></p>
+      <label for="actual-title">일정명</label>
+      <input id="actual-title" maxlength="40" required>
+      <label for="plan-link">계획 일정 연결</label>
+      <select id="plan-link"><option value="">연결 안 함</option></select>
+      <div class="dialog-actions">
+        <button id="delete-actual" class="button danger" type="button">삭제</button>
+        <button id="cancel-dialog" class="button ghost" value="cancel">취소</button>
+        <button class="button" value="default">저장</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="plan-dialog" class="event-dialog">
+    <form id="plan-form" method="dialog">
+      <h2>계획 일정</h2><p id="plan-dialog-range" class="dialog-range"></p>
+      <label for="plan-activity">활동</label><select id="plan-activity"></select>
+      <div class="dialog-actions"><button id="delete-plan" class="button danger" type="button">계획 삭제</button><button class="button ghost" value="cancel">닫기</button><button class="button" value="default">저장</button></div>
+    </form>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,11 +1,13 @@
 (function () {
   const page = document.querySelector('.calendar-page');
   const daygrid = document.getElementById('daygrid');
+  const actualDaygrid = document.getElementById('actualDaygrid');
   const layer = document.querySelector('[data-calendar-layer]');
   const eventSheet = document.querySelector('[data-event-sheet]');
   const eventEditSheet = document.querySelector('[data-event-edit-sheet]');
   const planItemSheet = document.querySelector('[data-plan-item-sheet]');
   const planItemEditSheet = document.querySelector('[data-plan-item-edit-sheet]');
+  const planBlockEditSheet = document.querySelector('[data-plan-block-edit-sheet]');
   const planSettingsSheet = document.querySelector('[data-plan-settings-sheet]');
   const quickMemoSheet = document.querySelector('[data-quick-memo-sheet]');
   const conditionSheet = document.querySelector('[data-condition-sheet]');
@@ -66,7 +68,6 @@
   const planEditEnd = document.getElementById('calendarPlanEditEndIndex');
   const planLinkAction = document.getElementById('calendarPlanLinkAction');
   const planLinkChoice = document.querySelector('[data-plan-link-choice]');
-  const timeGrid = window.LifeFlowTimeGrid;
   const ui = window.LifeFlowUI;
   const routineState = window.LifeFlowRoutineState;
   const userTimeFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -79,8 +80,12 @@
     hourCycle: 'h23',
   });
 
-  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !conditionSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !timeFields || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !editStartInput || !editEndInput || !editTimeFields || !planLayer || !actualLayer || !planScheduleType || !planTimeToggle || !planCreateTimeFields || !planStartInput || !planEndInput || !planEditScheduleType || !planEditTimeFields || !planEditStart || !planEditEnd || !timeGrid) {
+  if (!page || !daygrid || !layer || !eventSheet || !eventEditSheet || !planItemSheet || !planItemEditSheet || !planSettingsSheet || !quickMemoSheet || !conditionSheet || !retrospectPreview || !eventForm || !titleInput || !startInput || !endInput || !timeFields || !scheduleTypeInput || !sourceEventIdInput || !createMemoInput || !editEventId || !editScheduleTypeInput || !deleteEventId || !editTitleInput || !editMemoInput || !editStartInput || !editEndInput || !editTimeFields || !planLayer || !actualLayer || !planScheduleType || !planTimeToggle || !planCreateTimeFields || !planStartInput || !planEndInput || !planEditScheduleType || !planEditTimeFields || !planEditStart || !planEditEnd) {
     return;
+  }
+
+  if (planBlockEditSheet && !layer.contains(planBlockEditSheet)) {
+    layer.append(planBlockEditSheet);
   }
 
   function getDefaultEventRange() {
@@ -127,21 +132,15 @@
 
   function updateCurrentTimeCell() {
     const currentTime = getUserCurrentTime();
-    const currentCell = daygrid.querySelector('.cell.current-cell');
-    if (currentCell) {
-      currentCell.classList.remove('current-cell');
-    }
+    document.querySelectorAll('.daygrid .cell.current-cell').forEach(cell => cell.classList.remove('current-cell'));
 
     if (page.dataset.calendarDate !== currentTime.date) {
       page.dataset.currentIndex = '';
       return;
     }
 
-    const nextCurrentCell = daygrid.querySelector(`.cell[data-index="${currentTime.index}"]`);
-    if (nextCurrentCell) {
-      nextCurrentCell.classList.add('current-cell');
-      page.dataset.currentIndex = String(currentTime.index);
-    }
+    document.querySelectorAll(`.daygrid .cell[data-index="${currentTime.index}"]`).forEach(cell => cell.classList.add('current-cell'));
+    page.dataset.currentIndex = String(currentTime.index);
   }
 
   function focusCurrentTimeOnce() {
@@ -192,6 +191,7 @@
     eventEditSheet.hidden = panel !== eventEditSheet;
     planItemSheet.hidden = panel !== planItemSheet;
     planItemEditSheet.hidden = panel !== planItemEditSheet;
+    if (planBlockEditSheet) planBlockEditSheet.hidden = panel !== planBlockEditSheet;
     planSettingsSheet.hidden = panel !== planSettingsSheet;
     quickMemoSheet.hidden = panel !== quickMemoSheet;
     conditionSheet.hidden = panel !== conditionSheet;
@@ -235,6 +235,7 @@
     eventEditSheet.hidden = true;
     planItemSheet.hidden = true;
     planItemEditSheet.hidden = true;
+    if (planBlockEditSheet) planBlockEditSheet.hidden = true;
     planSettingsSheet.hidden = true;
     quickMemoSheet.hidden = true;
     conditionSheet.hidden = true;
@@ -658,8 +659,8 @@
       link.href = `${url.pathname}${url.search}${url.hash}`;
     });
     planLayer.hidden = false;
-    planLayer.classList.toggle('is-background', calendarMode === 'actual');
-    actualLayer.hidden = calendarMode !== 'actual';
+    planLayer.classList.remove('is-background');
+    actualLayer.hidden = false;
     document.querySelectorAll('[data-calendar-empty-mode]').forEach(prompt => {
       prompt.hidden = prompt.dataset.calendarEmptyMode !== calendarMode;
     });
@@ -746,6 +747,10 @@
   }
 
   function openPlanItemEditSheet(button) {
+    if (button.dataset.planBlockId && planBlockEditSheet) {
+      openPlanBlockEditSheet(button);
+      return;
+    }
     const scheduleType = button.dataset.planItemScheduleType === 'unscheduled' ? 'unscheduled' : 'timed';
     const parsedStart = Number.parseInt(button.dataset.planItemStartIndex || '', 10);
     const parsedEnd = Number.parseInt(button.dataset.planItemEndIndex || '', 10);
@@ -767,6 +772,409 @@
     focusSheetInput(planEditTitle);
   }
 
+  function openPlanBlockEditSheet(button) {
+    const itemId = planBlockEditSheet.querySelector('#calendarPlanBlockItemId');
+    const blockId = planBlockEditSheet.querySelector('#calendarPlanBlockId');
+    const deleteId = planBlockEditSheet.querySelector('#calendarPlanBlockDeleteId');
+    const start = planBlockEditSheet.querySelector('#calendarPlanBlockStart');
+    const end = planBlockEditSheet.querySelector('#calendarPlanBlockEnd');
+    const title = planBlockEditSheet.querySelector('[data-plan-block-title]');
+    if (!itemId || !blockId || !deleteId || !start || !end) return;
+    itemId.value = button.dataset.planItemId || '';
+    blockId.value = button.dataset.planBlockId || '';
+    deleteId.value = button.dataset.planBlockId || '';
+    start.value = button.dataset.planItemStartIndex || '0';
+    end.value = button.dataset.planItemEndIndex || '1';
+    if (title) title.textContent = button.dataset.planItemTitle || '';
+    openPanel(planBlockEditSheet);
+  }
+
+  let selectedPlanBlockSource = null;
+  let sourceDrag = null;
+  let planPlacement = null;
+
+  function clearPlanPlacementPreview() {
+    daygrid.querySelectorAll('.plan-placement-preview').forEach(cell => cell.classList.remove('plan-placement-preview'));
+  }
+
+  function clearPlanResizePreview() {
+    daygrid.querySelectorAll('.plan-resize-preview').forEach(cell => cell.classList.remove('plan-resize-preview'));
+  }
+
+  function previewPlanResize(start, end) {
+    clearPlanResizePreview();
+    for (let index = start; index < end; index += 1) {
+      daygrid.querySelector(`.cell[data-index="${index}"]`)?.classList.add('plan-resize-preview');
+    }
+  }
+
+  function previewPlanPlacement() {
+    clearPlanPlacementPreview();
+    if (!planPlacement) return;
+    const start = Math.min(planPlacement.startIndex, planPlacement.endIndex);
+    const end = Math.max(planPlacement.startIndex, planPlacement.endIndex);
+    for (let index = start; index <= end; index += 1) {
+      daygrid.querySelector(`.cell[data-index="${index}"]`)?.classList.add('plan-placement-preview');
+    }
+  }
+
+  function beginPlanPlacement(source, startIndex) {
+    planPlacement = { source, startIndex, endIndex: startIndex };
+    previewPlanPlacement();
+    showCalendarToast('포인터를 움직여 길이를 정한 뒤 다시 클릭하면 계획 블록이 저장됩니다.');
+  }
+
+  function commitPlanPlacement() {
+    if (!planPlacement) return;
+    const placement = planPlacement;
+    planPlacement = null;
+    clearPlanPlacementPreview();
+    const start = Math.min(placement.startIndex, placement.endIndex);
+    const end = Math.max(placement.startIndex, placement.endIndex) + 1;
+    if (hasOccupiedRange(start, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex')) {
+      showCalendarToast('이미 등록된 계획 블록과 시간이 겹칩니다.');
+      return;
+    }
+    submitPlanBlock(placement.source.dataset.planItemId || '', start, end);
+  }
+
+  function submitPlanBlock(itemId, start, end) {
+    const token = document.querySelector('input[name="_csrf_token"]')?.value || '';
+    if (!itemId || !token) return;
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = '/calendar/plan-block';
+    [['_csrf_token', token], ['date', page.dataset.calendarDate || ''], ['daily_plan_item_id', itemId], ['start_index', start], ['end_index', end]].forEach(([name, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = name; input.value = String(value); form.append(input);
+    });
+    document.body.append(form);
+    form.submit();
+  }
+
+  function submitPlanBlockUpdate(itemId, blockId, start, end) {
+    const token = document.querySelector('input[name="_csrf_token"]')?.value || '';
+    if (!itemId || !blockId || !token) return;
+    const form = document.createElement('form');
+    form.method = 'post'; form.action = '/calendar/plan-block/update';
+    [['_csrf_token', token], ['date', page.dataset.calendarDate || ''], ['daily_plan_item_id', itemId], ['daily_plan_block_id', blockId], ['start_index', start], ['end_index', end]].forEach(([name, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = name; input.value = String(value); form.append(input);
+    });
+    document.body.append(form);
+    form.submit();
+  }
+
+  function gridIndexFrom(grid, x, y) {
+    const cell = document.elementsFromPoint(x, y).find(element => element instanceof HTMLElement && element.classList.contains('cell') && grid.contains(element));
+    const index = Number.parseInt(cell?.dataset.index || '', 10);
+    return Number.isInteger(index) ? index : null;
+  }
+
+  function gridIndexFromPoint(x, y) {
+    return gridIndexFrom(daygrid, x, y);
+  }
+
+  function actualGridIndexFromPoint(x, y) {
+    return actualDaygrid ? gridIndexFrom(actualDaygrid, x, y) : null;
+  }
+
+  daygrid.addEventListener('pointerdown', event => {
+    if (!planPlacement) return;
+    const index = gridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    planPlacement.endIndex = index;
+    commitPlanPlacement();
+  }, true);
+  document.addEventListener('pointermove', event => {
+    if (!planPlacement) return;
+    const index = gridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null) return;
+    planPlacement.endIndex = index;
+    previewPlanPlacement();
+  });
+  function finishPlanSourceDrag(event) {
+    if (!sourceDrag || sourceDrag.pointerId !== event.pointerId) return;
+    const drag = sourceDrag;
+    sourceDrag = null;
+    const index = gridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null) return;
+    beginPlanPlacement(drag.source, index);
+  }
+  document.addEventListener('pointerup', finishPlanSourceDrag);
+
+  let blockResize = null;
+  let suppressPlanBlockClick = false;
+  planLayer.addEventListener('pointerdown', event => {
+    const handle = event.target.closest('[data-plan-block-resize]');
+    const block = event.target.closest('[data-plan-block-id]');
+    if (!handle || !block || !block.dataset.planBlockId) return;
+    event.preventDefault(); event.stopPropagation();
+    blockResize = {
+      block,
+      edge: handle.dataset.planBlockResize,
+      itemId: block.dataset.planItemId,
+      blockId: block.dataset.planBlockId,
+      start: Number.parseInt(block.dataset.planItemStartIndex || '', 10),
+      end: Number.parseInt(block.dataset.planItemEndIndex || '', 10),
+    };
+    if (!Number.isInteger(blockResize.start) || !Number.isInteger(blockResize.end)) { blockResize = null; return; }
+    blockResize.originalStart = blockResize.start;
+    blockResize.originalEnd = blockResize.end;
+    block.classList.add('is-resizing');
+    previewPlanResize(blockResize.start, blockResize.end);
+    try {
+      block.setPointerCapture(event.pointerId);
+    } catch (error) {
+      blockResize = null;
+      block.classList.remove('is-resizing');
+      clearPlanResizePreview();
+      showCalendarToast('계획 블록 크기 조정을 시작하지 못했습니다. 다시 시도해 주세요.');
+    }
+  });
+  planLayer.addEventListener('pointermove', event => {
+    if (!blockResize) return;
+    const index = gridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null) return;
+    if (blockResize.edge === 'start' && index < blockResize.end) blockResize.start = index;
+    if (blockResize.edge === 'end' && index >= blockResize.start) blockResize.end = Math.min(index + 1, 144);
+    blockResize.block.dataset.planItemStartIndex = String(blockResize.start);
+    blockResize.block.dataset.planItemEndIndex = String(blockResize.end);
+    previewPlanResize(blockResize.start, blockResize.end);
+  });
+  planLayer.addEventListener('pointerup', event => {
+    if (!blockResize) return;
+    const resize = blockResize; blockResize = null;
+    resize.block.classList.remove('is-resizing');
+    clearPlanResizePreview();
+    try { resize.block.releasePointerCapture(event.pointerId); } catch (error) { /* Capture can already be released. */ }
+    if (resize.start < resize.end) {
+      suppressPlanBlockClick = true;
+      window.setTimeout(() => { suppressPlanBlockClick = false; }, 0);
+      submitPlanBlockUpdate(resize.itemId, resize.blockId, resize.start, resize.end);
+    }
+  });
+  planLayer.addEventListener('click', event => {
+    if (!suppressPlanBlockClick) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+  planLayer.addEventListener('pointercancel', () => {
+    if (blockResize) {
+      blockResize.block.classList.remove('is-resizing');
+      blockResize.block.dataset.planItemStartIndex = String(blockResize.originalStart);
+      blockResize.block.dataset.planItemEndIndex = String(blockResize.originalEnd);
+    }
+    clearPlanResizePreview();
+    blockResize = null;
+  });
+
+  function clearActualPreview() {
+    actualDaygrid?.querySelectorAll('.actual-selection-preview, .actual-resize-preview, .actual-copy-preview')
+      .forEach(cell => cell.classList.remove('actual-selection-preview', 'actual-resize-preview', 'actual-copy-preview'));
+  }
+
+  function previewActualRange(start, end, className) {
+    clearActualPreview();
+    for (let index = start; index < end; index += 1) {
+      actualDaygrid?.querySelector(`.cell[data-index="${index}"]`)?.classList.add(className);
+    }
+  }
+
+  function actualRangeFromStartAndPointer(startIndex, currentIndex) {
+    return {
+      start: Math.min(startIndex, currentIndex),
+      end: Math.max(startIndex, currentIndex) + 1,
+    };
+  }
+
+  function hasActualConflict(start, end, excludeEventId = '') {
+    return hasOccupiedRange(
+      start,
+      end,
+      '[data-event-open][data-event-start-index]',
+      'eventStartIndex',
+      'eventEndIndex',
+      excludeEventId === '' ? '' : 'eventId',
+      excludeEventId
+    );
+  }
+
+  function submitActualRangeUpdate(eventId, start, end) {
+    const token = document.querySelector('input[name="_csrf_token"]')?.value || '';
+    if (!eventId || !token) return;
+    const form = document.createElement('form');
+    form.method = 'post'; form.action = '/calendar/event/time-range';
+    [['_csrf_token', token], ['date', page.dataset.calendarDate || ''], ['event_id', eventId], ['start_index', start], ['end_index', end]].forEach(([name, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = name; input.value = String(value); form.append(input);
+    });
+    document.body.append(form);
+    form.submit();
+  }
+
+  function submitPlanBlockCopy(blockId, start, end) {
+    const token = document.querySelector('input[name="_csrf_token"]')?.value || '';
+    if (!blockId || !token) return;
+    const form = document.createElement('form');
+    form.method = 'post'; form.action = '/calendar/event/from-plan-block';
+    [['_csrf_token', token], ['date', page.dataset.calendarDate || ''], ['daily_plan_block_id', blockId], ['start_index', start], ['end_index', end]].forEach(([name, value]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden'; input.name = name; input.value = String(value); form.append(input);
+    });
+    document.body.append(form);
+    form.submit();
+  }
+
+  let actualSelection = null;
+  let actualResize = null;
+  let planCopyDrag = null;
+  let suppressActualEventClick = false;
+
+  actualDaygrid?.addEventListener('pointerdown', event => {
+    if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (event.target.closest('[data-event-open], [data-actual-block-resize], button, input, select, textarea, a')) return;
+    const index = actualGridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null) return;
+    event.preventDefault();
+    actualSelection = { pointerId: event.pointerId, startIndex: index, currentIndex: index };
+    previewActualRange(index, index + 1, 'actual-selection-preview');
+    try { actualDaygrid.setPointerCapture(event.pointerId); } catch (error) { /* Native capture may be unavailable. */ }
+  });
+  actualDaygrid?.addEventListener('pointermove', event => {
+    if (!actualSelection || actualSelection.pointerId !== event.pointerId) return;
+    const index = actualGridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null) return;
+    actualSelection.currentIndex = index;
+    const range = actualRangeFromStartAndPointer(actualSelection.startIndex, index);
+    previewActualRange(range.start, range.end, 'actual-selection-preview');
+  });
+  actualDaygrid?.addEventListener('pointerup', event => {
+    if (!actualSelection || actualSelection.pointerId !== event.pointerId) return;
+    const selection = actualSelection;
+    actualSelection = null;
+    try { actualDaygrid.releasePointerCapture(event.pointerId); } catch (error) { /* Capture may already be released. */ }
+    const index = actualGridIndexFromPoint(event.clientX, event.clientY);
+    const range = actualRangeFromStartAndPointer(selection.startIndex, index === null ? selection.currentIndex : index);
+    clearActualPreview();
+    if (hasActualConflict(range.start, range.end)) {
+      showCalendarToast('이미 등록된 실제 일정과 시간이 겹칩니다.');
+      return;
+    }
+    openEventSheet(range.start, range.end);
+  });
+  actualDaygrid?.addEventListener('pointercancel', () => {
+    actualSelection = null;
+    clearActualPreview();
+  });
+
+  actualLayer.addEventListener('pointerdown', event => {
+    const handle = event.target.closest('[data-actual-block-resize]');
+    const block = event.target.closest('[data-event-open]');
+    if (!handle || !block || !block.dataset.eventId) return;
+    event.preventDefault(); event.stopPropagation();
+    const start = Number.parseInt(block.dataset.eventStartIndex || '', 10);
+    const end = Number.parseInt(block.dataset.eventEndIndex || '', 10);
+    if (!Number.isInteger(start) || !Number.isInteger(end)) return;
+    actualResize = {
+      block,
+      edge: handle.dataset.actualBlockResize,
+      eventId: block.dataset.eventId,
+      start,
+      end,
+      originalStart: start,
+      originalEnd: end,
+    };
+    block.classList.add('is-resizing');
+    previewActualRange(start, end, 'actual-resize-preview');
+    try { block.setPointerCapture(event.pointerId); } catch (error) {
+      actualResize = null;
+      block.classList.remove('is-resizing');
+      clearActualPreview();
+      showCalendarToast('실제 일정 크기 조정을 시작하지 못했습니다. 다시 시도해 주세요.');
+    }
+  });
+  actualLayer.addEventListener('pointermove', event => {
+    if (!actualResize) return;
+    const index = actualGridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null) return;
+    if (actualResize.edge === 'start' && index < actualResize.end) actualResize.start = index;
+    if (actualResize.edge === 'end' && index >= actualResize.start) actualResize.end = Math.min(index + 1, 144);
+    previewActualRange(actualResize.start, actualResize.end, 'actual-resize-preview');
+  });
+  actualLayer.addEventListener('pointerup', event => {
+    if (!actualResize) return;
+    const resize = actualResize;
+    actualResize = null;
+    resize.block.classList.remove('is-resizing');
+    clearActualPreview();
+    try { resize.block.releasePointerCapture(event.pointerId); } catch (error) { /* Capture may already be released. */ }
+    suppressActualEventClick = true;
+    window.setTimeout(() => { suppressActualEventClick = false; }, 0);
+    if (resize.start < resize.end && !hasActualConflict(resize.start, resize.end, resize.eventId)) {
+      submitActualRangeUpdate(resize.eventId, resize.start, resize.end);
+      return;
+    }
+    showCalendarToast('다른 실제 일정과 시간이 겹쳐 변경하지 않았습니다.');
+  });
+  actualLayer.addEventListener('pointercancel', () => {
+    if (actualResize) actualResize.block.classList.remove('is-resizing');
+    actualResize = null;
+    clearActualPreview();
+  });
+  actualLayer.addEventListener('click', event => {
+    if (!suppressActualEventClick) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+
+  planLayer.addEventListener('pointerdown', event => {
+    if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (event.target.closest('[data-plan-block-resize]')) return;
+    const block = event.target.closest('[data-plan-block-id]');
+    const blockId = block?.dataset.planBlockId || '';
+    const start = Number.parseInt(block?.dataset.planItemStartIndex || '', 10);
+    const end = Number.parseInt(block?.dataset.planItemEndIndex || '', 10);
+    if (!block || !blockId || !Number.isInteger(start) || !Number.isInteger(end) || end <= start) return;
+    planCopyDrag = { pointerId: event.pointerId, block, blockId, duration: end - start, lastStart: null };
+    try { block.setPointerCapture(event.pointerId); } catch (error) { /* Document listeners remain the fallback. */ }
+  });
+  document.addEventListener('pointermove', event => {
+    if (!planCopyDrag || planCopyDrag.pointerId !== event.pointerId) return;
+    const index = actualGridIndexFromPoint(event.clientX, event.clientY);
+    if (index === null || index + planCopyDrag.duration > 144) {
+      planCopyDrag.lastStart = null;
+      clearActualPreview();
+      return;
+    }
+    planCopyDrag.lastStart = index;
+    previewActualRange(index, index + planCopyDrag.duration, 'actual-copy-preview');
+  });
+  document.addEventListener('pointerup', event => {
+    if (!planCopyDrag || planCopyDrag.pointerId !== event.pointerId) return;
+    const copy = planCopyDrag;
+    planCopyDrag = null;
+    clearActualPreview();
+    try { copy.block.releasePointerCapture(event.pointerId); } catch (error) { /* Capture may already be released. */ }
+    if (copy.lastStart === null) return;
+    const end = copy.lastStart + copy.duration;
+    suppressPlanBlockClick = true;
+    window.setTimeout(() => { suppressPlanBlockClick = false; }, 0);
+    if (hasActualConflict(copy.lastStart, end)) {
+      showCalendarToast('이미 등록된 실제 일정과 시간이 겹칩니다.');
+      return;
+    }
+    submitPlanBlockCopy(copy.blockId, copy.lastStart, end);
+  });
+  document.addEventListener('pointercancel', event => {
+    if (planCopyDrag?.pointerId === event.pointerId) {
+      planCopyDrag = null;
+      clearActualPreview();
+    }
+  });
+
   function setPlanEditScheduleType(scheduleType) {
     const isTimed = scheduleType === 'timed';
     planEditScheduleType.value = isTimed ? 'timed' : 'unscheduled';
@@ -777,11 +1185,21 @@
     planEditEnd.required = isTimed;
   }
 
-  timeGrid.create({
+  // Range selection belongs to the prototype-style source drag flow below.
+  // Keep the legacy controller disabled so an empty Plan cell cannot open a form.
+  if (false) timeGrid.create({
     grid: daygrid,
     ignoreSelector: '[data-event-open], [data-plan-item-open], button, input, select, textarea, a',
     onSelect({ start, end }) {
       if (calendarMode === 'plan') {
+        if (page.dataset.planBlocksEnabled === '1' && selectedPlanBlockSource) {
+          if (hasOccupiedRange(start, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex')) {
+            showCalendarToast('이미 등록된 계획 블록과 시간이 겹칩니다.');
+            return;
+          }
+          submitPlanBlock(selectedPlanBlockSource.dataset.planItemId || '', start, end);
+          return;
+        }
         if (hasOccupiedRange(start, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex')) {
           showCalendarToast('이미 등록된 계획 일정과 시간이 겹칩니다.');
           return;
@@ -802,6 +1220,22 @@
   });
   document.querySelectorAll('[data-plan-item-open]').forEach(button => {
     button.addEventListener('click', () => openPlanItemEditSheet(button));
+  });
+  document.querySelectorAll('[data-plan-block-source]').forEach(button => {
+    button.addEventListener('pointerdown', event => {
+      if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      sourceDrag = { pointerId: event.pointerId, source: button };
+      try { button.setPointerCapture(event.pointerId); } catch (error) { /* Pointer capture is optional. */ }
+    });
+    button.addEventListener('pointerup', finishPlanSourceDrag);
+    button.addEventListener('pointercancel', event => {
+      if (sourceDrag?.pointerId === event.pointerId) sourceDrag = null;
+    });
+    button.addEventListener('click', () => {
+      selectedPlanBlockSource = button;
+      document.querySelectorAll('[data-plan-block-source]').forEach(source => source.classList.toggle('is-selected', source === button));
+      showCalendarToast(`${button.dataset.planTitle || '할 일'}을(를) 선택했습니다. 시간표에서 범위를 드래그하세요.`);
+    });
   });
   document.querySelector('[data-untimed-plan-toggle]')?.addEventListener('click', event => {
     const button = event.currentTarget;
@@ -994,7 +1428,23 @@
     form.addEventListener('change', refresh);
     refresh();
   });
-  setCalendarMode(page.dataset.calendarMode || 'actual');
+  // The desktop timetable always exposes Plan and Actual together. Plan remains
+  // the interactive grid in STEP 2; Actual-range creation stays in STEP 3.
+  setCalendarMode('plan');
+
+  if (actualDaygrid) {
+    const planScroller = daygrid.closest('.calendar-timetable-panel');
+    const actualScroller = actualDaygrid.closest('.calendar-timetable-panel');
+    let syncingTimetableScroll = false;
+    const syncScroll = (from, to) => {
+      if (syncingTimetableScroll || !from || !to) return;
+      syncingTimetableScroll = true;
+      to.scrollTop = from.scrollTop;
+      window.requestAnimationFrame(() => { syncingTimetableScroll = false; });
+    };
+    planScroller?.addEventListener('scroll', () => syncScroll(planScroller, actualScroller), { passive: true });
+    actualScroller?.addEventListener('scroll', () => syncScroll(actualScroller, planScroller), { passive: true });
+  }
 
   document.getElementById('calendarPlanItemDeleteForm')?.addEventListener('submit', async event => {
     const deleteForm = event.currentTarget;
@@ -1587,6 +2037,21 @@
   });
 
   document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && (actualSelection || actualResize || planCopyDrag)) {
+      if (actualResize) actualResize.block.classList.remove('is-resizing');
+      actualSelection = null;
+      actualResize = null;
+      planCopyDrag = null;
+      clearActualPreview();
+      showCalendarToast('실제 일정 조작을 취소했습니다.');
+      return;
+    }
+    if (event.key === 'Escape' && planPlacement) {
+      planPlacement = null;
+      clearPlanPlacementPreview();
+      showCalendarToast('계획 블록 배치를 취소했습니다.');
+      return;
+    }
     if (event.key === 'Escape' && !layer.hidden) {
       const activeForm = [eventForm, document.getElementById('calendarEventEditForm')]
         .find(form => form && form.dataset.activeActualView && form.dataset.activeActualView !== 'main');

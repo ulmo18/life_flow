@@ -428,6 +428,22 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
     CHECK (`estimated_duration_minutes` IS NULL OR (`estimated_duration_minutes` >= 10 AND `estimated_duration_minutes` <= 1440))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `daily_plan_blocks` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `daily_plan_item_id` BIGINT UNSIGNED NOT NULL,
+  `start_index` SMALLINT UNSIGNED NOT NULL,
+  `end_index` SMALLINT UNSIGNED NOT NULL,
+  `sort_order` INT UNSIGNED NOT NULL DEFAULT 1,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_daily_plan_blocks_item_order` (`daily_plan_item_id`, `sort_order`),
+  CONSTRAINT `fk_daily_plan_blocks_item`
+    FOREIGN KEY (`daily_plan_item_id`) REFERENCES `daily_plan_items` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `chk_daily_plan_blocks_index_range`
+    CHECK (`start_index` >= 0 AND `end_index` <= 144 AND `start_index` < `end_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `calendar_tag_palettes` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `slug` VARCHAR(40) NOT NULL,
@@ -539,6 +555,7 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
   `end_index` SMALLINT UNSIGNED NULL,
   `plan_template_id` BIGINT UNSIGNED NULL,
   `daily_plan_item_id` BIGINT UNSIGNED NULL,
+  `daily_plan_block_id` BIGINT UNSIGNED NULL,
   `calendar_tag_id` BIGINT UNSIGNED NULL,
   `memo` TEXT NULL,
   `deleted_at` DATETIME NULL,
@@ -549,6 +566,7 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
   KEY `idx_calendar_events_day_time` (`calendar_day_id`, `start_index`, `end_index`),
   KEY `idx_calendar_events_plan_template_id` (`plan_template_id`),
   KEY `idx_calendar_events_daily_plan_item_id` (`daily_plan_item_id`),
+  KEY `idx_calendar_events_daily_plan_block_id` (`daily_plan_block_id`),
   KEY `idx_calendar_events_tag_id` (`calendar_tag_id`),
   CONSTRAINT `fk_calendar_events_user`
     FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
@@ -564,6 +582,10 @@ CREATE TABLE IF NOT EXISTS `calendar_events` (
     ON UPDATE CASCADE,
   CONSTRAINT `fk_calendar_events_daily_plan_item`
     FOREIGN KEY (`daily_plan_item_id`) REFERENCES `daily_plan_items` (`id`)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
+  CONSTRAINT `fk_calendar_events_daily_plan_block`
+    FOREIGN KEY (`daily_plan_block_id`) REFERENCES `daily_plan_blocks` (`id`)
     ON DELETE SET NULL
     ON UPDATE CASCADE,
   CONSTRAINT `fk_calendar_events_tag`
@@ -717,6 +739,7 @@ CREATE TABLE IF NOT EXISTS `retrospect_report_actual_items` (
   `tag_name_snapshot` VARCHAR(40) NULL,
   `tag_color_snapshot` CHAR(7) NULL,
   `plan_template_id_snapshot` BIGINT UNSIGNED NULL,
+  `daily_plan_block_id_snapshot` BIGINT UNSIGNED NULL,
   `plan_importance_snapshot` CHAR(1) NULL,
   `energy_group_name_snapshot` VARCHAR(60) NULL,
   `energy_effect_type_snapshot` VARCHAR(20) NULL,

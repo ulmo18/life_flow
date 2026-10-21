@@ -299,6 +299,21 @@ CREATE INDEX IF NOT EXISTS idx_daily_plan_items_plan_order ON daily_plan_items(d
 CREATE INDEX IF NOT EXISTS idx_daily_plan_items_goal ON daily_plan_items(goal_id);
 CREATE INDEX IF NOT EXISTS idx_daily_plan_items_source_template ON daily_plan_items(source_plan_template_id);
 
+CREATE TABLE IF NOT EXISTS daily_plan_blocks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  daily_plan_item_id INTEGER NOT NULL,
+  start_index INTEGER NOT NULL,
+  end_index INTEGER NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (daily_plan_item_id) REFERENCES daily_plan_items(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CHECK (start_index >= 0 AND end_index <= 144 AND start_index < end_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_plan_blocks_item_order
+  ON daily_plan_blocks(daily_plan_item_id, sort_order);
+
 CREATE TABLE IF NOT EXISTS calendar_tag_palettes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT NOT NULL UNIQUE,
@@ -379,6 +394,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   end_index INTEGER NULL,
   plan_template_id INTEGER NULL,
   daily_plan_item_id INTEGER NULL,
+  daily_plan_block_id INTEGER NULL,
   calendar_tag_id INTEGER NULL,
   memo TEXT NULL,
   deleted_at TEXT NULL,
@@ -388,6 +404,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   FOREIGN KEY (calendar_day_id) REFERENCES calendar_days(id) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (plan_template_id) REFERENCES plan_templates(id) ON DELETE SET NULL ON UPDATE CASCADE,
   FOREIGN KEY (daily_plan_item_id) REFERENCES daily_plan_items(id) ON DELETE SET NULL ON UPDATE CASCADE,
+  FOREIGN KEY (daily_plan_block_id) REFERENCES daily_plan_blocks(id) ON DELETE SET NULL ON UPDATE CASCADE,
   FOREIGN KEY (calendar_tag_id) REFERENCES calendar_tags(id) ON DELETE SET NULL ON UPDATE CASCADE,
   CHECK (
     (schedule_type = 'timed' AND start_index >= 0 AND end_index <= 144 AND start_index < end_index)
@@ -399,6 +416,7 @@ CREATE INDEX IF NOT EXISTS idx_calendar_events_user_day ON calendar_events(user_
 CREATE INDEX IF NOT EXISTS idx_calendar_events_day_time ON calendar_events(calendar_day_id, start_index, end_index);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_plan_template_id ON calendar_events(plan_template_id);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_daily_plan_item_id ON calendar_events(daily_plan_item_id);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_daily_plan_block_id ON calendar_events(daily_plan_block_id);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_tag_id ON calendar_events(calendar_tag_id);
 
 CREATE TABLE IF NOT EXISTS routines (
@@ -512,6 +530,7 @@ CREATE TABLE IF NOT EXISTS retrospect_report_actual_items (
   tag_name_snapshot TEXT NULL,
   tag_color_snapshot TEXT NULL,
   plan_template_id_snapshot INTEGER NULL,
+  daily_plan_block_id_snapshot INTEGER NULL,
   plan_importance_snapshot TEXT NULL,
   energy_group_name_snapshot TEXT NULL,
   energy_effect_type_snapshot TEXT NULL,
