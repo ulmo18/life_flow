@@ -31,6 +31,8 @@ final class PlanService
                 'id' => (int) $template['id'],
                 'title' => (string) $template['title'],
                 'durationIndex' => $durationIndex,
+                'isEnabled' => (int) $template['is_enabled'] === 1,
+                'createdAt' => (string) $template['created_at'],
                 'durationMinutes' => $durationIndex * 10,
                 'durationLabel' => $this->formatDuration($durationIndex),
                 'importance' => $this->normalizeImportance((string) $template['importance']),
@@ -96,6 +98,11 @@ final class PlanService
             (string) $data['importance'],
             $data['goalId'] === null ? null : (int) $data['goalId']
         );
+    }
+
+    public function setBlockTemplateEnabled(int $userId, int $templateId, bool $enabled): bool
+    {
+        return $this->blockTemplateRepository->setEnabled($userId, $templateId, $enabled);
     }
 
     public function deleteBlockTemplate(int $userId, int $templateId): bool

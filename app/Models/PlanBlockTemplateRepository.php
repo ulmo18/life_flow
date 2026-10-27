@@ -24,6 +24,7 @@ final class PlanBlockTemplateRepository
                 pbt.id,
                 pbt.title,
                 pbt.duration_index,
+                pbt.is_enabled,
                 pbt.importance,
                 pbt.goal_id,
                 g.title AS goal_title,
@@ -108,6 +109,13 @@ final class PlanBlockTemplateRepository
         $exists->execute(['id' => $templateId, 'user_id' => $userId]);
 
         return $exists->fetchColumn() !== false;
+    }
+
+    public function setEnabled(int $userId, int $templateId, bool $enabled): bool
+    {
+        $stmt = $this->db->prepare('UPDATE plan_block_templates SET is_enabled = :enabled WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL');
+        $stmt->execute(['enabled' => $enabled ? 1 : 0, 'id' => $templateId, 'user_id' => $userId]);
+        return $stmt->rowCount() > 0;
     }
 
     public function softDelete(int $userId, int $templateId): bool

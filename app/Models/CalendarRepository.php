@@ -82,8 +82,8 @@ final class CalendarRepository
                     ' . $blockColumn . ',
                     ce.calendar_tag_id,
                     ce.memo,
-                    COALESCE(dpi.title, pt.title) AS plan_title,
-                    COALESCE(dpi.importance, pt.importance) AS plan_importance,
+                    ' . ($this->supportsDailyPlanBlocks() ? 'COALESCE(dpb.title_snapshot, dpi.title, pt.title)' : 'COALESCE(dpi.title, pt.title)') . ' AS plan_title,
+                    ' . ($this->supportsDailyPlanBlocks() ? 'COALESCE(dpb.importance_snapshot, dpi.importance, pt.importance)' : 'COALESCE(dpi.importance, pt.importance)') . ' AS plan_importance,
                     ct.name AS tag_name,
                     ct.color_hex AS tag_color,
                     ees.group_id_snapshot AS execution_energy_group_id,
@@ -98,6 +98,7 @@ final class CalendarRepository
                 FROM calendar_events ce
                 LEFT JOIN plan_templates pt ON pt.id = ce.plan_template_id
                 LEFT JOIN daily_plan_items dpi ON dpi.id = ce.daily_plan_item_id
+                ' . ($this->supportsDailyPlanBlocks() ? 'LEFT JOIN daily_plan_blocks dpb ON dpb.id = ce.daily_plan_block_id' : '') . '
                 LEFT JOIN calendar_tags ct ON ct.id = ce.calendar_tag_id
                     AND ct.deleted_at IS NULL
                 LEFT JOIN execution_energy_event_settings ees ON ees.calendar_event_id = ce.id
@@ -204,14 +205,14 @@ final class CalendarRepository
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function getDailyPlanItems(int $userId, int $calendarDayId): array
+    public function getDailyPlanItems(int $userId, int $calendarDayId, bool $includeBlockItems = false): array
     {
         $stmt = $this->db->prepare(
             'SELECT dpi.id AS daily_plan_item_id, dpi.id AS plan_block_id,
                     dp.source_plan_group_id AS plan_group_id,
                     dpi.source_plan_template_id AS plan_template_id,
                     dpi.source_plan_block_id, dpi.goal_id, dpi.title, dpi.importance,
-                    dpi.start_index, dpi.end_index, dpi.estimated_duration_minutes, dpi.sort_order,
+                    dpi.start_index, dpi.end_index, dpi.estimated_duration_minutes, dpi.sort_order, dpi.created_at,
                     g.title AS goal_title,
                     (SELECT ce.id FROM calendar_events ce
                      WHERE ce.daily_plan_item_id = dpi.id
@@ -223,7 +224,9 @@ final class CalendarRepository
              LEFT JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id AND g.deleted_at IS NULL
              WHERE dp.user_id = :user_id
                AND dp.calendar_day_id = :calendar_day_id
-               AND dpi.deleted_at IS NULL
+               ' . ($includeBlockItems
+                    ? 'AND (dpi.deleted_at IS NULL OR EXISTS (SELECT 1 FROM daily_plan_blocks existing_block WHERE existing_block.daily_plan_item_id = dpi.id))'
+                    : 'AND dpi.deleted_at IS NULL AND dpi.source_block_template_id IS NULL') . '
              ORDER BY dpi.sort_order ASC, dpi.start_index ASC, dpi.id ASC'
         );
         $stmt->execute(['user_id' => $userId, 'calendar_day_id' => $calendarDayId]);
@@ -267,7 +270,7 @@ final class CalendarRepository
             'SELECT dpb.id AS daily_plan_block_id, dpi.id AS daily_plan_item_id,
                     dp.source_plan_group_id AS plan_group_id,
                     dpi.source_plan_template_id AS plan_template_id,
-                    dpi.source_plan_block_id, dpi.goal_id, dpi.title, dpi.importance,
+                    dpi.source_plan_block_id, CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END AS goal_id, COALESCE(dpb.title_snapshot, dpi.title) AS title, COALESCE(dpb.importance_snapshot, dpi.importance) AS importance,
                     dpb.start_index, dpb.end_index, dpb.sort_order,
                     g.title AS goal_title,
                     EXISTS (
@@ -279,10 +282,9 @@ final class CalendarRepository
              FROM daily_plan_blocks dpb
              INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
-             LEFT JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id AND g.deleted_at IS NULL
+             LEFT JOIN goals g ON g.id = CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END AND g.user_id = dp.user_id AND g.deleted_at IS NULL
              WHERE dp.user_id = :user_id
                AND dp.calendar_day_id = :calendar_day_id
-               AND dpi.deleted_at IS NULL
              ORDER BY dpb.start_index ASC, dpb.sort_order ASC, dpb.id ASC'
         );
         $stmt->execute(['user_id' => $userId, 'calendar_day_id' => $calendarDayId]);
@@ -368,6 +370,7 @@ final class CalendarRepository
                 'end_index' => $endIndex,
             ]);
             $blockId = (int) $this->db->lastInsertId();
+            $this->snapshotDailyPlanBlock($blockId, $dailyPlanItemId);
             $this->db->commit();
 
             return $blockId;
@@ -380,7 +383,41 @@ final class CalendarRepository
         }
     }
 
-    public function updateDailyPlanBlock(int $userId, int $blockId, int $startIndex, int $endIndex): bool
+    /** @return array{itemId:int, blockId:int}|null */
+    public function placePlanBlockTemplate(int $userId, string $date, int $templateId, int $startIndex, int $endIndex): ?array
+    {
+        if (!$this->supportsDailyPlanBlocks() || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) return null;
+        try {
+            $this->db->beginTransaction();
+            $template = $this->db->prepare('SELECT title, importance, goal_id FROM plan_block_templates WHERE id = :id AND user_id = :user_id AND is_enabled = 1 AND deleted_at IS NULL');
+            $template->execute(['id' => $templateId, 'user_id' => $userId]);
+            $source = $template->fetch();
+            if (!$source) { $this->db->rollBack(); return null; }
+            $day = $this->getOrCreateDay($userId, $date);
+            $dayId = (int) $day['id'];
+            if ($this->hasOverlappingDailyPlanBlockForDay($dayId, $startIndex, $endIndex)) { $this->db->rollBack(); return null; }
+            $plan = $this->getDailyPlanForDay($userId, $dayId);
+            if ($plan === null) {
+                $stmt = $this->db->prepare('INSERT INTO daily_plans (user_id, calendar_day_id, source_plan_group_id, name, created_at, updated_at) VALUES (:user_id, :day_id, NULL, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
+                $stmt->execute(['user_id' => $userId, 'day_id' => $dayId, 'name' => '[' . $date . ']의 계획']);
+                $planId = (int) $this->db->lastInsertId();
+            } else $planId = (int) $plan['id'];
+            $goalId = $source['goal_id'] === null ? null : (int) $source['goal_id'];
+            if ($goalId !== null && !$this->userOwnsGoal($userId, $goalId)) $goalId = null;
+            $stmt = $this->db->prepare('INSERT INTO daily_plan_items (daily_plan_id, source_plan_block_id, source_plan_template_id, source_block_template_id, goal_id, title, importance, start_index, end_index, estimated_duration_minutes, sort_order, deleted_at, created_at, updated_at) VALUES (:plan_id, NULL, NULL, :template_id, :goal_id, :title, :importance, NULL, NULL, NULL, (SELECT COALESCE(MAX(existing.sort_order), 0) + 1 FROM daily_plan_items existing WHERE existing.daily_plan_id = :sort_plan_id), NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
+            $stmt->execute(['plan_id' => $planId, 'sort_plan_id' => $planId, 'template_id' => $templateId, 'goal_id' => $goalId, 'title' => $source['title'], 'importance' => $source['importance']]);
+            $itemId = (int) $this->db->lastInsertId();
+            $blockId = $this->createInitialDailyPlanBlock($itemId, $startIndex, $endIndex);
+            $this->db->commit();
+            return ['itemId' => $itemId, 'blockId' => $blockId];
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('[calendar] template placement failed: ' . $exception->getMessage());
+            return null;
+        }
+    }
+
+    public function updateDailyPlanBlock(int $userId, int $blockId, int $startIndex, int $endIndex, ?string $date = null): bool
     {
         if (!$this->supportsDailyPlanBlocks() || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) {
             return false;
@@ -388,9 +425,13 @@ final class CalendarRepository
         try {
             $this->db->beginTransaction();
             $block = $this->findOwnedDailyPlanBlock($userId, $blockId);
-            if ($block === null || $this->hasOverlappingDailyPlanBlock(
-                (int) $block['daily_plan_item_id'], $startIndex, $endIndex, $blockId
-            )) {
+            $day = $date === null ? null : $this->findDay($userId, $date);
+            if ($block === null
+                || ($day !== null && (int) $block['calendar_day_id'] !== (int) $day['id'])
+                || ($date !== null && $day === null)
+                || $this->hasOverlappingDailyPlanBlockForDay(
+                    (int) $block['calendar_day_id'], $startIndex, $endIndex, $blockId
+                )) {
                 $this->db->rollBack();
                 return false;
             }
@@ -420,12 +461,13 @@ final class CalendarRepository
                 $this->db->rollBack();
                 return false;
             }
-            // Actual records are intentionally retained. Their optional block link is removed first.
+            // Preserve Actual records as unplanned when their Plan block is deleted.
             $clear = $this->db->prepare(
-                'UPDATE calendar_events SET daily_plan_block_id = NULL, updated_at = CURRENT_TIMESTAMP
-                 WHERE daily_plan_block_id = :daily_plan_block_id AND deleted_at IS NULL'
+                'UPDATE calendar_events SET daily_plan_block_id = NULL, daily_plan_item_id = NULL,
+                     plan_template_id = NULL, updated_at = CURRENT_TIMESTAMP
+                 WHERE user_id = :user_id AND daily_plan_block_id = :daily_plan_block_id AND deleted_at IS NULL'
             );
-            $clear->execute(['daily_plan_block_id' => $blockId]);
+            $clear->execute(['user_id' => $userId, 'daily_plan_block_id' => $blockId]);
             $delete = $this->db->prepare('DELETE FROM daily_plan_blocks WHERE id = :id');
             $delete->execute(['id' => $blockId]);
             $this->db->commit();
@@ -433,6 +475,31 @@ final class CalendarRepository
         } catch (Throwable $exception) {
             if ($this->db->inTransaction()) $this->db->rollBack();
             error_log('[calendar] delete daily plan block failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
+
+    public function updateDailyPlanBlockDetails(int $userId, int $blockId, string $importance, bool $detachActuals): bool
+    {
+        if (!$this->supportsDailyPlanBlocks()) return false;
+        try {
+            $this->db->beginTransaction();
+            $block = $this->findOwnedDailyPlanBlock($userId, $blockId);
+            if ($block === null) { $this->db->rollBack(); return false; }
+            $stmt = $this->db->prepare('UPDATE daily_plan_blocks SET importance_snapshot = :importance, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $stmt->execute(['importance' => $importance, 'id' => $blockId]);
+            if ($detachActuals) {
+                $clear = $this->db->prepare(
+                    'UPDATE calendar_events SET daily_plan_block_id = NULL, daily_plan_item_id = NULL, plan_template_id = NULL, updated_at = CURRENT_TIMESTAMP
+                     WHERE user_id = :user_id AND daily_plan_block_id = :block_id AND deleted_at IS NULL'
+                );
+                $clear->execute(['user_id' => $userId, 'block_id' => $blockId]);
+            }
+            $this->db->commit();
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('[calendar] update daily plan block details failed: ' . $exception->getMessage());
             return false;
         }
     }
@@ -498,7 +565,7 @@ final class CalendarRepository
         return $meta !== false ? $meta : null;
     }
 
-    public function setDayPlanGroup(int $userId, string $date, ?int $planGroupId): bool
+    public function setDayPlanGroup(int $userId, string $date, ?int $planGroupId, bool $requireEmpty = false): bool
     {
         if ($planGroupId !== null && !$this->userOwnsPlanGroup($userId, $planGroupId)) {
             return false;
@@ -507,18 +574,27 @@ final class CalendarRepository
         try {
             $this->db->beginTransaction();
             $day = $this->getOrCreateDay($userId, $date);
+            if ($requireEmpty) {
+                if ($this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+                    $lock = $this->db->prepare('SELECT id FROM calendar_days WHERE id = :id AND user_id = :user_id FOR UPDATE');
+                    $lock->execute(['id' => (int) $day['id'], 'user_id' => $userId]);
+                }
+                $existing = $this->db->prepare('SELECT dpi.id FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id WHERE dp.user_id = :user_id AND dp.calendar_day_id = :day_id AND dpi.deleted_at IS NULL LIMIT 1');
+                $existing->execute(['user_id' => $userId, 'day_id' => (int) $day['id']]);
+                if ($existing->fetchColumn() !== false) { $this->db->rollBack(); return false; }
+            }
             $dailyPlan = $this->getDailyPlanForDay($userId, (int) $day['id']);
             $oldPlanGroupId = $dailyPlan !== null && $dailyPlan['source_plan_group_id'] !== null
                 ? (int) $dailyPlan['source_plan_group_id']
                 : null;
 
-            if ($oldPlanGroupId === $planGroupId && $dailyPlan !== null) {
+            if (!$requireEmpty && $oldPlanGroupId === $planGroupId && $dailyPlan !== null) {
                 $this->db->commit();
                 return true;
             }
 
-            $this->clearEventPlanLinks($userId, (int) $day['id']);
-            if ($dailyPlan !== null) {
+            if (!$requireEmpty) $this->clearEventPlanLinks($userId, (int) $day['id']);
+            if ($dailyPlan !== null && !$requireEmpty) {
                 $stmt = $this->db->prepare('DELETE FROM daily_plans WHERE id = :id AND user_id = :user_id');
                 $stmt->execute(['id' => (int) $dailyPlan['id'], 'user_id' => $userId]);
             }
@@ -548,6 +624,11 @@ final class CalendarRepository
                     return false;
                 }
 
+                if ($requireEmpty && $dailyPlan !== null) {
+                    $dailyPlanId = (int) $dailyPlan['id'];
+                    $stmt = $this->db->prepare('UPDATE daily_plans SET source_plan_group_id = :group_id, name = :name, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id');
+                    $stmt->execute(['group_id' => $planGroupId, 'name' => (string) $group['name'], 'id' => $dailyPlanId, 'user_id' => $userId]);
+                } else {
                 $stmt = $this->db->prepare(
                     'INSERT INTO daily_plans (
                         user_id, calendar_day_id, source_plan_group_id, name, created_at, updated_at
@@ -563,6 +644,7 @@ final class CalendarRepository
                     'name' => (string) $group['name'],
                 ]);
                 $dailyPlanId = (int) $this->db->lastInsertId();
+                }
 
                 $stmt = $this->db->prepare(
                     'INSERT INTO daily_plan_items (
@@ -587,11 +669,13 @@ final class CalendarRepository
                      SELECT dpi.id, dpi.start_index, dpi.end_index, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                      FROM daily_plan_items dpi
                      WHERE dpi.daily_plan_id = :daily_plan_id
+                        AND dpi.deleted_at IS NULL
                        AND dpi.start_index IS NOT NULL
                        AND dpi.end_index IS NOT NULL'
                 );
                 if ($this->supportsDailyPlanBlocks()) {
                     $stmt->execute(['daily_plan_id' => $dailyPlanId]);
+                    $this->db->prepare('UPDATE daily_plan_blocks SET title_snapshot = (SELECT title FROM daily_plan_items WHERE id = daily_plan_item_id), importance_snapshot = (SELECT importance FROM daily_plan_items WHERE id = daily_plan_item_id), goal_id_snapshot = (SELECT goal_id FROM daily_plan_items WHERE id = daily_plan_item_id) WHERE title_snapshot IS NULL AND daily_plan_item_id IN (SELECT id FROM daily_plan_items WHERE daily_plan_id = :plan_id)')->execute(['plan_id' => $dailyPlanId]);
                 }
             }
 
@@ -782,7 +866,9 @@ final class CalendarRepository
                 'estimated_duration_minutes' => $estimatedDurationMinutes,
                 'id' => $itemId,
             ]);
-            $this->synchronizeLegacyDailyPlanBlock($itemId, $startIndex, $endIndex);
+            if ($this->supportsDailyPlanBlocks() && $this->getDailyPlanBlocks($userId, $itemId) === [] && $startIndex !== null && $endIndex !== null) {
+                $this->createInitialDailyPlanBlock($itemId, $startIndex, $endIndex);
+            }
             $this->db->commit();
             return true;
         } catch (Throwable $exception) {
@@ -790,6 +876,44 @@ final class CalendarRepository
                 $this->db->rollBack();
             }
             error_log('[calendar] update daily plan item failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
+
+    public function updateDailyPlanItemDetails(
+        int $userId,
+        int $itemId,
+        string $title,
+        string $importance,
+        ?int $goalId
+    ): bool {
+        try {
+            $this->db->beginTransaction();
+            if ($this->findOwnedDailyPlanItem($userId, $itemId) === null
+                || ($goalId !== null && !$this->userOwnsGoal($userId, $goalId))) {
+                $this->db->rollBack();
+                return false;
+            }
+
+            $stmt = $this->db->prepare(
+                'UPDATE daily_plan_items
+                 SET title = :title, importance = :importance, goal_id = :goal_id,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND deleted_at IS NULL'
+            );
+            $stmt->execute([
+                'title' => $title,
+                'importance' => $importance,
+                'goal_id' => $goalId,
+                'id' => $itemId,
+            ]);
+            $this->db->commit();
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            error_log('[calendar] update daily plan item details failed: ' . $exception->getMessage());
             return false;
         }
     }
@@ -806,7 +930,7 @@ final class CalendarRepository
                 'UPDATE calendar_events
                  SET daily_plan_item_id = NULL' . ($this->supportsDailyPlanBlocks() ? ', daily_plan_block_id = NULL' : '') . ',
                      plan_template_id = NULL, updated_at = CURRENT_TIMESTAMP
-                 WHERE user_id = :user_id AND daily_plan_item_id = :item_id AND deleted_at IS NULL'
+                 WHERE user_id = :user_id AND daily_plan_item_id = :item_id AND deleted_at IS NULL' . ($this->supportsDailyPlanBlocks() ? ' AND daily_plan_block_id IS NULL' : '')
             );
             $stmt->execute(['user_id' => $userId, 'item_id' => $itemId]);
             $stmt = $this->db->prepare(
@@ -1029,12 +1153,38 @@ final class CalendarRepository
         }
     }
 
+    public function updateActualEventTag(int $userId, int $eventId, ?int $calendarTagId): bool
+    {
+        try {
+            if ($calendarTagId !== null && !$this->calendarTagExists($userId, $calendarTagId, $eventId)) {
+                return false;
+            }
+
+            $stmt = $this->db->prepare(
+                'UPDATE calendar_events
+                 SET calendar_tag_id = :calendar_tag_id, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL'
+            );
+            $stmt->execute([
+                'calendar_tag_id' => $calendarTagId,
+                'id' => $eventId,
+                'user_id' => $userId,
+            ]);
+
+            return $stmt->rowCount() === 1;
+        } catch (Throwable $exception) {
+            error_log('[calendar] update event tag failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
+
     public function createActualFromDailyPlanBlock(
         int $userId,
         string $date,
         int $dailyPlanBlockId,
         int $startIndex,
-        int $endIndex
+        int $endIndex,
+        ?array $energySetting = null
     ): ?int {
         if (!$this->supportsDailyPlanBlocks() || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) {
             return null;
@@ -1044,6 +1194,10 @@ final class CalendarRepository
             $this->db->beginTransaction();
             $day = $this->getOrCreateDay($userId, $date);
             $dayId = (int) $day['id'];
+            if ($this->db->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'mysql') {
+                $lock = $this->db->prepare('SELECT id FROM calendar_days WHERE id = :id AND user_id = :user_id FOR UPDATE');
+                $lock->execute(['id' => $dayId, 'user_id' => $userId]);
+            }
             $block = $this->findCopyableDailyPlanBlock($userId, $dayId, $dailyPlanBlockId);
             if ($block === null || $this->hasOverlappingEvent($userId, $dayId, $startIndex, $endIndex)) {
                 $this->db->rollBack();
@@ -1073,6 +1227,15 @@ final class CalendarRepository
             ]);
 
             $eventId = (int) $this->db->lastInsertId();
+            if ($energySetting !== null) {
+                (new ExecutionEnergyRepository())->upsertEventSetting($userId, $eventId, [
+                    'group_id_snapshot' => null,
+                    'group_name_snapshot' => '직접 설정',
+                    'effect_type' => (string) $energySetting['effectType'],
+                    'energy_value' => (int) $energySetting['value'],
+                    'is_override' => 1,
+                ]);
+            }
             $this->db->commit();
             return $eventId;
         } catch (Throwable $exception) {
@@ -1345,10 +1508,39 @@ final class CalendarRepository
         return $stmt->fetchColumn() !== false;
     }
 
-    private function createInitialDailyPlanBlock(int $dailyPlanItemId, int $startIndex, int $endIndex): void
+    private function hasOverlappingDailyPlanBlockForDay(
+        int $calendarDayId,
+        int $startIndex,
+        int $endIndex,
+        ?int $excludeBlockId = null
+    ): bool {
+        $sql = 'SELECT dpb.id
+                FROM daily_plan_blocks dpb
+                INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
+                INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                WHERE dp.calendar_day_id = :calendar_day_id
+                  AND :start_index < dpb.end_index
+                  AND :end_index > dpb.start_index
+                  ' . ($excludeBlockId !== null ? 'AND dpb.id <> :exclude_block_id' : '') . '
+                LIMIT 1';
+        $params = [
+            'calendar_day_id' => $calendarDayId,
+            'start_index' => $startIndex,
+            'end_index' => $endIndex,
+        ];
+        if ($excludeBlockId !== null) {
+            $params['exclude_block_id'] = $excludeBlockId;
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    private function createInitialDailyPlanBlock(int $dailyPlanItemId, int $startIndex, int $endIndex): ?int
     {
         if (!$this->supportsDailyPlanBlocks()) {
-            return;
+            return null;
         }
         $stmt = $this->db->prepare(
             'INSERT INTO daily_plan_blocks (
@@ -1360,6 +1552,15 @@ final class CalendarRepository
             'start_index' => $startIndex,
             'end_index' => $endIndex,
         ]);
+        $blockId = (int) $this->db->lastInsertId();
+        $this->snapshotDailyPlanBlock($blockId, $dailyPlanItemId);
+        return $blockId;
+    }
+
+    private function snapshotDailyPlanBlock(int $blockId, int $itemId): void
+    {
+        $stmt = $this->db->prepare('UPDATE daily_plan_blocks SET title_snapshot = (SELECT title FROM daily_plan_items WHERE id = :item_title), importance_snapshot = (SELECT importance FROM daily_plan_items WHERE id = :item_importance), goal_id_snapshot = (SELECT goal_id FROM daily_plan_items WHERE id = :item_goal) WHERE id = :block_id');
+        $stmt->execute(['item_title' => $itemId, 'item_importance' => $itemId, 'item_goal' => $itemId, 'block_id' => $blockId]);
     }
 
     private function synchronizeLegacyDailyPlanBlock(
@@ -1442,7 +1643,7 @@ final class CalendarRepository
              FROM daily_plan_blocks dpb
              INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
-             WHERE dpb.id = :id AND dp.user_id = :user_id AND dpi.deleted_at IS NULL
+             WHERE dpb.id = :id AND dp.user_id = :user_id
              LIMIT 1'
         );
         $stmt->execute(['id' => $blockId, 'user_id' => $userId]);
@@ -1540,7 +1741,6 @@ final class CalendarRepository
                AND dpb.daily_plan_item_id = :daily_plan_item_id
                AND dp.calendar_day_id = :calendar_day_id
                AND dp.user_id = :user_id
-               AND dpi.deleted_at IS NULL
              LIMIT 1'
         );
         $stmt->execute([
@@ -1557,14 +1757,13 @@ final class CalendarRepository
     private function findCopyableDailyPlanBlock(int $userId, int $calendarDayId, int $dailyPlanBlockId): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT dpb.daily_plan_item_id, dpi.title, dpi.source_plan_template_id
+            'SELECT dpb.daily_plan_item_id, COALESCE(dpb.title_snapshot, dpi.title) AS title, dpi.source_plan_template_id
              FROM daily_plan_blocks dpb
              INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
              WHERE dpb.id = :daily_plan_block_id
                AND dp.calendar_day_id = :calendar_day_id
                AND dp.user_id = :user_id
-               AND dpi.deleted_at IS NULL
              LIMIT 1'
         );
         $stmt->execute([

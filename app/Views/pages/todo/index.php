@@ -83,9 +83,7 @@ $renderTodoItems = static function (array $items) use ($canEdit): void {
         <div class="todo-sheet-header ui-form-sheet-header"><strong id="todoCreateTitle">할 일 추가</strong><button type="button" class="ui-close-button" data-todo-create-close aria-label="닫기">×</button></div>
         <form class="todo-create-form" method="post" action="/todo">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-            <label class="form-label" for="todoCreateTitleInput">일정명</label>
-            <input class="input" id="todoCreateTitleInput" name="title" type="text" maxlength="80" placeholder="오늘 할 일을 입력하세요" autocomplete="off" required>
-            <p class="muted">시간이 없는 오늘의 계획 일정으로 등록됩니다.</p>
+            <?php $activityFieldPrefix = 'todoCreate'; $activityGoalOptions = $todo['goalOptions'] ?? []; require __DIR__ . '/../../components/activity-create-fields.php'; ?>
             <div class="ui-form-sheet-actions"><button class="btn btn-primary" type="submit">할 일 추가</button></div>
         </form>
     </section>

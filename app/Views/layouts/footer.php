@@ -29,7 +29,7 @@
                     <span class="bottom-nav-icon" aria-hidden="true">□</span>
                     <span><?= e(t('nav.todo')) ?></span>
                 </a>
-                <a class="bottom-nav-item" href="/calendar" <?= ($currentPath ?? '') === '/calendar' ? 'aria-current="page"' : '' ?>>
+                <a class="bottom-nav-item" href="/calendar?focus=current" <?= ($currentPath ?? '') === '/calendar' ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">▦</span>
                     <span><?= e(t('nav.schedule')) ?></span>
                 </a>

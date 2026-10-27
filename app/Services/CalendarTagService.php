@@ -21,17 +21,20 @@ final class CalendarTagService
         $tags = $this->tagRepository->listVisibleTags($userId);
         $palettes = $this->tagRepository->listPalettes();
         $usedPaletteIds = [];
+        $systemPaletteIds = [];
 
         foreach ($tags as $tag) {
             if (!empty($tag['palette_id'])) {
                 $usedPaletteIds[(int) $tag['palette_id']] = true;
+                if (!empty($tag['is_system'])) $systemPaletteIds[(int) $tag['palette_id']] = true;
             }
         }
 
         return [
             'tags' => $tags,
-            'palettes' => array_map(static function (array $palette) use ($usedPaletteIds): array {
+            'palettes' => array_map(static function (array $palette) use ($usedPaletteIds, $systemPaletteIds): array {
                 $palette['isUsed'] = isset($usedPaletteIds[(int) $palette['id']]);
+                $palette['isSystemUsed'] = isset($systemPaletteIds[(int) $palette['id']]);
                 return $palette;
             }, $palettes),
         ];

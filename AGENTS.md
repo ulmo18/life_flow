@@ -134,6 +134,7 @@ MVC principles must be strictly followed.
 - Before working on Plan, Routine, Calendar, Retrospect, or Goal menu behavior, read `docs/menu-feature-overview.md`
 - Before working on shared header, aside menu, bottom navigator, or common layout behavior, read `docs/common-layout.md`
 - Before working on dashboard calendar entry points, calendar pages, toast reuse, or calendar data sources, read `docs/calendar-feature-roles.md`
+- When modifying source code, review and update existing documentation relevant to the changed behavior. If no documentation changes are needed, explain why in the completion report.
 - Only implement what is requested
 - Do not modify unrelated files
 - List changed files after completion

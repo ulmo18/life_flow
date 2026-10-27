@@ -34,7 +34,10 @@ final class TodoController
             'csrfToken' => Csrf::token(),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
-            'pageStyles' => [$this->versionedAsset('/assets/css/pages/todo.css')],
+            'pageStyles' => [
+                $this->versionedAsset('/assets/css/components/todo-sheet.css'),
+                $this->versionedAsset('/assets/css/pages/todo.css'),
+            ],
             'pageScripts' => [$this->versionedAsset('/assets/js/pages/todo.js')],
         ]);
         unset($_SESSION['flash_success'], $_SESSION['errors']);
@@ -71,18 +74,25 @@ final class TodoController
 
     public function store(): void
     {
+        $returnPath = $this->returnPath($_POST['return_to'] ?? null, $_POST['date'] ?? null);
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($this->isJsonRequest()) {
+                $this->respond(['ok' => false, 'message' => t('todo.invalid')], 419);
+            }
             $_SESSION['errors'] = ['general' => t('todo.invalid')];
-            header('Location: /todo');
+            header('Location: ' . $returnPath);
             exit;
         }
-        $result = $this->todoService->createToday($this->userId(), $_POST['title'] ?? '');
+        $result = $this->todoService->create($this->userId(), $_POST);
+        if ($this->isJsonRequest()) {
+            $this->respond($result, (int) ($result['status'] ?? ($result['ok'] ? 201 : 422)));
+        }
         if ($result['ok']) {
             $_SESSION['flash_success'] = $result['message'];
         } else {
             $_SESSION['errors'] = ['general' => $result['message']];
         }
-        header('Location: /todo');
+        header('Location: ' . $returnPath);
         exit;
     }
 
@@ -120,6 +130,13 @@ final class TodoController
         }
 
         return date('Y-m-d');
+    }
+
+    private function returnPath(mixed $returnTo, mixed $date): string
+    {
+        if ($returnTo !== 'calendar') return '/todo';
+        $selectedDate = $this->normalizeDate(is_string($date) ? $date : '');
+        return '/calendar?date=' . rawurlencode($selectedDate) . '&mode=plan';
     }
 
     private function isJsonRequest(): bool

@@ -905,14 +905,17 @@ final class RetrospectService
     {
         $planIds = [];
         foreach ($plans as $plan) {
-            $planIds[(int) ($plan['plan_template_id'] ?? 0)] = true;
+            $blockId = (int) ($plan['plan_block_id'] ?? 0);
+            $templateId = (int) ($plan['plan_template_id'] ?? 0);
+            if ($blockId > 0) $planIds[$blockId] = true;
+            if ($templateId > 0) $planIds[$templateId] = true;
         }
         $actualByPlan = [];
         $unplanned = [];
         foreach ($actuals as $actual) {
-            $planId = $actual['plan_template_id'] ?? null;
+            $planId = $actual['dailyPlanBlockId'] ?? ($actual['plan_template_id'] ?? null);
             if ($planId !== null && (int) $planId > 0 && isset($planIds[(int) $planId])) {
-                $actualByPlan[(int) $planId] = $actual;
+                $actualByPlan[(int) $planId][] = $actual;
             } else {
                 $unplanned[] = $actual;
             }
@@ -920,8 +923,12 @@ final class RetrospectService
 
         $rows = [];
         foreach ($plans as $plan) {
-            $planId = (int) ($plan['plan_template_id'] ?? 0);
-            $actual = $actualByPlan[$planId] ?? null;
+            $planId = (int) (($plan['plan_block_id'] ?? 0) ?: ($plan['plan_template_id'] ?? 0));
+            $linkedActuals = $actualByPlan[$planId] ?? [];
+            if ($linkedActuals === [] && !empty($plan['plan_template_id'])) {
+                $linkedActuals = $actualByPlan[(int) $plan['plan_template_id']] ?? [];
+            }
+            $actual = $linkedActuals[0] ?? null;
             $planStart = $plan['start_index'] ?? null;
             $planEnd = $plan['end_index'] ?? null;
             $actualStart = is_array($actual) ? (int) $actual['start_index'] : null;
@@ -946,6 +953,16 @@ final class RetrospectService
                 'energyEffectType' => $actual === null ? '' : (string) ($actual['energy_effect_type'] ?? ''),
                 'energyValue' => $actual === null ? null : $actual['energy_value'],
                 'isLinked' => $actual !== null,
+                'linkedActualCount' => count($linkedActuals),
+                'linkedActuals' => array_map(static fn(array $entry): array => [
+                    'title' => (string) $entry['title'],
+                    'timeRange' => (string) $entry['timeRange'],
+                    'memo' => (string) ($entry['memo'] ?? ''),
+                    'tagName' => (string) ($entry['tag_name'] ?? ''),
+                    'tagColor' => (string) ($entry['tag_color'] ?? ''),
+                    'energyEffectType' => (string) ($entry['energy_effect_type'] ?? ''),
+                    'energyValue' => $entry['energy_value'],
+                ], $linkedActuals),
                 'hasDifference' => $hasDifference,
                 'isLongDuration' => $planDuration !== null && $planDuration >= 60,
                 'durationDifferenceLabel' => $actual === null || $planDuration === null
@@ -977,6 +994,7 @@ final class RetrospectService
                 'energyEffectType' => (string) ($actual['energy_effect_type'] ?? ''),
                 'energyValue' => $actual['energy_value'],
                 'isLinked' => false,
+                'linkedActualCount' => 0,
                 'hasDifference' => false,
                 'isLongDuration' => false,
                 'durationDifferenceLabel' => '',

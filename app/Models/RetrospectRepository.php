@@ -471,25 +471,28 @@ final class RetrospectRepository
         $startIndex = $this->supportsDailyPlanBlocks() ? 'dpb.start_index' : 'dpi.start_index';
         $endIndex = $this->supportsDailyPlanBlocks() ? 'dpb.end_index' : 'dpi.end_index';
         $sortOrder = $this->supportsDailyPlanBlocks() ? 'dpb.sort_order' : 'dpi.sort_order';
+        $goalId = $this->supportsDailyPlanBlocks() ? 'CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END' : 'dpi.goal_id';
+        $title = $this->supportsDailyPlanBlocks() ? 'COALESCE(dpb.title_snapshot, dpi.title)' : 'dpi.title';
+        $importance = $this->supportsDailyPlanBlocks() ? 'COALESCE(dpb.importance_snapshot, dpi.importance)' : 'dpi.importance';
         $stmt = $this->db->prepare(
             'SELECT
                 ' . $blockId . ' AS plan_block_id,
                 dp.source_plan_group_id AS plan_group_id,
                 dpi.id AS plan_template_id,
-                dpi.goal_id,
+                ' . $goalId . ' AS goal_id,
                 ' . $startIndex . ' AS start_index,
                 ' . $endIndex . ' AS end_index,
                 ' . $sortOrder . ' AS sort_order,
-                dpi.title,
-                dpi.importance,
+                ' . $title . ' AS title,
+                ' . $importance . ' AS importance,
                 g.title AS goal_title
              FROM daily_plan_items dpi
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
               ' . $blockJoin . '
-             LEFT JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id
+             LEFT JOIN goals g ON g.id = ' . $goalId . ' AND g.user_id = dp.user_id
              WHERE dp.calendar_day_id = :calendar_day_id
                 AND dp.user_id = :user_id
-                AND dpi.deleted_at IS NULL
+                ' . ($this->supportsDailyPlanBlocks() ? '' : 'AND dpi.deleted_at IS NULL') . '
               ORDER BY ' . $sortOrder . ' ASC, ' . $startIndex . ' ASC'
         );
         $stmt->execute([
@@ -526,7 +529,7 @@ final class RetrospectRepository
                 ce.daily_plan_item_id AS plan_template_id,
                 ' . $blockColumn . ',
                 ce.calendar_tag_id,
-                dpi.importance AS plan_importance,
+                ' . ($this->supportsDailyPlanBlocks() ? 'COALESCE(dpb.importance_snapshot, dpi.importance)' : 'dpi.importance') . ' AS plan_importance,
                 ct.name AS tag_name,
                 ct.color_hex AS tag_color,
                 ct.sort_order AS tag_sort_order,
@@ -535,6 +538,7 @@ final class RetrospectRepository
                 ees.energy_value AS energy_value
              FROM calendar_events ce
              LEFT JOIN daily_plan_items dpi ON dpi.id = ce.daily_plan_item_id
+             ' . ($this->supportsDailyPlanBlocks() ? 'LEFT JOIN daily_plan_blocks dpb ON dpb.id = ce.daily_plan_block_id' : '') . '
              LEFT JOIN calendar_tags ct ON ct.id = ce.calendar_tag_id
                 AND ct.deleted_at IS NULL
              LEFT JOIN execution_energy_event_settings ees ON ees.calendar_event_id = ce.id

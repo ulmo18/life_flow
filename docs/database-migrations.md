@@ -1,5 +1,11 @@
 # Database Migrations
 
+The Calendar daily published-Retrospect prompt uses `calendar_retrospect_prompt_date` in `user_preferences`. New schemas contain it; existing installations may apply `migration.calendar_retrospect_prompt.mysql.sql` or `migration.calendar_retrospect_prompt.sqlite.sql` once. The existing preference repository also adds missing columns when initialized.
+
+Independent Calendar blocks require `migration.calendar_block_snapshots.mysql.sql` once on existing MySQL installations, after a verified backup and before deploying the updated application. SQLite upgrades existing databases at connection time; new databases include the columns. Existing block snapshots preserve the source values at migration time; existing duplicate-looking placement items cannot be identified retroactively and are not changed. The SQLite in-memory and MySQL connection-local temporary-table smoke tests are `tests/calendar_block_migration.php` and `tests/calendar_block_migration_mysql.php`.
+
+Calendar Plan-block usage requires `migration.plan_block_enabled.mysql.sql` once on existing MySQL databases after `migration.plan_block_templates.mysql.sql`. Existing templates default to enabled. SQLite applies the matching migration automatically for existing databases.
+
 ## Locale And Time Zone
 
 - New installations include `user_preferences.locale` (default `ko`) and `user_preferences.timezone` (default `Asia/Seoul`) in both schema files.

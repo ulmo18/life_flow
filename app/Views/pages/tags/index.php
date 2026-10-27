@@ -29,6 +29,7 @@
             <fieldset class="tag-palette-grid">
                 <legend>색상</legend>
                 <?php foreach (($tagData['palettes'] ?? []) as $palette): ?>
+                    <?php if (!empty($palette['isSystemUsed'])) continue; ?>
                     <?php $disabled = !empty($palette['isUsed']); ?>
                     <label class="tag-palette-option <?= $disabled ? 'is-disabled' : '' ?>" style="--tag-color: <?= e((string) $palette['color_hex']) ?>;">
                         <input type="radio" name="palette_id" value="<?= e((string) $palette['id']) ?>" <?= $disabled ? 'disabled' : '' ?> required>
@@ -83,6 +84,7 @@
                             <fieldset class="tag-palette-grid">
                                 <legend>색상</legend>
                                 <?php foreach (($tagData['palettes'] ?? []) as $palette): ?>
+                                    <?php if (!empty($palette['isSystemUsed']) && (int) ($tag['palette_id'] ?? 0) !== (int) $palette['id']) continue; ?>
                                     <?php
                                     $isCurrent = (int) ($tag['palette_id'] ?? 0) === (int) $palette['id'];
                                     $disabled = !$isCurrent && !empty($palette['isUsed']);

@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS `plan_block_templates` (
   `goal_id` BIGINT UNSIGNED NULL,
   `title` VARCHAR(80) NOT NULL,
   `duration_index` SMALLINT UNSIGNED NOT NULL,
+  `is_enabled` TINYINT NOT NULL DEFAULT 1,
   `importance` CHAR(1) NOT NULL DEFAULT 'D',
   `deleted_at` DATETIME NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

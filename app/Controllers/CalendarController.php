@@ -41,6 +41,7 @@ final class CalendarController
             'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($userId, $calendar),
             'pageStyles' => [
                 '/assets/css/components/routine-state.css',
+                $this->versionedAsset('/assets/css/components/todo-sheet.css'),
                 $this->versionedAsset('/assets/css/pages/retrospect-report.css'),
                 $this->versionedAsset('/assets/css/pages/calendar.css'),
             ],
@@ -54,10 +55,19 @@ final class CalendarController
         unset($_SESSION['errors'], $_SESSION['flash_success']);
     }
 
+    public function claimRetrospectPrompt(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->respondJson(['ok' => false], 419);
+        }
+        $date = is_string($_POST['date'] ?? null) ? $_POST['date'] : '';
+        $this->respondJson(['ok' => true, 'show' => $this->calendarService->claimRetrospectPrompt($this->userId(), $date)]);
+    }
+
     public function storeEvent(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
-            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null, $_POST['calendar_mode'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $validation = $this->calendarService->validateEventInput($this->userId(), $_POST);
@@ -122,6 +132,26 @@ final class CalendarController
         $this->redirect($this->calendarPath($validation['data']['date'] ?? null));
     }
 
+    public function updateEventTag(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->respondJson(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해 주세요.'], 419);
+        }
+
+        $eventId = filter_var($_POST['event_id'] ?? null, FILTER_VALIDATE_INT);
+        $rawTagId = $_POST['calendar_tag_id'] ?? '';
+        $tagId = $rawTagId === '' || $rawTagId === null ? null : filter_var($rawTagId, FILTER_VALIDATE_INT);
+        if ($eventId === false || $eventId <= 0 || $tagId === false || !$this->calendarService->updateActualEventTag(
+            $this->userId(),
+            (int) $eventId,
+            $tagId === null ? null : (int) $tagId
+        )) {
+            $this->respondJson(['ok' => false, 'message' => '태그를 적용하지 못했습니다.'], 422);
+        }
+
+        $this->respondJson(['ok' => true, 'eventId' => (int) $eventId, 'calendarTagId' => $tagId]);
+    }
+
     public function copyPlanBlockToActual(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
@@ -161,12 +191,21 @@ final class CalendarController
     public function setDayPlan(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($this->isJsonRequest()) $this->respondJson(['ok' => false, 'message' => '요청이 만료되었습니다.'], 419);
             $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $date = is_string($_POST['date'] ?? null) ? (string) $_POST['date'] : null;
         $planGroupId = filter_var($_POST['plan_group_id'] ?? null, FILTER_VALIDATE_INT);
         $planGroupId = $planGroupId === false || $planGroupId <= 0 ? null : $planGroupId;
+
+        if ($this->isJsonRequest()) {
+            if ($planGroupId === null || !$this->calendarService->setDayPlanGroup($this->userId(), (string) $date, $planGroupId, true)) {
+                $this->respondJson(['ok' => false, 'message' => '계획이 이미 있거나 템플릿을 적용할 수 없습니다.'], 409);
+            }
+            $calendar = $this->calendarService->getDayViewData($this->userId(), $date);
+            $this->respondJson(['ok' => true, 'items' => $calendar['planActivityItems'], 'segments' => $calendar['planSegments']]);
+        }
 
         if (!$this->calendarService->setDayPlanGroup($this->userId(), (string) $date, $planGroupId)) {
             $this->redirectWithErrors($this->calendarPath($date), ['general' => '계획 일정 연결에 실패했습니다.']);
@@ -184,10 +223,10 @@ final class CalendarController
         $validation = $this->calendarService->validateDailyPlanItemInput($_POST);
         if (!$validation['ok'] || $this->calendarService->createDailyPlanItem($this->userId(), $validation['data']) === null) {
             $errors = $validation['errors'] ?: ['general' => '계획 일정을 추가하지 못했습니다. 시간이 겹치는지 확인해주세요.'];
-            $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null), $errors);
+            $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null, $_POST['calendar_mode'] ?? null), $errors);
         }
         $_SESSION['flash_success'] = '오늘의 계획 일정이 추가되었습니다.';
-        $this->redirect($this->calendarPath($validation['data']['date']));
+        $this->redirect($this->calendarPath($validation['data']['date'], $_POST['calendar_mode'] ?? null));
     }
 
     public function updatePlanItem(): void
@@ -202,6 +241,22 @@ final class CalendarController
         }
         $_SESSION['flash_success'] = '오늘의 계획 일정이 수정되었습니다.';
         $this->redirect($this->calendarPath($validation['data']['date']));
+    }
+
+    public function updatePlanItemDetails(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null, $_POST['calendar_mode'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+
+        $validation = $this->calendarService->validateDailyPlanItemDetailsInput($_POST);
+        if (!$validation['ok'] || !$this->calendarService->updateDailyPlanItemDetails($this->userId(), $validation['data'])) {
+            $errors = $validation['errors'] ?: ['general' => '활동 정보를 수정하지 못했습니다. 목표 연결을 확인해주세요.'];
+            $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null, $_POST['calendar_mode'] ?? null), $errors);
+        }
+
+        $_SESSION['flash_success'] = '활동 정보가 수정되었습니다. 계획 블록 시간은 유지됩니다.';
+        $this->redirect($this->calendarPath($validation['data']['date'], $_POST['calendar_mode'] ?? null));
     }
 
     public function deletePlanItem(): void
@@ -239,14 +294,27 @@ final class CalendarController
     public function storePlanBlock(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($this->isJsonRequest()) $this->respondJson(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해 주세요.'], 419);
             $this->redirectWithErrors($this->calendarPath($_POST['date'] ?? null, 'plan'), ['general' => '요청이 만료되었습니다. 다시 시도해 주세요.']);
         }
+        $templateId = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
+        if ($templateId !== false && $templateId > 0 && $this->isJsonRequest()) {
+            $input = $_POST;
+            $input['daily_plan_item_id'] = 1;
+            $validation = $this->calendarService->validateDailyPlanBlockInput($input);
+            $result = $validation['ok'] ? $this->calendarService->placePlanBlockTemplate($this->userId(), $validation['data'], (int) $templateId) : null;
+            if ($result === null) $this->respondJson(['ok' => false, 'message' => '계획을 배치하지 못했습니다. 시간 충돌이나 사용 상태를 확인해 주세요.'], 422);
+            $this->respondJson(['ok' => true] + $result);
+        }
         $validation = $this->calendarService->validateDailyPlanBlockInput($_POST);
-        if (!$validation['ok'] || $this->calendarService->createDailyPlanBlock($this->userId(), $validation['data']) === null) {
+        $blockId = $validation['ok'] ? $this->calendarService->createDailyPlanBlock($this->userId(), $validation['data']) : null;
+        if (!$validation['ok'] || $blockId === null) {
+            if ($this->isJsonRequest()) $this->respondJson(['ok' => false, 'message' => (string) (reset($validation['errors']) ?: '계획 블록을 추가하지 못했습니다. 시간 충돌을 확인해 주세요.')], 422);
             $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null, 'plan'), $validation['errors'] ?: ['general' => '계획 블록을 추가하지 못했습니다. 시간 충돌을 확인해 주세요.']);
         }
+        if ($this->isJsonRequest()) $this->respondJson(['ok' => true, 'blockId' => $blockId]);
         $_SESSION['flash_success'] = '계획 블록을 추가했습니다.';
-        $this->redirect($this->calendarPath($validation['data']['date'], 'plan'));
+        $this->redirect($this->calendarPath($validation['data']['date'], $_POST['calendar_mode'] ?? 'plan'));
     }
 
     public function updatePlanBlock(): void
@@ -259,7 +327,7 @@ final class CalendarController
             $this->redirectWithErrors($this->calendarPath($validation['data']['date'] ?? null, 'plan'), $validation['errors'] ?: ['general' => '계획 블록을 수정하지 못했습니다. 시간 충돌을 확인해 주세요.']);
         }
         $_SESSION['flash_success'] = '계획 블록을 수정했습니다.';
-        $this->redirect($this->calendarPath($validation['data']['date'], 'plan'));
+        $this->redirect($this->calendarPath($validation['data']['date'], $_POST['calendar_mode'] ?? 'plan'));
     }
 
     public function deletePlanBlock(): void
@@ -273,6 +341,22 @@ final class CalendarController
             $this->redirectWithErrors($this->calendarPath($date, 'plan'), ['general' => '계획 블록을 삭제하지 못했습니다.']);
         }
         $_SESSION['flash_success'] = '계획 블록을 삭제했습니다. 연결된 실제 일정은 유지됩니다.';
+        $this->redirect($this->calendarPath($date, 'plan'));
+    }
+
+    public function updatePlanBlockDetails(): void
+    {
+        $date = $_POST['date'] ?? null;
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors($this->calendarPath($date, 'plan'), ['general' => '요청이 만료되었습니다. 다시 시도해 주세요.']);
+        }
+        $blockId = filter_var($_POST['daily_plan_block_id'] ?? null, FILTER_VALIDATE_INT);
+        $importance = (string) ($_POST['importance'] ?? 'D');
+        $detach = (string) ($_POST['actual_link_action'] ?? 'keep') === 'detach_all';
+        if ($blockId === false || $blockId <= 0 || !$this->calendarService->updateDailyPlanBlockDetails($this->userId(), (int) $blockId, $importance, $detach)) {
+            $this->redirectWithErrors($this->calendarPath($date, 'plan'), ['general' => '계획 수정에 실패했습니다.']);
+        }
+        $_SESSION['flash_success'] = $detach ? '계획 수정 및 연결 Actual 전체 해제를 완료했습니다.' : '계획을 수정했습니다.';
         $this->redirect($this->calendarPath($date, 'plan'));
     }
 

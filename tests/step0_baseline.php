@@ -16,6 +16,8 @@ use App\Models\CalendarRepository;
 use App\Models\RetrospectRepository;
 use App\Services\RetrospectService;
 use App\Services\TodoService;
+use App\Services\CalendarService;
+use App\Services\ExecutionEnergyService;
 
 $root = dirname(__DIR__);
 $testDbPath = tempnam(sys_get_temp_dir(), 'lifeflow-step0-');
@@ -199,6 +201,10 @@ $tests['a plan block can be stored and linked to an Actual without replacing the
     $blocks = $repository->getDailyPlanBlocks($userId, (int) $itemId);
     assertSameValue(66, (int) $blocks[0]['end_index'], 'The first block must keep its original range.');
     assertSameValue(93, (int) $blocks[1]['end_index'], 'The edited block range must persist.');
+    assertTrueValue($repository->updateDailyPlanItemDetails($userId, (int) $itemId, 'Renamed multi-block plan', 'A', null), 'Shared activity details should update without changing blocks.');
+    $blocksAfterDetails = $repository->getDailyPlanBlocks($userId, (int) $itemId);
+    assertSameValue(66, (int) $blocksAfterDetails[0]['end_index'], 'Shared activity details must not change the first block range.');
+    assertSameValue(93, (int) $blocksAfterDetails[1]['end_index'], 'Shared activity details must not change the second block range.');
 
     $eventId = $repository->createActualEvent($userId, $date, 'Multi-block plan', 'timed', 60, 66, (int) $itemId, null, '', (int) $blockId);
     assertTrueValue($eventId !== null, 'Actual event should accept a block belonging to its plan item.');
@@ -221,8 +227,12 @@ $tests['a plan block can be stored and linked to an Actual without replacing the
     assertSameValue((int) $blockId, (int) $updated['daily_plan_block_id'], 'Backward-compatible Actual update must not clear the block link.');
     assertTrueValue($repository->deleteDailyPlanBlock($userId, (int) $blockId), 'A single plan block should be deletable.');
     $preservedActual = findActual($repository->getActualEvents($userId, (int) $day['id']), (int) $eventId);
-    assertSameValue((int) $itemId, (int) $preservedActual['daily_plan_item_id'], 'Deleting a block must retain the Actual-to-Plan item link.');
-    assertSameValue(null, $preservedActual['daily_plan_block_id'], 'Deleting a block must only clear its optional Actual block link.');
+    assertSameValue(null, $preservedActual['daily_plan_block_id'], 'Deleting a block must clear its Actual block link.');
+    assertSameValue(null, $preservedActual['daily_plan_item_id'], 'Deleting a block must detach the Actual from the plan item too.');
+    assertSameValue(null, $preservedActual['plan_template_id'], 'Deleting a block must detach the legacy plan link too.');
+    $preservedSecond = findActual($repository->getActualEvents($userId, (int) $day['id']), (int) $secondActualId);
+    assertSameValue(null, $preservedSecond['daily_plan_item_id'], 'Every linked Actual must become unplanned.');
+    assertSameValue(null, $preservedSecond['daily_plan_block_id'], 'Every linked Actual block link must be cleared.');
     assertSameValue(1, count($repository->getDailyPlanBlocks($userId, (int) $itemId)), 'Deleting one block must retain its sibling.');
 };
 
@@ -270,6 +280,14 @@ $tests['Retrospect aggregates multiple plan blocks and Actuals without duplicate
     assertSameValue(100, (int) $page['summary']['linkedActualMinutes'], 'Linked Actual records must be summed once.');
     assertSameValue(30, (int) $page['summary']['unplannedActualMinutes'], 'Unplanned Actual records must stay separate.');
     assertSameValue(-20, (int) $page['activityComparisons'][0]['differenceMinutes'], 'Activity comparison must use actual minus planned minutes.');
+    $multi = array_values(array_filter($page['scheduleItems'], static fn(array $row): bool => ($row['linkedActualCount'] ?? 0) === 2));
+    assertSameValue(1, count($multi), 'One plan row must retain both linked Actuals.');
+    assertSameValue(['10:20 ~ 10:50', '11:00 ~ 11:20'], array_column($multi[0]['linkedActuals'], 'timeRange'), 'Both Actual ranges must be available in detail.');
+    $service = new RetrospectService();
+    assertTrueValue($service->publish($userId, $date, ['today_review' => '', 'today_thoughts' => '', 'tomorrow_plan' => '']), 'Snapshot should publish.');
+    $report = $service->getPageData($userId, $date, 'time');
+    $snapshotMulti = array_values(array_filter($report['scheduleItems'], static fn(array $row): bool => ($row['linkedActualCount'] ?? 0) === 2));
+    assertSameValue(2, count($snapshotMulti[0]['linkedActuals'] ?? []), 'Published snapshots must retain both linked Actuals.');
 };
 
 $tests['To-do completion is derived from a linked Actual event'] = static function (): void {
@@ -330,6 +348,117 @@ $tests['Retrospect saves KPT and preserves a published snapshot'] = static funct
     assertTrueValue($repository->updateActualEvent($userId, (int) $eventId, $date, 'Changed after publish', 'timed', 102, 108, (int) $itemId, null, 'changed'), 'Source Actual mutation should succeed after publishing.');
     $preservedSnapshot = $reportRepository->listActualItems((int) $report['id'], 'time');
     assertSameValue('Snapshot plan', (string) $preservedSnapshot[0]['title_snapshot'], 'Published snapshot must not change with source data.');
+};
+
+$tests['plan block copy saves one default energy setting and rolls back on failure'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'copy-energy@example.test');
+    $repository = new CalendarRepository();
+    $service = new CalendarService();
+    $date = date('Y-m-d');
+    $item = $repository->createDailyPlanItem($userId, $date, 'Multi-range', 'B', null, null, null, null);
+    $block = $repository->createDailyPlanBlock($userId, (int) $item, 54, 60);
+    $repository->createDailyPlanBlock($userId, (int) $item, 84, 90);
+    $untimed = $repository->createDailyPlanItem($userId, $date, 'Unplaced', 'D', null, null, null, null);
+    $legacy = $repository->createActualEvent($userId, $date, 'Existing', 'timed', 30, 36, null, null, '');
+    assertTrueValue($legacy !== null, 'Existing event fixture should be created without an energy setting.');
+    $view = $service->getDayViewData($userId, $date);
+    $option = array_values(array_filter($view['planOptions'], static fn(array $entry): bool => $entry['itemId'] === (int) $item))[0];
+    assertSameValue('09:00 ~ 10:00, 14:00 ~ 15:00', $option['timeRange'], 'All placed ranges must be displayed.');
+    $untimedOption = array_values(array_filter($view['planOptions'], static fn(array $entry): bool => $entry['itemId'] === (int) $untimed))[0];
+    assertSameValue('시간 미정', $untimedOption['timeRange'], 'Unplaced plans must remain untimed.');
+    $input = ['date' => $date, 'blockId' => (int) $block, 'startIndex' => 60, 'endIndex' => 66];
+    $eventId = $service->copyDailyPlanBlockToActual($userId, $input);
+    assertTrueValue($eventId !== null, 'Copy should succeed.');
+    $energy = (new ExecutionEnergyService())->getDayData($userId, $date);
+    assertSameValue(25, $energy['consumed'], 'Copy must consume exactly 25.');
+    $legacyEnergy = $db->prepare('SELECT COUNT(*) FROM execution_energy_event_settings WHERE calendar_event_id = :id');
+    $legacyEnergy->execute(['id' => $legacy]);
+    assertSameValue(0, (int) $legacyEnergy->fetchColumn(), 'Existing events must not be changed.');
+    assertSameValue(null, $service->copyDailyPlanBlockToActual($userId, $input), 'Duplicate overlapping copy must fail.');
+    assertSameValue(25, (new ExecutionEnergyService())->getDayData($userId, $date)['consumed'], 'Duplicate must not consume energy again.');
+    $day = $repository->findDay($userId, $date);
+    $before = count($repository->getActualEvents($userId, (int) $day['id']));
+    $db->exec("CREATE TRIGGER test_reject_energy BEFORE INSERT ON execution_energy_event_settings BEGIN SELECT RAISE(ABORT, 'test failure'); END");
+    try {
+        $input['startIndex'] = 66;
+        $input['endIndex'] = 72;
+        assertSameValue(null, $service->copyDailyPlanBlockToActual($userId, $input), 'Energy failure must reject copy.');
+        assertSameValue($before, count($repository->getActualEvents($userId, (int) $day['id'])), 'Energy failure must roll back event.');
+        assertSameValue(25, (new ExecutionEnergyService())->getDayData($userId, $date)['consumed'], 'Failed copy must not consume energy.');
+    } finally {
+        $db->exec('DROP TRIGGER test_reject_energy');
+    }
+};
+
+$tests['placed blocks remain independent of source and preserve Actual linkage'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'independent-blocks@example.test');
+    $repository = new CalendarRepository();
+    $date = date('Y-m-d');
+    $itemId = $repository->createDailyPlanItem($userId, $date, 'Original', 'B', null, null, null, null);
+    $first = $repository->createDailyPlanBlock($userId, (int) $itemId, 48, 54);
+    $second = $repository->createDailyPlanBlock($userId, (int) $itemId, 72, 78);
+    assertTrueValue($first !== null && $second !== null, 'Both blocks must be created.');
+    $actual = (new CalendarService())->copyDailyPlanBlockToActual($userId, ['date' => $date, 'blockId' => $first, 'startIndex' => 48, 'endIndex' => 54]);
+    assertTrueValue($actual !== null, 'Actual linked to first block must be created.');
+    assertTrueValue($repository->updateDailyPlanItemDetails($userId, (int) $itemId, 'Edited source', 'D', null), 'Source edit must succeed.');
+    assertTrueValue($repository->updateDailyPlanBlockDetails($userId, (int) $first, 'A', false), 'Individual block importance must be editable.');
+    $day = $repository->findDay($userId, $date);
+    $blocks = $repository->getDailyPlanBlocksForDay($userId, (int) $day['id']);
+    assertSameValue(['Original', 'Original'], array_column($blocks, 'title'), 'Source edits must not alter block titles.');
+    assertSameValue(['A', 'B'], array_column($blocks, 'importance'), 'Block importance must be independent.');
+    assertTrueValue($repository->deleteDailyPlanItem($userId, (int) $itemId), 'Source deletion must succeed.');
+    assertSameValue(2, count($repository->getDailyPlanBlocksForDay($userId, (int) $day['id'])), 'Blocks must survive source deletion.');
+    $event = findActual($repository->getActualEvents($userId, (int) $day['id']), (int) $actual);
+    assertSameValue((int) $first, (int) $event['daily_plan_block_id'], 'Actual link must survive source deletion.');
+    $retrospect = (new RetrospectService())->getPageData($userId, $date, 'time');
+    assertSameValue(2, count(array_filter($retrospect['scheduleItems'], static fn(array $row): bool => $row['kind'] === 'plan')), 'Retrospect must retain independent blocks.');
+    assertSameValue(1, (int) $retrospect['summary']['linkedActualCount'], 'Retrospect must retain Actual linkage.');
+};
+
+$tests['template placements do not add duplicate list items'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'template-source-hidden@example.test');
+    $plans = new \App\Services\PlanService();
+    $template = $plans->createBlockTemplate($userId, ['title' => 'Reusable', 'durationIndex' => 6, 'importance' => 'B', 'goalId' => null]);
+    assertTrueValue($template !== null, 'Template must be created.');
+    $repository = new CalendarRepository();
+    $date = date('Y-m-d');
+    $result = $repository->placePlanBlockTemplate($userId, $date, (int) $template, 60, 66);
+    assertTrueValue($result !== null, 'Template placement must succeed.');
+    $day = $repository->findDay($userId, $date);
+    assertSameValue(0, count($repository->getDailyPlanItems($userId, (int) $day['id'])), 'Copied template item must not appear in placement list.');
+    assertSameValue(1, count($repository->getDailyPlanBlocksForDay($userId, (int) $day['id'])), 'Placed block must remain visible.');
+    assertTrueValue($plans->updateBlockTemplate($userId, (int) $template, ['title' => 'Changed', 'durationIndex' => 6, 'importance' => 'D', 'goalId' => null]), 'Template edit must succeed.');
+    $blocks = $repository->getDailyPlanBlocksForDay($userId, (int) $day['id']);
+    assertSameValue('Reusable', $blocks[0]['title'], 'Template edit must not change placed block.');
+    assertSameValue('B', $blocks[0]['importance'], 'Template edit must not change block importance.');
+};
+
+$tests['calendar retrospect prompt is claimed once per user local day only when eligible'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'calendar-prompt@example.test');
+    $service = new CalendarService();
+    $date = date('Y-m-d');
+    $noReportUser = seedUser($db, 'calendar-prompt-no-report@example.test');
+    assertSameValue(false, $service->claimRetrospectPrompt($noReportUser, $date), 'No published report means no prompt.');
+    $report = new RetrospectService();
+    assertTrueValue($report->publish($userId, $date, ['today_review' => 'note', 'today_thoughts' => '', 'tomorrow_plan' => '']), 'Report must publish.');
+    $repository = new CalendarRepository();
+    assertTrueValue($repository->createActualEvent($userId, $date, 'Actual only', 'timed', 6, 12, null, null, '') !== null, 'Actual fixture must be created.');
+    assertSameValue(true, $service->claimRetrospectPrompt($userId, $date), 'Actual-only day should prompt.');
+    assertSameValue(false, $service->claimRetrospectPrompt($userId, $date), 'Second request on same account and date must not prompt.');
+    assertSameValue(false, $service->claimRetrospectPrompt($userId, date('Y-m-d', strtotime('-1 day'))), 'Other dates must not prompt.');
+    $other = seedUser($db, 'calendar-prompt-plan@example.test');
+    assertTrueValue((new RetrospectService())->publish($other, $date, ['today_review' => 'note', 'today_thoughts' => '', 'tomorrow_plan' => '']), 'Second report must publish.');
+    $item = $repository->createDailyPlanItem($other, $date, 'Plan', 'D', null, null, null, null);
+    assertTrueValue($repository->createDailyPlanBlock($other, (int) $item, 30, 36) !== null, 'Plan block must be created.');
+    assertSameValue(false, $service->claimRetrospectPrompt($other, $date), 'A plan block must prevent prompting.');
+    $day = $repository->findDay($other, $date);
+    $block = $repository->getDailyPlanBlocksForDay($other, (int) $day['id'])[0];
+    assertTrueValue($repository->deleteDailyPlanBlock($other, (int) $block['daily_plan_block_id']), 'Fixture block must delete.');
+    assertSameValue(false, $service->claimRetrospectPrompt($other, $date), 'A later visit is not the first visit, even if the plan is removed.');
 };
 
 $passed = 0;

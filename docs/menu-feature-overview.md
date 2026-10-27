@@ -31,6 +31,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Users define a plan from `00:00` to `24:00` in 10-minute blocks.
 - Saved daily templates are shown as compact cards. The template name opens its detail page, the only right-side action is a confirmed copy icon, and a collapsed block list shows its block count before expanding to importance, block name, and time range in chronological order.
 - The Plan-block library keeps creation in a fixed bottom action and reuses one bottom sheet for create and edit. Each list row keeps compact edit and delete actions on the right.
+- Plan-block templates have a per-item usage toggle. Existing templates default to enabled; disabled templates are omitted from Calendar placement sources without deleting any copied daily Plans. Calendar placement chooses the range directly and does not use the template's stored default duration.
 - Selecting a saved Plan in Calendar creates a date-specific copy, including each block's goal link. Calendar edits apply only to that copy.
 - Plan data is copied into Calendar as daily intention; the daily copy and its actual links feed retrospective analysis.
 
@@ -59,6 +60,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 
 ## Calendar
 - Calendar is the daily intention and execution screen.
+- On mobile, Plan placement and Tag painting remain reachable in a fixed bottom work bar above the daily navigator, alongside the existing `+` quick menu. Condition and memo remain inside that menu; a timer is not displayed until it has an implementation.
 - The Plan schedule tab edits only the selected date's copied plan blocks. The Actual schedule tab keeps the existing actual-event behavior.
 - The selected Plan/Actual tab is carried in the Calendar URL and every Calendar write redirect, date link, date picker move, and date swipe. Adding or editing a Plan therefore returns to Plan instead of unexpectedly switching to Actual; a Calendar URL without `mode` still defaults to Actual.
 - Calendar uses the current day-grid interaction model.
@@ -68,7 +70,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - New Actual schedules always require a start and end time. Legacy untimed Actual records may only be selected and placed into a timed range.
 - Calendar event creation can mark selected routines complete for the same date, avoiding duplicate completion work across menus.
 - Calendar, Routine, and daily Retrospect use the same blank/completed/missed Routine state cell and update only the affected state and metrics after a successful JSON response.
-- Calendar's Retrospect button opens the latest published report by report date in an internally scrolling popup, independent of the selected Calendar date. It does not navigate away from Today.
+- Calendar's `+` menu offers 발행 회고 보기, opening the latest published report in an internally scrolling popup. On the first Calendar visit of each account-local day, with no Plan blocks and a published report, it also opens automatically once; Actual events do not block it. Later visits do not prompt even if a plan is removed.
 - The popup provides previous/next published-date controls and reuses the same report content as the published Retrospect archive.
 - If a calendar entry overlaps with a plan, the UI should help the user confirm whether the entry is a copy of that plan or a different schedule.
 - Actual calendar entries are used for retrospective reports together with Plan and Routine data.

@@ -91,6 +91,7 @@ final class Database
             self::ensureSqliteUntimedDailyPlans($connection);
             self::ensureSqliteDailyPlanEstimatedDuration($connection);
             self::ensureSqliteDailyPlanBlocks($connection);
+            self::ensureSqliteCalendarBlockSnapshots($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteRetrospectReviewColumns($connection);
             self::ensureSqliteRetrospectExecutionEnergyColumns($connection);
@@ -272,6 +273,17 @@ final class Database
         self::backfillSqliteDailyPlanBlocks($connection);
     }
 
+    private static function ensureSqliteCalendarBlockSnapshots(PDO $connection): void
+    {
+        $columns = array_column($connection->query('PRAGMA table_info(daily_plan_blocks)')->fetchAll(), 'name');
+        foreach (['title_snapshot' => 'TEXT', 'importance_snapshot' => 'TEXT', 'goal_id_snapshot' => 'INTEGER'] as $name => $type) {
+            if (!in_array($name, $columns, true)) $connection->exec("ALTER TABLE daily_plan_blocks ADD COLUMN {$name} {$type} NULL");
+        }
+        $itemColumns = array_column($connection->query('PRAGMA table_info(daily_plan_items)')->fetchAll(), 'name');
+        if (!in_array('source_block_template_id', $itemColumns, true)) $connection->exec('ALTER TABLE daily_plan_items ADD COLUMN source_block_template_id INTEGER NULL');
+        $connection->exec('UPDATE daily_plan_blocks SET title_snapshot = (SELECT title FROM daily_plan_items WHERE id = daily_plan_item_id), importance_snapshot = (SELECT importance FROM daily_plan_items WHERE id = daily_plan_item_id), goal_id_snapshot = (SELECT goal_id FROM daily_plan_items WHERE id = daily_plan_item_id) WHERE title_snapshot IS NULL');
+    }
+
     private static function backfillSqliteDailyPlanBlocks(PDO $connection): void
     {
         $connection->exec(
@@ -331,11 +343,14 @@ final class Database
         $table = $connection->query(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='plan_block_templates' LIMIT 1"
         );
-        if ($table !== false && $table->fetchColumn() !== false) {
-            return;
+        if ($table === false || $table->fetchColumn() === false) {
+            self::runSqliteMigration($connection, 'migration.plan_block_templates.sqlite.sql');
         }
-
-        self::runSqliteMigration($connection, 'migration.plan_block_templates.sqlite.sql');
+        $columns = $connection->query('PRAGMA table_info(plan_block_templates)');
+        $names = $columns !== false ? array_column($columns->fetchAll(), 'name') : [];
+        if (!in_array('is_enabled', $names, true)) {
+            self::runSqliteMigration($connection, 'migration.plan_block_enabled.sqlite.sql');
+        }
     }
 
     private static function ensureSqliteExecutionEnergy(PDO $connection): void

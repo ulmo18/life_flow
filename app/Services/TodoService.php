@@ -146,24 +146,46 @@ final class TodoService
         ];
     }
 
-    /** @return array{ok: bool, message: string} */
-    public function createToday(int $userId, mixed $title): array
+    /** @return array<string, mixed> */
+    public function create(int $userId, array $input): array
     {
         $validation = $this->calendarService->validateDailyPlanItemInput([
-            'date' => date('Y-m-d'),
-            'title' => $title,
-            'importance' => 'D',
-            'goal_id' => '',
+            'date' => $input['date'] ?? date('Y-m-d'),
+            'title' => $input['title'] ?? '',
+            'importance' => $input['importance'] ?? 'D',
+            'goal_id' => $input['goal_id'] ?? '',
             'schedule_type' => 'unscheduled',
         ]);
         if (!$validation['ok']) {
             return ['ok' => false, 'message' => (string) (reset($validation['errors']) ?: '할 일 이름을 확인해주세요.')];
         }
-        if ($this->calendarService->createDailyPlanItem($userId, $validation['data']) === null) {
+        $itemId = $this->calendarService->createDailyPlanItem($userId, $validation['data']);
+        if ($itemId === null) {
             return ['ok' => false, 'message' => '할 일을 추가하지 못했습니다.'];
         }
 
-        return ['ok' => true, 'message' => '오늘의 할 일을 추가했습니다.'];
+        return [
+            'ok' => true,
+            'message' => '계획을 추가했습니다.',
+            'item' => [
+                'id' => $itemId,
+                'title' => (string) $validation['data']['title'],
+                'importance' => (string) $validation['data']['importance'],
+                'goalId' => $validation['data']['goalId'] === null ? null : (int) $validation['data']['goalId'],
+                'scheduleType' => 'unscheduled',
+            ],
+        ];
+    }
+
+    /** @return array{ok: bool, message: string} */
+    public function createToday(int $userId, mixed $title): array
+    {
+        return $this->create($userId, [
+            'date' => date('Y-m-d'),
+            'title' => $title,
+            'importance' => 'D',
+            'goal_id' => '',
+        ]);
     }
 
     /** @return array{ok: bool, message: string} */

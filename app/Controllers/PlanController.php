@@ -230,7 +230,14 @@ final class PlanController
 
     public function updateBlockTemplate(): void
     {
+        $wantsJson = stripos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false;
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($wantsJson) {
+                http_response_code(419);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
@@ -240,6 +247,12 @@ final class PlanController
             $templateId === false || $templateId <= 0 || !$validation['ok']
             || !$this->planService()->updateBlockTemplate($this->userId(), (int) $templateId, $validation['data'])
         ) {
+            if ($wantsJson) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => reset($validation['errors']) ?: '계획 블록 템플릿을 수정하지 못했습니다.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             $_SESSION['block_form_old'] = $this->blockTemplateFormState(
                 'edit',
                 $templateId === false ? null : (int) $templateId,
@@ -251,7 +264,24 @@ final class PlanController
             );
         }
 
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => true, 'message' => '계획 블록 템플릿이 수정되었습니다.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         $_SESSION['flash_success'] = '계획 블록 템플릿이 수정되었습니다.';
+        $this->redirect('/plan?view=blocks');
+    }
+
+    public function setBlockTemplateEnabled(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+        }
+        $id = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
+        if ($id === false || $id <= 0 || !$this->planService()->setBlockTemplateEnabled($this->userId(), (int) $id, ($_POST['enabled'] ?? '') === '1')) {
+            $this->redirectWithErrors('/plan?view=blocks', ['general' => '사용 상태를 변경하지 못했습니다.']);
+        }
         $this->redirect('/plan?view=blocks');
     }
 

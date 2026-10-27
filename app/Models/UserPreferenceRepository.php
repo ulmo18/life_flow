@@ -100,6 +100,14 @@ final class UserPreferenceRepository
         ]);
     }
 
+    public function claimCalendarRetrospectPrompt(int $userId, string $date): bool
+    {
+        $this->get($userId);
+        $stmt = $this->db->prepare('UPDATE user_preferences SET calendar_retrospect_prompt_date = :new_date WHERE user_id = :user_id AND (calendar_retrospect_prompt_date IS NULL OR calendar_retrospect_prompt_date <> :existing_date)');
+        $stmt->execute(['new_date' => $date, 'user_id' => $userId, 'existing_date' => $date]);
+        return $stmt->rowCount() === 1;
+    }
+
     public function updateLocaleAndTimezone(int $userId, string $locale, string $timezone): void
     {
         if (Database::configuredDriver() === 'mysql') {
@@ -278,6 +286,7 @@ final class UserPreferenceRepository
             ? [
                 'locale' => "VARCHAR(10) NOT NULL DEFAULT 'ko'",
                 'timezone' => "VARCHAR(64) NOT NULL DEFAULT 'Asia/Seoul'",
+                'calendar_retrospect_prompt_date' => 'DATE NULL',
                 'notification_enabled' => 'TINYINT(1) NOT NULL DEFAULT 1',
                 'retrospect_morning_enabled' => 'TINYINT(1) NOT NULL DEFAULT 1',
                 'retrospect_morning_time' => "TIME NOT NULL DEFAULT '07:00:00'",
@@ -293,6 +302,7 @@ final class UserPreferenceRepository
             : [
                 'locale' => "TEXT NOT NULL DEFAULT 'ko'",
                 'timezone' => "TEXT NOT NULL DEFAULT 'Asia/Seoul'",
+                'calendar_retrospect_prompt_date' => 'TEXT NULL',
                 'notification_enabled' => 'INTEGER NOT NULL DEFAULT 1',
                 'retrospect_morning_enabled' => 'INTEGER NOT NULL DEFAULT 1',
                 'retrospect_morning_time' => "TEXT NOT NULL DEFAULT '07:00'",

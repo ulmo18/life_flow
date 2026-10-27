@@ -37,6 +37,12 @@
                                     <div><strong><?= e((string) $template['title']) ?></strong><small><?= e((string) $template['durationLabel']) ?><?= $template['goalTitle'] !== '' ? ' · ' . e((string) $template['goalTitle']) : '' ?></small></div>
                                 </div>
                                 <div class="plan-block-template-actions">
+                                    <form method="post" action="/plan/block-template/enabled">
+                                        <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                                        <input type="hidden" name="block_template_id" value="<?= e((string) $template['id']) ?>">
+                                        <input type="hidden" name="enabled" value="<?= !empty($template['isEnabled']) ? '0' : '1' ?>">
+                                        <button type="submit" class="btn btn-secondary" aria-label="<?= e((string) $template['title']) ?> 사용 상태 변경"><?= !empty($template['isEnabled']) ? '사용 중' : '미사용' ?></button>
+                                    </form>
                                     <button
                                         type="button"
                                         class="btn btn-secondary"

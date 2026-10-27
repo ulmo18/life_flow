@@ -38,16 +38,6 @@
 .todo-menu-popover button:hover,
 .todo-menu-popover button:focus-visible { background: var(--color-surface-soft); outline: 0; }
 .todo-empty { display: grid; justify-items: start; gap: var(--space-3); padding: var(--space-5); }
-.todo-layer { position: fixed; inset: 0; z-index: 1100; display: grid; align-items: end; }
-.todo-layer[hidden] { display: none; }
-.todo-overlay { position: absolute; inset: 0; border: 0; background: rgba(26, 27, 58, .42); }
-.todo-sheet { position: relative; z-index: 1; width: min(100%, 680px); max-height: min(82vh, 720px); margin: 0 auto; padding: var(--space-5); overflow-y: auto; border-radius: 24px 24px 0 0; background: var(--color-surface); box-shadow: var(--shadow-lg); }
-.todo-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
-.todo-time-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin: var(--space-4) 0; }
-.todo-time-fields[hidden] { display: none; }
-.todo-time-fields label { display: grid; gap: var(--space-2); }
-.todo-create-form { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
-.todo-edit-form { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
 .todo-schedule-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
 .todo-schedule-choice legend { grid-column: 1 / -1; margin-bottom: 2px; font-size: var(--font-size-sm); font-weight: 800; }
 .todo-schedule-choice label { position: relative; cursor: pointer; }
@@ -55,7 +45,6 @@
 .todo-schedule-choice span { min-height: 42px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--color-surface-soft); color: var(--color-text-muted); font-size: 13px; font-weight: 900; }
 .todo-schedule-choice input:checked + span { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface)); color: var(--color-primary-text); box-shadow: inset 0 0 0 1px var(--color-primary); }
 .todo-schedule-choice input:focus-visible + span { outline: 3px solid var(--color-focus); outline-offset: 2px; }
-.todo-create-form p { margin: 0; }
 .todo-goal-link-picker { border-width: 0 0 1px; border-style: solid; border-color: var(--border); background: transparent; }
 .todo-goal-link-picker > summary { min-height: 52px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,auto); align-items: center; gap: 8px; padding: 8px 2px; cursor: pointer; list-style: none; }
 .todo-goal-link-picker > summary::-webkit-details-marker { display: none; }
@@ -66,7 +55,6 @@
 .todo-goal-options label:last-child { border-bottom: 0; }
 .todo-goal-options input { width: 18px; height: 18px; accent-color: var(--color-primary); }
 .todo-goal-options span { min-width: 0; overflow: hidden; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-body[data-theme='dark'] .todo-sheet { background: var(--color-surface); }
 
 @media (max-width: 639px) {
   .todo-table td { padding: 9px 10px; }
