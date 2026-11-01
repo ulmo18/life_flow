@@ -49,6 +49,22 @@ final class CalendarService
         $tagData = $this->calendarTagService->getTagPageData($userId);
         $planReminderItems = $this->buildPlanReminderItems($planItems, $usedPlanItemIds);
         $planSegments = $this->buildSegmentsFromBlocks($planBlocks, 'plan');
+        $actualTotals = [];
+        foreach ($this->calendarRepository->getTodoLinkedActualEvents($userId, (int) $day['id']) as $event) {
+            $blockId = (int) ($event['daily_plan_block_id'] ?? 0);
+            if ($blockId <= 0) continue;
+            if (!isset($actualTotals[$blockId])) $actualTotals[$blockId] = ['count' => 0, 'minutes' => 0];
+            $actualTotals[$blockId]['count']++;
+            if ($event['start_index'] !== null && $event['end_index'] !== null) {
+                $actualTotals[$blockId]['minutes'] += ((int) $event['end_index'] - (int) $event['start_index']) * 10;
+            }
+        }
+        foreach ($planSegments as &$segment) {
+            $total = $actualTotals[(int) ($segment['blockId'] ?? 0)] ?? ['count' => 0, 'minutes' => 0];
+            $segment['actualCount'] = $total['count'];
+            $segment['actualMinutes'] = $total['minutes'];
+        }
+        unset($segment);
         $actualSegments = $this->buildSegmentsFromEvents($actualEvents);
 
         $executionEnergy = $this->executionEnergyService->getDayData($userId, $date);
@@ -459,6 +475,15 @@ final class CalendarService
         );
     }
 
+    public function createPlanItemWithBlock(int $userId, array $data): ?int
+    {
+        return $this->calendarRepository->createDailyPlanItem(
+            $userId, (string) $data['date'], (string) $data['title'], (string) $data['importance'],
+            $data['goalId'] === null ? null : (int) $data['goalId'], null, null, null,
+            [(int) $data['startIndex'], (int) $data['endIndex']]
+        );
+    }
+
     /** @param array<string, mixed> $data */
     public function updateDailyPlanItem(int $userId, array $data): bool
     {
@@ -581,9 +606,24 @@ final class CalendarService
         return $this->calendarRepository->deleteDailyPlanBlock($userId, $blockId);
     }
 
-    public function updateDailyPlanBlockDetails(int $userId, int $blockId, string $importance, bool $detachActuals): bool
+    public function updateDailyPlanBlockDetails(int $userId, int $blockId, string $importance, bool $detachActuals, ?string $manualStatus = null): bool
     {
-        return $this->calendarRepository->updateDailyPlanBlockDetails($userId, $blockId, $this->normalizeImportance($importance), $detachActuals);
+        return $this->calendarRepository->updateDailyPlanBlockDetails($userId, $blockId, $this->normalizeImportance($importance), $detachActuals, $manualStatus);
+    }
+
+    public function updateDailyPlanBlockStatus(int $userId, int $blockId, string $status): bool
+    {
+        return $this->calendarRepository->updateDailyPlanBlockStatus($userId, $blockId, $status);
+    }
+
+    public function planBlockFollowsTodo(int $userId, int $blockId): bool
+    {
+        return $this->calendarRepository->planBlockFollowsTodo($userId, $blockId);
+    }
+
+    public function detachDailyPlanBlockActuals(int $userId, int $blockId): bool
+    {
+        return $this->calendarRepository->detachDailyPlanBlockActuals($userId, $blockId);
     }
 
     private function normalizeDate(?string $date): string
@@ -830,6 +870,7 @@ final class CalendarService
                 'title' => (string) $block['title'],
                 'importance' => $importance,
                 'importanceBadge' => $importance,
+                'todoStatus' => (string) ($block['todo_status'] ?? 'pending'),
                 'goalId' => $block['goal_id'] === null ? null : (int) $block['goal_id'],
                 'scheduleType' => $isTimed ? 'timed' : 'unscheduled',
                 'timeRange' => $isTimed
@@ -869,7 +910,8 @@ final class CalendarService
             if ($block['start_index'] === null || $block['end_index'] === null) {
                 continue;
             }
-            $importance = $this->normalizeImportance((string) ($block['importance'] ?? 'D'));
+            $followsTodo = array_key_exists('source_block_template_id', $block) && $block['source_block_template_id'] === null && $this->calendarRepository->supportsTodoStatus();
+            $importance = $this->normalizeImportance((string) ($followsTodo ? $block['source_importance'] : ($block['importance'] ?? 'D')));
 
             foreach ($this->splitRange((int) $block['start_index'], (int) $block['end_index']) as $segment) {
                 $segments[] = array_merge($segment, [
@@ -886,6 +928,8 @@ final class CalendarService
                         : $block['linked_event_id'] !== null,
                     'importance' => $importance,
                     'importanceBadge' => $importance,
+                    'manualStatus' => (string) ($followsTodo ? $block['source_todo_status'] : ($block['manual_status'] ?? 'pending')),
+                    'followsTodo' => $followsTodo,
                 ]);
             }
         }

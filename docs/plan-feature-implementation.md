@@ -119,6 +119,8 @@ Important columns:
 
 `duration_index` is a 10-minute count from `1` through `143`, representing 10 minutes through 23 hours 50 minutes. The library does not store start or end clock times. Deleting a library item hides it from future selection and does not change copies already placed in daily templates or Calendar.
 
+The Plan-block template management screen hides the duration in its list and create/edit sheet. New templates retain the existing one-hour default; editing a template preserves its stored duration. Daily-template placement still uses that stored value.
+
 ## Current Routes
 
 - `GET /plan`: list saved plan groups
@@ -158,8 +160,8 @@ All POST routes require CSRF verification.
 - `Plan Save` is a floating button.
 - Copying a plan group redirects back to the plan list, not to the copied plan detail page.
 - Plan block backgrounds stay neutral in an organic gray tone. Eisenhower importance colors are applied only inside the circular `A/B/C/D` badge so future tag colors can own the block background.
-- The Plan list separates `하루 템플릿` and `계획 블록` tabs. The Plan-block tab manages the reusable library without mixing library rows into daily-template cards.
-- The Plan-block tab uses a fixed bottom `계획 블록 추가` action instead of an always-visible form. Create and edit reuse one bottom sheet.
+- The `반복 할 일` page opens on the first tab, `할 일 블록`; `하루 템플릿` is the second tab at `/plan?view=days`. Daily-template back links and copy/delete redirects return to that tab. The block tab manages the reusable library without mixing library rows into daily-template cards.
+- The block tab uses a fixed bottom `할 일 블록 추가` action instead of an always-visible form. Create and edit reuse one bottom sheet.
 - Plan-block rows place compact edit and delete buttons on the right. Edit opens the populated bottom sheet, while delete keeps the shared confirmation popup.
 - Plan-block create/edit forms expose A through D as four horizontal radio-style buttons.
 - The daily-template editor offers `직접 입력` plus saved Plan-block templates. Selecting a library item copies its title, importance, goal, and default duration at the selected start time.
@@ -199,7 +201,7 @@ The shared UI layer also provides hover tooltips for elements with `data-ui-tool
 ## Manual Test Checklist
 
 - Create, edit, and delete a Plan-block template; confirm deleted templates disappear from both Plan and Calendar pickers.
-- Confirm the duration accepts 10-minute units from 10 minutes through 23 hours 50 minutes and stores no start/end clock time.
+- Confirm the duration is hidden in the Plan-block list and create/edit sheet, a new block retains the one-hour default, and editing an existing block preserves its previously stored duration.
 - In a daily-template editor, mix a saved Plan block with a directly entered block and save the day template.
 - Edit a library item after placing it and confirm the already placed copy remains unchanged.
 - Select a saved block near midnight; confirm cancellation adds nothing and confirmation shortens only the placed copy to `23:50`.

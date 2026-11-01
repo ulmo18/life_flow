@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Csrf;
 use App\Services\RetrospectService;
 use App\Services\ExecutionEnergyService;
+use App\Services\DailyDateAppearanceService;
 
 final class RetrospectController
 {
@@ -24,16 +25,24 @@ final class RetrospectController
         $date = is_string($_GET['date'] ?? null) ? (string) $_GET['date'] : null;
         $sort = is_string($_GET['sort'] ?? null) ? (string) $_GET['sort'] : null;
         $requestedView = (string) ($_GET['view'] ?? 'daily');
-        $view = in_array($requestedView, ['daily', 'history', 'goals'], true) ? $requestedView : 'daily';
+        if ($requestedView === 'goals') {
+            $this->redirect('/goal/review');
+            return;
+        }
+        $view = in_array($requestedView, ['daily', 'history'], true) ? $requestedView : 'daily';
         $page = max(1, (int) ($_GET['page'] ?? 1));
 
+        $retrospect = $this->retrospectService->getPageData($this->userId(), $date, $sort, ($_GET['edit'] ?? '') === '1');
+        $historyMonth = array_key_exists('month', $_GET)
+            ? (is_string($_GET['month']) ? $_GET['month'] : '')
+            : substr((string) $retrospect['todayDate'], 0, 7);
         $this->render('pages/retrospect/index', [
             'title' => t('nav.retrospect'),
-            'retrospect' => $this->retrospectService->getPageData($this->userId(), $date, $sort),
+            'retrospect' => $retrospect,
+            'dailyDateClass' => $view === 'daily' ? (new DailyDateAppearanceService())->getClass((string) $retrospect['date']) : '',
             'executionEnergy' => $view === 'daily' ? $this->executionEnergyService->getDayData($this->userId(), $date) : [],
             'selectedView' => $view,
-            'goalReview' => $view === 'goals' ? $this->retrospectService->getGoalReviewData($this->userId()) : ['goals' => []],
-            'history' => $view === 'history' ? $this->retrospectService->getHistoryData($this->userId(), $page) : ['items' => []],
+            'history' => $view === 'history' ? $this->retrospectService->getHistoryData($this->userId(), $page, $historyMonth) : ['items' => []],
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
@@ -42,6 +51,46 @@ final class RetrospectController
         ]);
 
         unset($_SESSION['errors'], $_SESSION['flash_success']);
+    }
+
+    public function goalReview(): void
+    {
+        $this->render('pages/goal/review', [
+            'title' => '목표 회고',
+            'goalReview' => $this->retrospectService->getGoalReviewData($this->userId()),
+            'pageStyles' => [$this->versionedAsset('/assets/css/pages/goal.css'), $this->versionedAsset('/assets/css/pages/retrospect.css')],
+        ]);
+    }
+
+    public function scheduleSort(): void
+    {
+        $date = is_string($_GET['date'] ?? null) ? $_GET['date'] : '';
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        $sort = is_string($_GET['sort'] ?? null) ? $_GET['sort'] : '';
+        if (!$parsed || $parsed->format('Y-m-d') !== $date || !in_array($sort, ['importance', 'time', 'tag'], true)) {
+            $this->respondJson(['ok' => false, 'message' => '날짜 또는 정렬 방식을 확인해 주세요.'], 422);
+        }
+        $bufferLevel = ob_get_level();
+        try {
+            $retrospect = $this->retrospectService->getPageData($this->userId(), $date, $sort, ($_GET['edit'] ?? '') === '1');
+            $report = $retrospect['report'] ?? null;
+            if ((!empty($retrospect['isEmptyHistory']) || !empty($retrospect['showEmptyGuide']))
+                || (is_array($report) && ($report['status'] ?? '') === 'submitted' && empty($retrospect['isEditingPublished']))) {
+                $this->respondJson(['ok' => false, 'message' => '일정 목록을 표시할 수 없습니다.'], 422);
+            }
+            $editQuery = !empty($retrospect['isEditingPublished']) ? '&amp;edit=1' : '';
+            ob_start();
+            require dirname(__DIR__) . '/Views/pages/retrospect/schedule-panel.php';
+            $panel = (string) ob_get_clean();
+            ob_start();
+            require dirname(__DIR__) . '/Views/pages/retrospect/schedule-details.php';
+            $details = (string) ob_get_clean();
+            $this->respondJson(['ok' => true, 'panel' => $panel, 'details' => $details]);
+        } catch (\Throwable $exception) {
+            while (ob_get_level() > $bufferLevel) ob_end_clean();
+            error_log('[retrospect] schedule sorting failed');
+            $this->respondJson(['ok' => false, 'message' => '일정 정렬에 실패했습니다. 다시 시도해 주세요.'], 500);
+        }
     }
 
     public function report(): void
@@ -158,28 +207,6 @@ final class RetrospectController
         $this->redirect($this->reportPath($date));
     }
 
-    public function updateSettings(): void
-    {
-        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
-            $this->redirectWithErrors($this->retrospectPath($_POST['date'] ?? null), ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
-        }
-
-        $validation = $this->retrospectService->validateSettingsInput($_POST);
-        $date = $this->retrospectService->normalizeDate(is_string($_POST['date'] ?? null) ? (string) $_POST['date'] : null);
-        if (!$validation['ok']) {
-            $this->redirectWithErrors($this->retrospectPath($date), $validation['errors']);
-        }
-
-        $this->retrospectService->updateSettings(
-            $this->userId(),
-            (bool) $validation['data']['enabled'],
-            (string) $validation['data']['time']
-        );
-
-        $_SESSION['flash_success'] = '자동 회고 발행 시간을 저장했습니다.';
-        $this->redirect($this->retrospectPath($date));
-    }
-
     /** @param array<string, string> $errors */
     private function redirectWithErrors(string $path, array $errors): void
     {
@@ -191,8 +218,8 @@ final class RetrospectController
     {
         $date = is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) === 1 ? $date : date('Y-m-d');
         $path = '/retrospect?date=' . rawurlencode($date);
-        if ($sort === 'time') {
-            $path .= '&sort=time';
+        if (in_array($sort, ['time', 'tag'], true)) {
+            $path .= '&sort=' . rawurlencode($sort);
         }
 
         return $path;

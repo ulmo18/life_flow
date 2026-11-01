@@ -7,12 +7,12 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 
 ## Navigation
 - The bottom navigator is reserved for daily execution in this order: Retrospect, Routine, To-do, Schedule. Execution Energy remains available as a separate 52px glass-liquid HUD on the left of the navigator; it opens the usage history without occupying a navigation slot or overlapping the daily floating action.
-- Schedule opens Calendar at the current day. The route and internal feature name remain `/calendar` and Calendar; `Today` is reserved for controls that return to the current date.
+- Schedule opens Calendar at the shared viewed date when navigating between daily menus in the same session; a new session defaults to today. The route and internal feature name remain `/calendar` and Calendar; `Today` is reserved for controls that return to the current date.
 - The bottom Routine page accepts `?date=YYYY-MM-DD`, starts at today, and shows routines whose execution period includes the selected date. Today and past dates can update execution state in `routine_logs`; future dates are read-only.
-- The bottom To-do page accepts `?date=YYYY-MM-DD` and shows that date's `daily_plan_items`, including importance, planned time, and connected Goal. Add, edit, and complete remain today-only; other dates link to Schedule Plan mode for editing.
-- Routine and To-do share a sticky date context with previous/next-day navigation, a native date picker, a conditional Today return action, and mobile Search/aside access.
-- Retrospect, Routine, and To-do use the same centered daily primary floating-action style. Compact actions such as To-do's selected-date Schedule link and Routine's Management link use the same secondary pill treatment as Retrospect date controls.
-- The daily To-do and Routine pages share the same unfinished/completed group language: a compact heading with an `n개` count, a bordered table, divided rows, and a calm empty message inside each group. To-do rows retain their importance, time, Goal, completion, and overflow actions within that denser structure.
+- The bottom To-do page accepts `?date=YYYY-MM-DD` and opens with the `할 일` tab: a compact table shows each To-do's importance, name and state symbol. The state button opens one bottom sheet with state choices and the plan/Actual tree, comparing each Actual to its own plan. Its add button creates today's To-do. The `반복 할 일` tab has its own reusable-template add button, lists enabled templates and adds them to today's To-dos. State changes work on any date, while other source edits remain today-only. Calendar follows item-level state and importance for linked plans; Retrospect has not yet adopted them.
+- Routine, To-do, Retrospect and Calendar use the same compact sticky date context, typography and colors, with previous/next-day navigation, swipe, the shared date picker, a conditional Today action, and mobile Search/aside access. Retrospect's view tabs sit on the next row.
+- Retrospect, Routine, and To-do use the same centered daily primary floating-action style. Routine's Management link uses the same secondary pill treatment as Retrospect date controls.
+- Daily Routine uses unfinished/completed groups; To-do uses To-do/recurring tabs with compact counts, divided rows, and empty messages. Source rows retain their state actions and editable names.
 - The aside groups Plan, Routine Management, Goal, and Execution Energy Management under Management because these structures are configured less frequently.
 - Dashboard remains a standalone aside entry. Memo and Schedule Tag Management are grouped as tools.
 - Settings is reached from the aside header gear, and logout is kept inside Settings rather than the main aside menu.
@@ -20,20 +20,24 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Settings owns notification management for Retrospect, Routine, Calendar selected plans, and Goal deadlines.
 - The tag management menu label is "Schedule Tag Management" to clarify that it manages calendar schedule tags.
 - Goal is a distinct feature menu for creating and managing long-term goals.
+- Goal includes the all-period Goal review; Retrospect retains Daily and Published History tabs. Date navigation appears on Daily only, and older published dates link directly to the report instead of displaying daily records.
 - Memo appears directly below Goal in the aside and owns standalone quick notes.
 
 ## Plan
 - Plan stores reusable daily schedule templates. Editing a template updates that template in place and never changes a date-specific plan already copied into Calendar.
 - Plan has two template levels: a Plan-block library for one reusable activity and a daily template that places copied blocks at specific times. A block template stores title, 10-minute-unit default duration, Eisenhower importance, and an optional goal, but no start or end clock time.
+- The `반복 할 일` page opens with the reusable `할 일 블록` tab first; `하루 템플릿` is the second tab. The explicit `?view=days` link opens daily templates, including after their copy or deletion.
 - Daily-template editing can mix blocks copied from the Plan-block library with blocks entered directly. Copying isolates the daily template from later library edits or deletion.
 - The Plan list omits the large menu-name introduction so the first plan card or empty state begins at the top of the content area; a screen-reader heading remains available.
 - A plan is built in the same day-grid style as the calendar.
 - Users define a plan from `00:00` to `24:00` in 10-minute blocks.
 - Saved daily templates are shown as compact cards. The template name opens its detail page, the only right-side action is a confirmed copy icon, and a collapsed block list shows its block count before expanding to importance, block name, and time range in chronological order.
 - The Plan-block library keeps creation in a fixed bottom action and reuses one bottom sheet for create and edit. Each list row keeps compact edit and delete actions on the right.
+- The Plan-block management list and editor hide the stored default duration; new templates retain the existing one-hour default and edits preserve previously saved durations.
 - Plan-block templates have a per-item usage toggle. Existing templates default to enabled; disabled templates are omitted from Calendar placement sources without deleting any copied daily Plans. Calendar placement chooses the range directly and does not use the template's stored default duration.
 - Selecting a saved Plan in Calendar creates a date-specific copy, including each block's goal link. Calendar edits apply only to that copy.
 - Plan data is copied into Calendar as daily intention; the daily copy and its actual links feed retrospective analysis.
+- To-do-backed Plan blocks show their To-do's state and importance in Calendar. Actual linking does not complete the To-do, and detachment does not reset its state. Template-only blocks retain their independent stored state and importance.
 
 ## Routine
 - Routine is a habit-tracking area.
@@ -60,6 +64,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 
 ## Calendar
 - Calendar is the daily intention and execution screen.
+- On mobile, a long press on an empty Plan grid selects one 10-minute cell; continuing to drag selects a range. The resulting Plan source and block are created in one save, and the source remains independent and selected in the Plan placement drawer afterward. Short taps do not start creation.
 - On mobile, Plan placement and Tag painting remain reachable in a fixed bottom work bar above the daily navigator, alongside the existing `+` quick menu. Condition and memo remain inside that menu; a timer is not displayed until it has an implementation.
 - The Plan schedule tab edits only the selected date's copied plan blocks. The Actual schedule tab keeps the existing actual-event behavior.
 - The selected Plan/Actual tab is carried in the Calendar URL and every Calendar write redirect, date link, date picker move, and date swipe. Adding or editing a Plan therefore returns to Plan instead of unexpectedly switching to Actual; a Calendar URL without `mode` still defaults to Actual.
@@ -70,11 +75,11 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - New Actual schedules always require a start and end time. Legacy untimed Actual records may only be selected and placed into a timed range.
 - Calendar event creation can mark selected routines complete for the same date, avoiding duplicate completion work across menus.
 - Calendar, Routine, and daily Retrospect use the same blank/completed/missed Routine state cell and update only the affected state and metrics after a successful JSON response.
-- Calendar's `+` menu offers 발행 회고 보기, opening the latest published report in an internally scrolling popup. On the first Calendar visit of each account-local day, with no Plan blocks and a published report, it also opens automatically once; Actual events do not block it. Later visits do not prompt even if a plan is removed.
+- Calendar's `+` menu offers 발행 회고 보기, opening the latest published report in an internally scrolling popup. On the first Calendar visit of each account-local day, with no Plan blocks and a published report, it asks once whether to open it; Actual events do not block the prompt. Later visits do not prompt even if a plan is removed or the user declined.
 - The popup provides previous/next published-date controls and reuses the same report content as the published Retrospect archive.
 - If a calendar entry overlaps with a plan, the UI should help the user confirm whether the entry is a copy of that plan or a different schedule.
 - Actual calendar entries are used for retrospective reports together with Plan and Routine data.
-- Saving an Actual event applies its per-event Execution Energy change to that day's current value. New events default to a 25-point decrease; the user may choose no change, decrease, or increase and select 10, 25, 50, 75, 100, or a valid custom value. A Plan item is never current usage and contributes only a projected 25-point decrease until completed.
+- Saving an Actual event applies its per-event Execution Energy change to that day's current value. New events initially show a 25-point decrease; the user may select increase or decrease, use slider values 0/25/50/75/100 (0 means keep), or enter a 5-unit value up to 100. Existing unchanged legacy values over 100 remain valid. A Plan item is never current usage and contributes only a projected 25-point decrease until completed.
 - The floating action opens a bottom sheet ordered as `오늘의 컨디션`, `계획 템플릿 연결`, `메모 작성`, `계획 일정 추가`, and `실제 일정 추가`. Today To-do and Today Routine entries are omitted because bottom navigation already exposes those pages.
 - `오늘의 컨디션` opens a radio-choice bottom sheet for sleep, fatigue, mood, stress, and perceived burden. Saving replaces that day's earlier condition adjustment; it is not shown as a Calendar-top summary.
 - Fixed schedule tags can be enabled or hidden per user. Hiding a fixed tag removes it from new event choices while preserving its color and all existing event links.
@@ -88,32 +93,37 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - A time-unspecified Plan item remains selectable as an Actual-event link and can later be edited from the `+` menu to receive a time range.
 - Selecting a Plan link for a new Actual event, or changing an existing event to a different Plan link, sets the Actual-event title from that Plan item. Later Actual-title edits stay independent; Calendar does not expose a per-save title-sync selector.
 - Actual-event forms keep long Plan-link choices inside a collapsed summary control with an internally scrolling list. The chosen Plan remains visible in the summary without making the whole sheet excessively tall.
-- Plan and Actual grid blocks use the same title typography. Plan mode gives A/B/C/D importance progressively stronger left accents, surfaces, and type weight while still displaying the letter badge so importance is not communicated by color alone. Actual mode deliberately mutes background Plan references with a translucent achromatic treatment so Actual events retain visual priority.
+- Plan and Actual grid blocks use the same title size, including the compact mobile size, and have no border or inset outline. Plan blocks retain their importance letter badges and type weight. Actual mode deliberately mutes background Plan references with a translucent achromatic treatment so Actual events retain visual priority.
 - On today's Calendar, the shared header may show one compact next action. Its priority is a configured Retrospect window, the current Plan, the next Plan, an empty-Plan prompt, then an empty-Actual prompt. The action opens the corresponding Retrospect date or Calendar form directly.
 - Actual Calendar event creation and editing optionally attach one Sleep, Meal, Snack, Exercise, or Rest Life Record. The event owns the time range; the Life Record stores detail, note, and perceived-state data for later nutrition, weight-management, and exercise expansion without overloading Schedule Tags.
 
 ## Retrospect
 - Retrospect is a daily reflection and reporting area.
 - The Retrospect page omits the large menu-name introduction so its view/date controls and first feedback card start near the top; a screen-reader heading remains available.
+- The daily view hides the 작성중 and 발행됨 status labels.
 - Retrospect uses Calendar actual events, selected Plan blocks, and Routine logs to prepare the daily review.
-- The daily view starts with a 100% composition bar for Routine, Plan, Actual, and Memo record shares, followed by separate record tabs. Plan and Actual counts remain independent even when linked, and the bar omits a visible heading while retaining its compact percentage legend.
+- The daily view shows a 100% composition bar and single-row count-and-percentage legend for Routine, Plan, Actual, and Memo, followed by record tabs. Legend buttons open the relevant tab. Plan and Actual counts remain independent even when linked; Schedule presents individual records with importance, time or tag ordering.
 - Routine, Schedule, and Memo rows open their own type-specific detail sheets rather than one mixed detail popup.
-- Routine and Schedule tabs use compact tables. Routine columns are ordered `루틴명 / 연속 달성 / 루틴 완료 체크` so the label receives the flexible width. Actual-tag color is limited to a left accent line on Schedule rows so tag context does not compete with Plan and difference information. Schedule differences use signed minutes, and Plans of at least one hour reuse To-do's title highlighter.
+- Routine and Schedule tabs use compact tables. Routine columns are ordered `루틴명 / 연속 / 완료` so the label receives the flexible width. Actual-tag color is limited to a left accent line on Schedule rows so tag context does not compete with Plan and difference information. Schedule differences use signed minutes, and Plans of at least one hour reuse To-do's title highlighter.
+- Schedule sorting updates the list and matching details without a page reload, retaining the date and published-review edit state; links remain usable without JavaScript.
 - KPT remains editable and publishable for today and yesterday in the user's configured time zone. Earlier submitted reports are read-only.
 - It appears twice a day through calendar reminders:
   - Morning retrospect shows yesterday's created retrospect.
   - Evening retrospect shows today's created retrospect.
 - Retrospect entries should be stored as report-style documents.
 - Published retrospects must be viewable later at any time through date navigation or direct date lookup.
+- Publishing is always initiated by the user; the former automatic publication setting and page-load trigger are removed. Try-to-Actual linking is disabled while its existing stored relationships are retained.
 - Published retrospects can be republished from the floating action button to refresh metrics and snapshots after Calendar or Routine edits while preserving written reflection text.
+- A submitted day's daily view first shows the newspaper link. For today and yesterday, `회고 수정` opens an explicit edit view using current records and the saved KPT text; the published schedule, routine and memo snapshots remain unchanged until republished. The existing KPT autosave continues to update its saved text.
 - Today and yesterday can edit and republish KPT text; earlier published KPT remains read-only. Republishing updates the one date report and does not keep version history.
-- The Keep/Problem/Try sheet displays one input step at a time. Close, Record View, Previous, Next, and final Publish actions live in its header. On mobile its normal height is 40% of the dynamic viewport; focusing an input uses 80% of the visual viewport above the keyboard, while Record View collapses the editor and preserves step, text, and timer state.
+- The Keep/Problem/Try sheet displays one input step at a time. Previous appears after Keep, Next appears before Try, and Publish or Republish appears only on Try. Close is visible only when Record View collapses the editor; the collapsed header shows only Close and Return. The collapsed editor preserves step, text, and timer state. On mobile its normal height is 40% of the dynamic viewport; focusing an input uses 80% of the visual viewport above the keyboard.
 - Submitted history opens a dedicated newspaper-style report page. Calendar opens the same report content in a large local popup; both provide adjacent published-date navigation and completion feedback for Goals and Routines captured when the report is published.
+- The published newspaper optionally shows one evidence-backed recorded-activity fact below the user's KPT, with expandable snapshot evidence; lack of reliable evidence leaves it hidden. The Calendar preview uses the same component.
 - Opening the KPT sheet starts a visible 10-minute soft timer that continues while collapsed and never blocks editing or publishing at `00:00`.
 - Future dates use a localized hopeful empty state with one of four randomly selected encouragement messages instead of the past-date missing-report notice.
 - Retrospect actual-event rows use the Calendar tag color as a left accent line, while keeping a neutral row background and showing duration plus time-range labels.
 - Retrospect should summarize progress based on calendar, plan, routine, and goal data.
-- Daily Retrospect shows a compact Execution Energy feedback card: start, current, planned remaining, consumed, recovered, over-consumption, and recovery overflow. The condition input belongs to Today's Calendar `+` menu, not Retrospect.
+- Daily Retrospect does not show the starting Execution Energy card. The condition input remains in Today's Calendar `+` menu.
 - Retrospect has a daily view and a goal review view. Goal review aggregates goal-linked Plan execution, actual Calendar events, Routine follow-through, and completed Routine history.
 - Completed Routine history uses the same month-grouped seven-column period record as Routine detail and keeps past-state correction available without a page reload.
 - Standalone Memo records remain independent from goals and Calendar event memos. Daily Retrospect combines active same-day standalone Memos with non-empty Actual-event memos into one chronological Memo tab, with source labels and the Actual start time used for event memos.
@@ -143,13 +153,14 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 
 ## To-do
 
-- To-do is a date-navigable view over `daily_plan_items`; it is not a second persistence model and does not introduce a separate `todos` table. Today is the execution surface, while past and future dates are read-only views whose Schedule link opens the same date in Plan mode.
+- To-do is a date-navigable view over `daily_plan_items`; it is not a second persistence model and does not introduce a separate `todos` table. To-do state can change on any date; other editing remains today-only.
+- The recurring To-do tab offers searchable enabled reusable templates. `사용하기` creates an independent time-unspecified To-do using the template's title, importance, and eligible Goal; management remains in Plan.
 - Timed and time-unspecified items remain in the same table. Both time indexes are populated for a timed item and both are null for a time-unspecified item.
-- A linked, non-deleted `calendar_events` row is the completion evidence for a To-do item.
+- Actual linking records execution independently of To-do completion. Users select the To-do's state, including completion without a link; Calendar displays that state for its linked plans. Actual ranges are shown under the associated plan in the To-do tree.
 - To-do visibly groups unfinished items above completed items. Each group sorts by importance A-D and then planned time.
 - The Completed group remains visible with an encouraging empty message when its count is zero.
 - To-do uses compact divider rows rather than one card per item. Group placement, subdued text, and strike-through already communicate completion, so rows do not repeat a `완료됨` label.
-- General editing lives in an accessible vertical-more popover. A pending time-unspecified item keeps `시간 설정` visible because assigning time is a primary next action rather than secondary maintenance.
+- General editing lives in an accessible vertical-more popover; the list no longer displays separate `시간 설정` or `완료` buttons.
 - Actual-event Plan linking and Routine selection use compact selection views within the existing sheet shell instead of stacking another sheet. Plan choices provide recommended/all filters, while Routine choices show only incomplete routines in creation order; reminder time does not affect this ordering.
 - To-do edit keeps time controls hidden and disabled for `시간 미정`. Goal selection uses an inline summary row and internally scrolling radio list matching Calendar's connection pattern: unlinked shows `연결하기 ›`, while a saved selection shows its Goal name.
 - To-do edits title, importance, Goal, and optional planned time in one bottom sheet. Time setting uses a two-button radio choice and reveals start/end controls only for a timed item. Linked items require an explicit Plan-only, synchronize, or detach choice, with Plan-only as the default.

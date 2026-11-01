@@ -8,6 +8,7 @@ Existing Goal, Plan, To-do, Calendar, Routine, notification, and Retrospect rela
 
 ## Main experience
 
+- The `목표 회고` view at `/goal/review` shows all-period Goal feedback and completed routine history. The previous `/retrospect?view=goals` URL redirects to it.
 - A `목표 추가` floating action above the bottom navigator opens a title-only bottom sheet. The created root goal is active but is not automatically focused.
 - Quick-created goals are internally stored as active `bucket` goals with no period. Type, dates, status, parent, and behavior reminder can be refined later in the detail panel.
 - Every node exposes a compact `＋` action that opens an inline child-title input. Child creation never requires a page or modal transition.

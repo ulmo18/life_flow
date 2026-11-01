@@ -164,6 +164,13 @@ final class ExecutionEnergyRepository
         $stmt->execute($data + ['calendar_event_id' => $eventId, 'user_id' => $userId]);
     }
 
+    public function matchesEventSetting(int $userId, int $eventId, string $effectType, int $value): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM execution_energy_event_settings ees INNER JOIN calendar_events ce ON ce.id = ees.calendar_event_id WHERE ees.user_id = :user_id AND ce.user_id = :owner_id AND ce.deleted_at IS NULL AND ees.calendar_event_id = :event_id AND ees.effect_type = :effect_type AND ees.energy_value = :energy_value LIMIT 1');
+        $stmt->execute(['user_id' => $userId, 'owner_id' => $userId, 'event_id' => $eventId, 'effect_type' => $effectType, 'energy_value' => $value]);
+        return $stmt->fetchColumn() !== false;
+    }
+
     public function deleteEventSetting(int $userId, int $eventId): void
     {
         $stmt = $this->db->prepare(

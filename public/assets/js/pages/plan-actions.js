@@ -32,8 +32,8 @@
     if (blockDuration instanceof HTMLSelectElement) blockDuration.value = isEdit ? String(data.duration || '6') : '6';
     if (blockGoal instanceof HTMLSelectElement) blockGoal.value = isEdit ? String(data.goal || '') : '';
     setBlockImportance(isEdit ? String(data.importance || 'D') : 'D');
-    if (blockSheetTitle) blockSheetTitle.textContent = isEdit ? '계획 블록 수정' : '계획 블록 추가';
-    if (blockSubmit) blockSubmit.textContent = isEdit ? '수정 저장' : '계획 블록 저장';
+    if (blockSheetTitle) blockSheetTitle.textContent = isEdit ? '할 일 블록 수정' : '할 일 블록 추가';
+    if (blockSubmit) blockSubmit.textContent = isEdit ? '수정 저장' : '할 일 블록 저장';
 
     blockLayer.hidden = false;
     document.body.classList.add('is-ui-open');

@@ -12,6 +12,7 @@ final class TodoService
     private ExecutionEnergyService $executionEnergyService;
     private CalendarService $calendarService;
     private GoalService $goalService;
+    private PlanService $planService;
 
     public function __construct()
     {
@@ -19,6 +20,7 @@ final class TodoService
         $this->executionEnergyService = new ExecutionEnergyService();
         $this->calendarService = new CalendarService();
         $this->goalService = new GoalService();
+        $this->planService = new PlanService();
     }
 
     /** @return array{date: string, items: array<int, array<string, mixed>>} */
@@ -35,27 +37,138 @@ final class TodoService
         $dayItems = $day === null
             ? []
             : $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id']);
-        $items = array_map(function (array $item): array {
+        $blocksByItem = [];
+        $blockItems = [];
+        $actualByItem = [];
+        if ($day !== null) {
+            foreach ($this->calendarRepository->getDailyPlanBlocksForDay($userId, (int) $day['id']) as $block) {
+                $itemId = (int) $block['daily_plan_item_id'];
+                $blocksByItem[$itemId][] = $block;
+                $blockItems[(int) $block['daily_plan_block_id']] = $itemId;
+            }
+            foreach ($this->calendarRepository->getTodoTreeActualEvents($userId, (int) $day['id']) as $event) {
+                $itemId = $event['daily_plan_item_id'] !== null
+                    ? (int) $event['daily_plan_item_id']
+                    : ($blockItems[(int) ($event['daily_plan_block_id'] ?? 0)] ?? null);
+                if ($itemId !== null) $actualByItem[$itemId][] = $event;
+            }
+            $visibleItemIds = array_fill_keys(array_map(static fn(array $item): int => (int) $item['daily_plan_item_id'], $dayItems), true);
+            foreach ($blocksByItem as $itemId => $blocks) {
+                if (isset($visibleItemIds[$itemId])) continue;
+                $block = $blocks[0];
+                $dayItems[] = [
+                    'daily_plan_item_id' => $itemId, 'title' => $block['title'], 'importance' => $block['source_deleted_at'] !== null ? $block['source_importance'] : $block['importance'],
+                    'todo_status' => $block['source_deleted_at'] !== null ? $block['source_todo_status'] : $block['manual_status'],
+                    'goal_id' => $block['goal_id'], 'goal_title' => $block['goal_title'],
+                    'start_index' => null, 'end_index' => null, 'estimated_duration_minutes' => null,
+                    'linked_event_id' => null, 'source_unavailable' => true,
+                ];
+            }
+        }
+        $blocksSupported = $this->calendarRepository->supportsDailyPlanBlocks();
+        $items = array_map(function (array $item) use ($blocksByItem, $actualByItem, $date, $blocksSupported): array {
+            $itemId = (int) $item['daily_plan_item_id'];
+            $blocks = $blocksByItem[$itemId] ?? [];
+            $actuals = $actualByItem[$itemId] ?? [];
             $isTimed = $item['start_index'] !== null && $item['end_index'] !== null;
-            $durationMinutes = $isTimed
-                ? ((int) $item['end_index'] - (int) $item['start_index']) * 10
-                : ($item['estimated_duration_minutes'] === null ? null : (int) $item['estimated_duration_minutes']);
+            $isCompleted = ($item['todo_status'] ?? 'pending') === 'completed';
+            $ranges = [];
+            if ($isCompleted) {
+                foreach ($actuals as $actual) {
+                    if ($actual['start_index'] !== null && $actual['end_index'] !== null) {
+                        $ranges[] = $this->formatTime((int) $actual['start_index']) . '–' . $this->formatTime((int) $actual['end_index']);
+                    }
+                }
+                $timeRange = $ranges === [] ? '' : t('todo.actual_time', ['time' => implode(' · ', $ranges)]);
+            } elseif (in_array(($item['todo_status'] ?? 'pending'), ['cancelled', 'postponed', 'external'], true)) {
+                $timeRange = '';
+            } elseif ($blocks !== []) {
+                foreach ($blocks as $block) {
+                    $ranges[] = $this->formatTime((int) $block['start_index']) . '–' . $this->formatTime((int) $block['end_index']);
+                }
+                $timeRange = implode(' · ', $ranges);
+            } else {
+                $timeRange = $isTimed
+                    ? $this->formatTime((int) $item['start_index']) . '–' . $this->formatTime((int) $item['end_index'])
+                    : t('todo.untimed');
+            }
+            $hasLongPlan = count(array_filter($blocks, static fn(array $block): bool => ((int) $block['end_index'] - (int) $block['start_index']) * 10 > 60)) > 0;
+            if (!$blocksSupported && $isTimed) $hasLongPlan = ((int) $item['end_index'] - (int) $item['start_index']) * 10 > 60;
+            $plannedRanges = array_map(fn(array $block): string => $this->formatTime((int) $block['start_index']) . '–' . $this->formatTime((int) $block['end_index']), $blocks);
+            $actualRangesForItem = [];
+            foreach ($actuals as $actual) {
+                if ($actual['start_index'] !== null && $actual['end_index'] !== null) $actualRangesForItem[] = $this->formatTime((int) $actual['start_index']) . '–' . $this->formatTime((int) $actual['end_index']);
+            }
 
             return [
                 'id' => (int) $item['daily_plan_item_id'],
                 'title' => (string) $item['title'],
                 'importance' => (string) ($item['importance'] ?? 'D'),
+                'todoStatus' => (string) ($item['todo_status'] ?? 'pending'),
                 'goalId' => $item['goal_id'] === null ? null : (int) $item['goal_id'],
                 'goalTitle' => $item['goal_title'] === null ? null : (string) $item['goal_title'],
                 'startIndex' => $isTimed ? (int) $item['start_index'] : null,
                 'endIndex' => $isTimed ? (int) $item['end_index'] : null,
-                'timeRange' => $isTimed
-                    ? $this->formatTime((int) $item['start_index']) . '–' . $this->formatTime((int) $item['end_index'])
-                    : t('todo.untimed'),
-                'isLongDuration' => $durationMinutes !== null && $durationMinutes >= 60,
-                'isCompleted' => $item['linked_event_id'] !== null,
+                'timeRange' => $timeRange,
+                'plannedTimeRange' => $plannedRanges !== [] ? implode(' · ', $plannedRanges) : ($isTimed ? $this->formatTime((int) $item['start_index']) . '–' . $this->formatTime((int) $item['end_index']) : t('todo.untimed')),
+                'actualTimeRange' => $actualRangesForItem === [] ? '' : t('todo.actual_time', ['time' => implode(' · ', $actualRangesForItem)]),
+                'isLongDuration' => $hasLongPlan,
+                'isCompleted' => $isCompleted,
+                'hasActual' => $actuals !== [] || $item['linked_event_id'] !== null,
+                'sourceUnavailable' => !empty($item['source_unavailable']),
+                'unassignedActuals' => array_values(array_map(fn(array $actual): array => [
+                    'title' => (string) $actual['title'],
+                    'date' => ($actual['actual_date'] ?? $date) !== $date ? (string) $actual['actual_date'] : null,
+                    'timeRange' => $this->formatTime((int) $actual['start_index']) . '–' . $this->formatTime((int) $actual['end_index']),
+                    'minutes' => ((int) $actual['end_index'] - (int) $actual['start_index']) * 10,
+                ], array_filter($actuals, static fn(array $actual): bool => empty($actual['daily_plan_block_id']) && $actual['start_index'] !== null && $actual['end_index'] !== null))),
+                'planBlocks' => array_map(function (array $block) use ($actuals, $date): array {
+                    $linked = [];
+                    $minutes = ((int) $block['end_index'] - (int) $block['start_index']) * 10;
+                    foreach ($actuals as $actual) {
+                        if ((int) ($actual['daily_plan_block_id'] ?? 0) !== (int) $block['daily_plan_block_id']) continue;
+                        $actualMinutes = $actual['start_index'] === null || $actual['end_index'] === null ? null : ((int) $actual['end_index'] - (int) $actual['start_index']) * 10;
+                        $linked[] = [
+                            'title' => (string) $actual['title'],
+                            'date' => ($actual['actual_date'] ?? $date) !== $date ? (string) $actual['actual_date'] : null,
+                            'timeRange' => $actualMinutes === null ? '시간 미정' : $this->formatTime((int) $actual['start_index']) . '–' . $this->formatTime((int) $actual['end_index']),
+                            'minutes' => $actualMinutes,
+                            'differenceMinutes' => $actualMinutes === null ? null : $actualMinutes - $minutes,
+                        ];
+                    }
+                    return [
+                        'id' => (int) $block['daily_plan_block_id'],
+                        'title' => (string) $block['title'],
+                        'timeRange' => $this->formatTime((int) $block['start_index']) . '–' . $this->formatTime((int) $block['end_index']),
+                        'minutes' => $minutes,
+                        'actuals' => $linked,
+                        'actualMinutes' => array_sum(array_column($linked, 'minutes')),
+                        'status' => (string) ($block['manual_status'] ?? 'pending'),
+                        'isLinked' => !empty($block['is_linked']),
+                    ];
+                }, $blocks),
             ];
         }, $dayItems);
+
+        if (!$blocksSupported) {
+            foreach ($items as &$item) {
+                if ($item['startIndex'] === null || $item['endIndex'] === null) continue;
+                $minutes = ($item['endIndex'] - $item['startIndex']) * 10;
+                $actuals = array_map(static fn(array $actual): array => $actual + ['differenceMinutes' => $actual['minutes'] - $minutes], $item['unassignedActuals']);
+                $item['planBlocks'] = [[
+                    'id' => null,
+                    'title' => $item['title'],
+                    'timeRange' => $this->formatTime($item['startIndex']) . '–' . $this->formatTime($item['endIndex']),
+                    'minutes' => $minutes,
+                    'actuals' => $actuals,
+                    'actualMinutes' => array_sum(array_column($actuals, 'minutes')),
+                    'status' => $item['todoStatus'],
+                    'isLinked' => $item['hasActual'],
+                ]];
+                $item['unassignedActuals'] = [];
+            }
+            unset($item);
+        }
 
         $importanceRank = ['A' => 0, 'B' => 1, 'C' => 2, 'D' => 3];
         usort($items, static function (array $left, array $right) use ($importanceRank): int {
@@ -74,13 +187,93 @@ final class TodoService
             return $timeComparison !== 0 ? $timeComparison : $left['id'] <=> $right['id'];
         });
 
+        $sourceItemsById = [];
+        foreach ($items as $item) {
+            if (!$item['sourceUnavailable']) $sourceItemsById[$item['id']] = $item;
+        }
+        $planItems = [];
+        foreach ($blocksByItem as $blocks) {
+            foreach ($blocks as $block) {
+                $source = $sourceItemsById[(int) $block['daily_plan_item_id']] ?? null;
+                $blockActuals = array_filter(
+                    $actualByItem[(int) $block['daily_plan_item_id']] ?? [],
+                    static fn(array $event): bool => (int) ($event['daily_plan_block_id'] ?? 0) === (int) $block['daily_plan_block_id']
+                );
+                $actualRanges = [];
+                foreach ($blockActuals as $actual) {
+                    if ($actual['start_index'] !== null && $actual['end_index'] !== null) {
+                        $actualRanges[] = $this->formatTime((int) $actual['start_index']) . '–' . $this->formatTime((int) $actual['end_index']);
+                    }
+                }
+                $planItems[] = [
+                    'id' => (int) $block['daily_plan_block_id'],
+                    'title' => (string) $block['title'],
+                    'importance' => $source['importance'] ?? ($block['source_deleted_at'] !== null ? (string) $block['source_importance'] : (string) ($block['importance'] ?? 'D')),
+                    'goalTitle' => $block['goal_title'] === null ? null : (string) $block['goal_title'],
+                    'startIndex' => (int) $block['start_index'],
+                    'timeRange' => $this->formatTime((int) $block['start_index']) . '–' . $this->formatTime((int) $block['end_index']),
+                    'actualTimeRanges' => $actualRanges,
+                    'status' => $source['todoStatus'] ?? ($block['source_deleted_at'] !== null ? (string) $block['source_todo_status'] : (string) ($block['manual_status'] ?? 'pending')),
+                    'sourceId' => $source['id'] ?? null,
+                    'isLinked' => !empty($block['is_linked']),
+                ];
+            }
+        }
+        if (!$this->calendarRepository->supportsDailyPlanBlocks()) {
+            foreach ($items as $item) {
+                if ($item['startIndex'] === null || $item['endIndex'] === null) continue;
+                $planItems[] = [
+                    'id' => null,
+                    'sourceId' => $item['id'],
+                    'title' => $item['title'],
+                    'importance' => $item['importance'],
+                    'goalTitle' => $item['goalTitle'],
+                    'startIndex' => $item['startIndex'],
+                    'timeRange' => $this->formatTime($item['startIndex']) . '–' . $this->formatTime($item['endIndex']),
+                    'actualTimeRanges' => [],
+                    'status' => $item['todoStatus'],
+                    'isLinked' => $item['isCompleted'],
+                ];
+            }
+        }
+        usort($planItems, static fn(array $left, array $right): int =>
+            ($left['startIndex'] <=> $right['startIndex']) ?: ($left['id'] <=> $right['id'])
+        );
+
         return [
             'date' => $date,
+            'todoStatusSupported' => $this->calendarRepository->supportsTodoStatus(),
+            'planItems' => $planItems,
+            'activityItems' => $items,
             'items' => $items,
             'pendingItems' => array_values(array_filter($items, static fn(array $item): bool => !$item['isCompleted'])),
             'completedItems' => array_values(array_filter($items, static fn(array $item): bool => $item['isCompleted'])),
-            'goalOptions' => $date === date('Y-m-d') ? $this->goalService->activeGoalOptions($userId) : [],
+            'blockTemplates' => array_values(array_filter(
+                $this->planService->getBlockTemplates($userId),
+                static fn(array $template): bool => $template['isEnabled']
+            )),
+            'goalOptions' => $this->goalService->activeGoalOptions($userId),
         ];
+    }
+
+    public function updateStatus(int $userId, int $itemId, string $status): bool
+    {
+        return $this->calendarRepository->updateTodoStatus($userId, $itemId, $status);
+    }
+
+    /** @param array<string, mixed> $input @return array<string, mixed> */
+    public function createRecurring(int $userId, array $input): array
+    {
+        $input['duration_index'] = 6;
+        $validation = $this->planService->validateBlockTemplateInput($userId, $input);
+        if (!$validation['ok']) return ['ok' => false, 'message' => (string) (reset($validation['errors']) ?: '반복 할 일을 확인해 주세요.')];
+        try {
+            $id = $this->planService->createBlockTemplate($userId, $validation['data']);
+        } catch (\Throwable $exception) {
+            return ['ok' => false, 'message' => '반복 할 일을 추가하지 못했습니다.'];
+        }
+        if ($id === null) return ['ok' => false, 'message' => '반복 할 일을 추가하지 못했습니다.'];
+        return ['ok' => true, 'message' => '반복 할 일을 추가했습니다.'];
     }
 
     /** @return array<string, mixed> */
@@ -149,6 +342,25 @@ final class TodoService
     /** @return array<string, mixed> */
     public function create(int $userId, array $input): array
     {
+        if (array_key_exists('plan_block_template_id', $input)) {
+            $templateId = filter_var($input['plan_block_template_id'], FILTER_VALIDATE_INT);
+            $template = null;
+            foreach ($this->planService->getBlockTemplates($userId) as $candidate) {
+                if ($candidate['id'] === $templateId && $candidate['isEnabled']) {
+                    $template = $candidate;
+                    break;
+                }
+            }
+            if ($template === null) {
+                return ['ok' => false, 'message' => '사용할 수 있는 계획 블록을 찾을 수 없습니다.'];
+            }
+            $input = [
+                'date' => date('Y-m-d'),
+                'title' => $template['title'],
+                'importance' => $template['importance'],
+                'goal_id' => $template['goalId'],
+            ];
+        }
         $validation = $this->calendarService->validateDailyPlanItemInput([
             'date' => $input['date'] ?? date('Y-m-d'),
             'title' => $input['title'] ?? '',
@@ -202,16 +414,32 @@ final class TodoService
 
         $input['date'] = date('Y-m-d');
         $input['daily_plan_item_id'] = (int) $itemId;
+        // This editor changes source details only; never accept schedule or link changes here.
+        $input['schedule_type'] = 'unscheduled';
+        unset($input['estimated_duration_minutes']);
         $validation = $this->calendarService->validateDailyPlanItemInput($input, true);
         if (!$validation['ok']) {
             return ['ok' => false, 'message' => (string) (reset($validation['errors']) ?: '할 일 내용을 확인해주세요.')];
         }
 
-        if (!$this->calendarService->updateDailyPlanItem($userId, $validation['data'])) {
-            return ['ok' => false, 'message' => '할 일을 수정하지 못했습니다. 계획 시간이 겹치는지 확인해주세요.'];
+        if (!$this->calendarService->updateDailyPlanItemDetails($userId, $validation['data'])) {
+            return ['ok' => false, 'message' => '할 일을 수정하지 못했습니다.'];
         }
 
         return ['ok' => true, 'message' => '할 일을 수정했습니다.'];
+    }
+
+    /** @return array<string, mixed> */
+    public function deleteToday(int $userId, int $itemId): array
+    {
+        $item = $itemId > 0 ? $this->calendarRepository->getDailyPlanItemForCompletion($userId, $itemId) : null;
+        if ($item === null || (string) $item['calendar_date'] !== date('Y-m-d')) {
+            return ['ok' => false, 'message' => '삭제할 오늘의 할 일을 찾을 수 없습니다.'];
+        }
+        if (!$this->calendarRepository->deleteDailyPlanItem($userId, $itemId)) {
+            return ['ok' => false, 'message' => '할 일을 삭제하지 못했습니다.'];
+        }
+        return ['ok' => true, 'message' => '할 일을 삭제했습니다.'];
     }
 
     /** @return array<string, mixed> */

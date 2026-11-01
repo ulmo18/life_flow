@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Core\Csrf;
 use App\Services\GoalService;
+use App\Services\DailyDateAppearanceService;
 use App\Services\NotificationService;
 use App\Services\RoutineService;
 use DateTimeImmutable;
@@ -30,6 +31,7 @@ final class RoutineController
         $this->render('pages/routine/today', [
             'title' => t('routine.today_title'),
             'date' => $date,
+            'dailyDateClass' => (new DailyDateAppearanceService())->getClass($date),
             'todayDate' => $today,
             'prevDate' => (new DateTimeImmutable($date))->modify('-1 day')->format('Y-m-d'),
             'nextDate' => (new DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d'),
@@ -309,7 +311,7 @@ final class RoutineController
         }
 
         if ($returnTo === 'retrospect_goals') {
-            return '/retrospect?view=goals';
+            return '/goal/review';
         }
 
         if ($returnTo === 'manage') {

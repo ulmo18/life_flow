@@ -32,8 +32,6 @@
   const editStartInput = document.getElementById('calendarEditStartIndex');
   const editEndInput = document.getElementById('calendarEditEndIndex');
   const editTimeFields = document.querySelector('[data-calendar-edit-time-fields]');
-  const createEnergyCustomValue = document.getElementById('calendarCreateEnergyCustomValue');
-  const editEnergyCustomValue = document.getElementById('calendarEditEnergyCustomValue');
   const createWellnessFields = eventForm?.querySelector('[data-wellness-fields]');
   const editWellnessFields = document.getElementById('calendarEventEditForm')?.querySelector('[data-wellness-fields]');
   const planPicker = document.querySelector('.calendar-plan-picker');
@@ -94,6 +92,11 @@
   if (planBlockEditSheet && !layer.contains(planBlockEditSheet)) {
     layer.append(planBlockEditSheet);
   }
+  const energyControllers = new WeakMap();
+  document.querySelectorAll('[data-actual-form]').forEach(form => {
+    const controller = window.LifeFlowCalendarEnergy?.create(form);
+    if (controller) energyControllers.set(form, controller);
+  });
 
   function getDefaultEventRange() {
     const currentIndex = Number.parseInt(page.dataset.currentIndex || '', 10);
@@ -258,6 +261,8 @@
       event.stopPropagation();
     }
 
+    cancelCalendarDelayHold();
+
     if (document.activeElement instanceof HTMLElement && layer.contains(document.activeElement)) {
       document.activeElement.blur();
     }
@@ -343,9 +348,7 @@
     eventForm.querySelectorAll('input[name="routine_ids[]"]:not(:disabled)').forEach(input => {
       input.checked = false;
     });
-    checkRadio(eventForm, 'execution_energy_type', 'consume');
-    checkRadio(eventForm, 'execution_energy_amount', '25');
-    if (createEnergyCustomValue) createEnergyCustomValue.value = '';
+    energyControllers.get(eventForm)?.reset();
     setWellnessFields(createWellnessFields, {}, !isUnscheduled);
     updatePlanRecommendations(eventForm, selectedStart, selectedEnd);
     resetActualDisclosures(eventForm);
@@ -412,53 +415,7 @@
       memoSummary.textContent = content === '' ? '메모 없음' : (content.length > 24 ? `${content.slice(0, 24)}…` : content);
     }
 
-    const energyType = form.querySelector('input[name="execution_energy_type"]:checked')?.value || 'none';
-    const energyAmount = form.querySelector('input[name="execution_energy_amount"]:checked')?.value || '25';
-    const customValue = form.querySelector('input[name="execution_energy_custom_value"]');
-    const amountPanel = form.querySelector('[data-energy-amount-panel]');
-    const customField = form.querySelector('[data-energy-custom]');
-    const energyMain = form.querySelector('[data-energy-summary-main]');
-    const energyFields = form.querySelector('[data-energy-fields]');
-    const energyHint = form.querySelector('[data-energy-hint]');
-    const customPrefix = form.querySelector('[data-energy-custom-prefix]');
-    const hasChange = energyType === 'consume' || energyType === 'recover';
-    const isCustom = energyAmount === 'custom';
-    const sign = energyType === 'recover' ? '+' : '−';
-    if (energyFields) energyFields.dataset.energyDirection = energyType;
-    if (amountPanel) amountPanel.hidden = !hasChange;
-    if (customField) customField.hidden = !hasChange || !isCustom;
-    form.querySelectorAll('[data-energy-amount-option]').forEach(option => {
-      const value = option.dataset.energyAmountValue || '';
-      option.textContent = `${sign}${value}`;
-      const input = option.previousElementSibling;
-      if (input instanceof HTMLInputElement) {
-        input.setAttribute('aria-label', `실행력 ${value} ${energyType === 'recover' ? '증가' : '감소'}`);
-      }
-    });
-    if (customPrefix) customPrefix.textContent = sign;
-    if (customValue) {
-      customValue.disabled = !hasChange || !isCustom;
-      customValue.required = hasChange && isCustom;
-      customValue.setAttribute('aria-label', `실행력 ${energyType === 'recover' ? '증가' : '감소'} 변화량 직접 입력`);
-    }
-    if (energyMain) {
-      const value = isCustom ? customValue?.value : energyAmount;
-      energyMain.textContent = hasChange ? `${sign}${value || '…'}` : '0';
-      energyMain.classList.toggle('is-consume', energyType === 'consume');
-      energyMain.classList.toggle('is-recover', energyType === 'recover');
-      energyMain.classList.toggle('is-none', !hasChange);
-      energyMain.setAttribute('aria-label', hasChange && value
-        ? `실행력 ${value} ${energyType === 'recover' ? '회복' : '사용'}`
-        : (hasChange ? '실행력 변화량 입력 필요' : '실행력 변화 없음'));
-    }
-    if (energyHint) {
-      const value = isCustom ? customValue?.value : energyAmount;
-      energyHint.textContent = !hasChange
-        ? '이 일정은 실행력에 영향을 주지 않습니다.'
-        : value
-          ? `이 일정은 실행력을 ${sign}${value} ${energyType === 'recover' ? '회복합니다.' : '사용합니다.'}`
-          : '변화량을 입력하면 실행력 변화를 확인할 수 있습니다.';
-    }
+    energyControllers.get(form)?.render();
   }
 
   function resetActualDisclosures(form, openFilled = false) {
@@ -612,18 +569,7 @@
       ? button.dataset.eventEnergyType
       : 'none';
     const savedEnergyValue = button.dataset.eventEnergyValue || '';
-    const presetValues = ['10', '25', '50', '75', '100'];
-    checkRadio(form, 'execution_energy_type', savedEnergyType);
-    checkRadio(
-      form,
-      'execution_energy_amount',
-      savedEnergyType === 'none' ? '25' : (presetValues.includes(savedEnergyValue) ? savedEnergyValue : 'custom')
-    );
-    if (editEnergyCustomValue) {
-      editEnergyCustomValue.value = savedEnergyType !== 'none' && !presetValues.includes(savedEnergyValue)
-        ? savedEnergyValue
-        : '';
-    }
+    energyControllers.get(form)?.reset(savedEnergyType === 'none' ? '' : savedEnergyType, savedEnergyValue, savedEnergyType === 'none');
     setWellnessFields(editWellnessFields, {
       type: button.dataset.eventWellnessType || '',
       detail: button.dataset.eventWellnessDetail || '',
@@ -679,9 +625,35 @@
 
   let calendarMode = 'actual';
   let calendarWorkMode = 'normal';
+  let calendarView = 'both';
   let selectedPaintTagId = null;
   const tagPaintPalette = document.querySelector('[data-calendar-tag-paint-palette]');
   const activityPanel = document.querySelector('.calendar-activity-panel');
+  const workStatus = document.querySelector('[data-calendar-work-status]');
+
+  function updateWorkStatus(interaction = '') {
+    const status = interaction || calendarWorkMode;
+    const labels = { 'plan-placement':'계획 배치', 'tag-paint':'태그 칠하기', 'actual-selection':'실제 일정 입력', 'plan-selection':'계획 일정 입력', 'resize':'시간 조절', 'move':'일정 이동', 'copy':'계획 → 실제' };
+    if (!workStatus) return;
+    workStatus.dataset.status = status;
+    workStatus.textContent = labels[status] || '';
+  }
+
+  function setCalendarView(view) {
+    calendarView = ['plan', 'actual'].includes(view) ? view : 'both';
+    page.dataset.calendarView = calendarView;
+    document.querySelectorAll('[data-calendar-view]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.calendarView === calendarView));
+    });
+  }
+
+  document.querySelectorAll('[data-calendar-view]').forEach(button => {
+    button.addEventListener('click', () => {
+      const nextView = calendarView === button.dataset.calendarView ? 'both' : button.dataset.calendarView;
+      if (calendarWorkMode !== 'normal') setCalendarWorkMode('normal', true);
+      setCalendarView(nextView);
+    });
+  });
 
   function syncMobileWorkBar() {
     const isOpen = calendarWorkMode !== 'normal' && window.matchMedia('(max-width: 767px)').matches;
@@ -692,6 +664,8 @@
     const next = ['normal', 'plan-placement', 'tag-paint'].includes(mode) ? mode : 'normal';
     calendarWorkMode = next;
     page.dataset.calendarWorkMode = calendarWorkMode;
+    setCalendarView(next === 'plan-placement' ? 'plan' : next === 'tag-paint' ? 'actual' : 'both');
+    updateWorkStatus();
     const compactWorkspace = window.matchMedia('(max-width: 1439px)').matches;
     document.querySelectorAll('button[data-calendar-work-mode]').forEach(button => {
       button.setAttribute('aria-pressed', button.dataset.calendarWorkMode === calendarWorkMode ? 'true' : 'false');
@@ -736,12 +710,13 @@
       return;
     }
     const eventId = button.dataset.eventId || '';
+    const tagId = selectedPaintTagId;
     const token = document.querySelector('input[name="_csrf_token"]')?.value || '';
     if (!eventId || !token) return;
     const body = new FormData();
     body.set('_csrf_token', token);
     body.set('event_id', eventId);
-    body.set('calendar_tag_id', selectedPaintTagId);
+    body.set('calendar_tag_id', tagId);
     button.setAttribute('aria-busy', 'true');
     try {
       const response = await fetch('/calendar/event/tag', {
@@ -753,11 +728,11 @@
         candidate => candidate.dataset.eventId === eventId
       );
       const option = Array.from(document.querySelectorAll('[data-calendar-tag-paint]')).find(
-        candidate => candidate.dataset.calendarTagPaint === selectedPaintTagId
+        candidate => candidate.dataset.calendarTagPaint === tagId
       );
       const color = option?.dataset.tagColor || '';
       eventButtons.forEach(eventButton => {
-        eventButton.dataset.eventTagId = selectedPaintTagId;
+        eventButton.dataset.eventTagId = tagId;
         if (color) {
         const hex = color.replace('#', '');
         const red = Number.parseInt(hex.slice(0, 2), 16);
@@ -770,9 +745,9 @@
           eventButton.style.removeProperty('--event-color');
           eventButton.style.removeProperty('--event-text-color');
         }
-        eventButton.classList.toggle('is-tag-cleared', selectedPaintTagId === '');
+        eventButton.classList.toggle('is-tag-cleared', tagId === '');
         const dot = eventButton.querySelector('.calendar-tag-dot');
-        if (selectedPaintTagId === '') dot?.remove();
+        if (tagId === '') dot?.remove();
         else if (!dot) {
           const nextDot = document.createElement('span');
           nextDot.className = 'calendar-tag-dot';
@@ -796,6 +771,8 @@
   function setCalendarMode(mode, syncUrl = false, focusCurrentTime = false) {
     calendarMode = mode === 'plan' ? 'plan' : 'actual';
     page.dataset.calendarMode = calendarMode;
+    const dateMode = page.querySelector('.daily-date-picker input[name="mode"]');
+    if (dateMode) dateMode.value = calendarMode;
     document.querySelectorAll('[data-calendar-mode]').forEach(button => {
       button.setAttribute('aria-selected', button.dataset.calendarMode === calendarMode ? 'true' : 'false');
     });
@@ -940,7 +917,128 @@
     focusSheetInput(planEditTitle);
   }
 
+  let planBlockChangePending = false;
+  const calendarDelayDuration = 1500;
+  let calendarDelayHold = null;
+  let planBlockDeleteAuthorized = false;
+  let actualEventDeleteAuthorized = false;
+  let actualEventDeleteSubmitting = false;
+  const planBlockDeleteButton = planBlockEditSheet?.querySelector('[data-plan-block-delete]');
+  const planBlockDetachButton = planBlockEditSheet?.querySelector('[data-plan-block-detach]');
+  const planBlockDeleteForm = document.getElementById('calendarPlanBlockDeleteForm');
+  const actualEventDeleteButton = eventEditSheet?.querySelector('[data-actual-event-delete]');
+  const actualEventDeleteForm = document.getElementById('calendarEventDeleteForm');
+
+  function cancelCalendarDelayHold() {
+    if (!calendarDelayHold) return;
+    window.clearTimeout(calendarDelayHold.timer);
+    calendarDelayHold.button.classList.remove('is-holding');
+    calendarDelayHold = null;
+  }
+
+  function registerCalendarDelayButton(button, sheet, shortMessage, onComplete) {
+    if (!button) return;
+    let ignoreClick = false;
+
+    function complete(hold) {
+      if (calendarDelayHold !== hold) return;
+      if (sheet.hidden) { cancelCalendarDelayHold(); return; }
+      cancelCalendarDelayHold();
+      onComplete();
+    }
+
+    function start(kind, keyOrPointer) {
+      if (calendarDelayHold || planBlockChangePending || button.disabled || sheet.hidden) return;
+      const hold = { button, kind, keyOrPointer, timer: null, startedAt: window.performance.now() };
+      calendarDelayHold = hold;
+      button.classList.add('is-holding');
+      hold.timer = window.setTimeout(() => complete(hold), calendarDelayDuration);
+    }
+
+    function finish(kind, keyOrPointer) {
+      const hold = calendarDelayHold;
+      if (!hold || hold.button !== button || hold.kind !== kind || hold.keyOrPointer !== keyOrPointer) return;
+      if (window.performance.now() - hold.startedAt >= calendarDelayDuration) { complete(hold); return; }
+      cancelCalendarDelayHold();
+      ignoreClick = true;
+      window.setTimeout(() => { ignoreClick = false; }, 0);
+      showCalendarToast(shortMessage);
+    }
+
+    button.addEventListener('pointerdown', event => {
+      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      start('pointer', event.pointerId);
+      if (calendarDelayHold?.button === button && calendarDelayHold.keyOrPointer === event.pointerId) {
+        try { button.setPointerCapture(event.pointerId); } catch (error) { /* Pointer capture is optional. */ }
+      }
+    });
+    button.addEventListener('pointermove', event => {
+      if (calendarDelayHold?.button !== button || calendarDelayHold.kind !== 'pointer' || calendarDelayHold.keyOrPointer !== event.pointerId) return;
+      const bounds = button.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) cancelCalendarDelayHold();
+    });
+    button.addEventListener('pointerup', event => finish('pointer', event.pointerId));
+    ['pointercancel', 'lostpointercapture'].forEach(type => button.addEventListener(type, event => {
+      if (calendarDelayHold?.button === button && calendarDelayHold.kind === 'pointer' && calendarDelayHold.keyOrPointer === event.pointerId) cancelCalendarDelayHold();
+    }));
+    button.addEventListener('contextmenu', event => { if (calendarDelayHold?.button === button) event.preventDefault(); });
+    button.addEventListener('keydown', event => {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      event.preventDefault();
+      if (!event.repeat) start('keyboard', event.key);
+    });
+    button.addEventListener('keyup', event => {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      event.preventDefault();
+      finish('keyboard', event.key);
+    });
+    button.addEventListener('blur', () => { if (calendarDelayHold?.button === button) cancelCalendarDelayHold(); });
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      if (event.detail === 0 && !ignoreClick && !planBlockChangePending) showCalendarToast(shortMessage);
+    });
+  }
+
+  registerCalendarDelayButton(planBlockDeleteButton, planBlockEditSheet, '삭제하려면 1.5초 이상 눌러서 삭제하세요.', () => {
+    planBlockDeleteAuthorized = true;
+    planBlockDeleteForm?.requestSubmit();
+  });
+  registerCalendarDelayButton(planBlockDetachButton, planBlockEditSheet, '연결을 해제하려면 1.5초 이상 눌러 주세요.', detachPlanBlockActuals);
+  registerCalendarDelayButton(actualEventDeleteButton, eventEditSheet, '삭제하려면 1.5초 이상 눌러서 삭제하세요.', () => {
+    if (actualEventDeleteSubmitting) return;
+    actualEventDeleteAuthorized = true;
+    actualEventDeleteForm?.requestSubmit();
+  });
+  actualEventDeleteForm?.addEventListener('submit', event => {
+    if (!actualEventDeleteAuthorized || actualEventDeleteSubmitting) {
+      event.preventDefault();
+      if (!actualEventDeleteSubmitting) showCalendarToast('삭제하려면 1.5초 이상 눌러서 삭제하세요.');
+      return;
+    }
+    actualEventDeleteAuthorized = false;
+    actualEventDeleteSubmitting = true;
+    actualEventDeleteButton.disabled = true;
+    preserveCalendarScroll();
+  });
+  window.addEventListener('blur', cancelCalendarDelayHold);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelCalendarDelayHold(); });
+
+  function setPlanBlockChangePending(pending) {
+    planBlockChangePending = pending;
+    if (pending) cancelCalendarDelayHold();
+    planBlockEditSheet?.querySelectorAll('#calendarPlanBlockStatus, [data-plan-block-importance], [data-plan-block-detach], [data-plan-block-delete]').forEach(control => { control.disabled = pending; });
+  }
+
+  function showPlanBlockChangeError(error, fallback) {
+    const message = error instanceof TypeError || error instanceof SyntaxError
+      ? '저장 결과를 확인하지 못했습니다. 새로고침해 확인해 주세요.'
+      : (error.message || fallback);
+    if (window.LifeFlowToast?.show) window.LifeFlowToast.show(message);
+    else window.alert(message);
+  }
+
   function openPlanBlockEditSheet(button) {
+    if (planBlockChangePending) return;
     const itemId = planBlockEditSheet.querySelector('#calendarPlanBlockItemId');
     const blockId = planBlockEditSheet.querySelector('#calendarPlanBlockId');
     const deleteId = planBlockEditSheet.querySelector('#calendarPlanBlockDeleteId');
@@ -956,11 +1054,45 @@
     end.value = button.dataset.planItemEndIndex || '1';
     if (title) title.textContent = button.dataset.planItemTitle || '';
     if (sheetTitle) sheetTitle.textContent = '계획 수정';
+    const followsTodo = button.dataset.planFollowsTodo === '1';
+    const inherited = planBlockEditSheet.querySelector('[data-plan-block-inherited]');
+    const statusContainer = planBlockEditSheet.querySelector('[data-plan-block-status-container]');
+    if (statusContainer) statusContainer.hidden = followsTodo;
+    if (inherited) {
+      inherited.hidden = !followsTodo;
+      const labels = {pending: '미정', in_progress: '진행 중', completed: '완료', postponed: '연기', cancelled: '취소', external: '위임'};
+      const icons = {pending: '—', in_progress: '·', completed: 'V', postponed: '→', cancelled: 'X', external: '○'};
+      const importance = button.dataset.planItemImportance || 'D';
+      const status = button.dataset.planManualStatus || 'pending';
+      const priorityIcon = inherited.querySelector('[data-plan-inherited-importance]');
+      const priorityLabel = inherited.querySelector('[data-plan-inherited-importance-label]');
+      const statusIcon = inherited.querySelector('[data-plan-inherited-status-icon]');
+      const statusLabel = inherited.querySelector('[data-plan-inherited-status-label]');
+      if (priorityIcon) priorityIcon.textContent = importance;
+      if (priorityLabel) priorityLabel.textContent = `중요도 ${importance}`;
+      if (statusIcon) statusIcon.textContent = icons[status] || '—';
+      if (statusLabel) statusLabel.textContent = labels[status] || '미정';
+    }
     checkRadio(planBlockEditSheet, 'importance', button.dataset.planItemImportance || 'D');
+    const importanceGroup = planBlockEditSheet.querySelector('[data-plan-block-importance]');
+    if (importanceGroup) { importanceGroup.hidden = followsTodo; importanceGroup.dataset.savedImportance = button.dataset.planItemImportance || 'D'; }
     const linkCount = Number.parseInt(button.dataset.planBlockActualCount || '', 10)
       || (button.dataset.planItemLinked === '1' ? 1 : 0);
+    const linkControls = planBlockEditSheet.querySelector('[data-plan-block-actual-link-controls]');
+    if (linkControls) linkControls.hidden = linkCount === 0;
+    const statusGroup = planBlockEditSheet.querySelector('#calendarPlanBlockStatus');
+    const statusNote = planBlockEditSheet.querySelector('[data-plan-block-status-note]');
+    if (statusGroup) {
+      const status = button.dataset.planManualStatus || 'pending';
+      statusGroup.querySelectorAll('input').forEach(input => { input.checked = input.value === status; });
+      statusGroup.dataset.savedStatus = status;
+      statusGroup.querySelector('input[value="completed"]').disabled = linkCount === 0;
+    }
+    if (statusNote) statusNote.textContent = linkCount > 0 ? '상태를 선택하면 바로 저장됩니다.' : '실제 일정을 연결한 뒤 완료할 수 있어요.';
     const linkCountLabel = planBlockEditSheet.querySelector('[data-plan-block-link-count]');
-    if (linkCountLabel) linkCountLabel.textContent = linkCount > 0 ? `연결(${linkCount}) · 해제하면 Actual 기록은 유지되고 연결만 사라집니다.` : '연결된 Actual이 없습니다.';
+    const actualMinutes = Number.parseInt(button.dataset.planBlockActualMinutes || '0', 10) || 0;
+    const actualDuration = `${Math.floor(actualMinutes / 60) ? `${Math.floor(actualMinutes / 60)}시간 ` : ''}${actualMinutes % 60 ? `${actualMinutes % 60}분` : (actualMinutes ? '' : '0분')}`.trim();
+    if (linkCountLabel) linkCountLabel.textContent = linkCount > 0 ? `실제 기록 ${actualDuration} · ${linkCount}건 연결. 모두 연결 해제되며 실제 기록은 유지됩니다.` : '연결된 실제 일정이 없습니다.';
     const detailsButton = planBlockEditSheet.querySelector('[data-plan-item-details-open]');
     if (detailsButton) {
       detailsButton.dataset.planItemId = button.dataset.planItemId || '';
@@ -974,6 +1106,167 @@
     }
     openPanel(planBlockEditSheet);
   }
+
+  planBlockEditSheet?.querySelector('#calendarPlanBlockStatus')?.addEventListener('change', async event => {
+    const group = event.currentTarget;
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || !input.checked) return;
+    if (planBlockChangePending) return;
+    const selectedStatus = input.value;
+    const form = group.closest('form');
+    const body = new FormData();
+    body.set('_csrf_token', form.querySelector('[name="_csrf_token"]').value);
+    body.set('daily_plan_block_id', form.querySelector('#calendarPlanBlockId').value);
+    body.set('manual_status', selectedStatus);
+    setPlanBlockChangePending(true);
+    try {
+      const response = await fetch('/calendar/plan-block/status', {method: 'POST', body, headers: {'Accept': 'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || '상태를 변경하지 못했습니다.');
+      if (form.querySelector('#calendarPlanBlockId').value === body.get('daily_plan_block_id')) {
+        group.dataset.savedStatus = selectedStatus;
+      }
+      const labels = {pending: '미정', in_progress: '진행 중', completed: '완료', postponed: '연기', cancelled: '취소', external: '위임'};
+      const icons = {in_progress: '·', completed: 'V', postponed: '→', cancelled: 'X', external: '○'};
+      document.querySelectorAll('[data-plan-block-id]').forEach(button => {
+        if (button.dataset.planBlockId !== body.get('daily_plan_block_id')) return;
+        button.dataset.planManualStatus = selectedStatus;
+        button.setAttribute('aria-label', `${button.dataset.planItemTitle || ''} · ${labels[selectedStatus]}`);
+        let badge = button.querySelector('.calendar-plan-status');
+        if (selectedStatus === 'pending') { badge?.remove(); return; }
+        if (!badge) { badge = document.createElement('span'); badge.className = 'calendar-plan-status'; badge.setAttribute('aria-hidden', 'true'); button.appendChild(badge); }
+        badge.textContent = icons[selectedStatus];
+      });
+      if (form.querySelector('#calendarPlanBlockId').value === body.get('daily_plan_block_id') && !planBlockEditSheet.hidden) closePanels();
+    } catch (error) {
+      if (form.querySelector('#calendarPlanBlockId').value === body.get('daily_plan_block_id')) {
+        group.querySelectorAll('input').forEach(option => { option.checked = option.value === (group.dataset.savedStatus || 'pending'); });
+      }
+      showPlanBlockChangeError(error, '상태를 변경하지 못했습니다.');
+    } finally { setPlanBlockChangePending(false); }
+  });
+
+  async function savePlanBlockChange(url, body) {
+    const response = await fetch(url, {method: 'POST', body, headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}});
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || '계획을 변경하지 못했습니다.');
+    return result;
+  }
+
+  function planBlockChangeBody(blockId) {
+    const body = new FormData();
+    body.set('_csrf_token', planBlockEditSheet.querySelector('[name="_csrf_token"]').value);
+    body.set('daily_plan_block_id', blockId);
+    body.set('date', page.dataset.calendarDate || '');
+    return body;
+  }
+
+  function refreshPlanLinkOptions(itemId) {
+    const isLinked = Array.from(actualLayer.querySelectorAll('[data-event-open]')).some(button => button.dataset.eventDailyPlanItemId === itemId);
+    const ranges = new Map();
+    planLayer.querySelectorAll('[data-plan-item-open]').forEach(button => {
+      if (button.dataset.planItemId === itemId && button.dataset.planBlockId) ranges.set(button.dataset.planBlockId, [Number(button.dataset.planItemStartIndex), Number(button.dataset.planItemEndIndex)]);
+    });
+    const detail = Array.from(ranges.values()).sort((a, b) => a[0] - b[0]).map(range => `${formatGridTime(range[0])}~${formatGridTime(range[1])}`).join(', ') || '시간 미정';
+    document.querySelectorAll('input[name="daily_plan_item_id"][data-plan-detail]').forEach(input => {
+      if (input.value !== itemId) return;
+      const label = input.closest('.calendar-plan-link');
+      if (label) { label.dataset.planDisabled = isLinked ? '1' : '0'; label.classList.toggle('is-disabled', isLinked); }
+      input.disabled = isLinked;
+      input.dataset.planDetail = detail;
+      const text = label?.querySelector('small');
+      if (text) text.textContent = detail + (isLinked ? ' · 이미 연결됨' : '');
+    });
+    document.querySelectorAll('[data-create-plan-group], [data-edit-plan-group]').forEach(syncPlanLinkSummary);
+  }
+
+  function clearPlanBlockActualLinks(blockId) {
+    actualLayer.querySelectorAll('[data-event-open]').forEach(button => {
+      if (button.dataset.eventDailyPlanBlockId !== blockId) return;
+      button.dataset.eventDailyPlanBlockId = '';
+      button.dataset.eventDailyPlanItemId = '';
+      button.classList.remove('is-linked');
+    });
+    planLayer.querySelectorAll('[data-plan-item-open]').forEach(button => {
+      if (button.dataset.planBlockId !== blockId) return;
+      button.dataset.planItemLinked = '0';
+      button.dataset.planBlockActualCount = '0';
+      button.dataset.planBlockActualMinutes = '0';
+      if (button.dataset.planFollowsTodo !== '1') {
+        button.dataset.planManualStatus = 'pending';
+        button.setAttribute('aria-label', `${button.dataset.planItemTitle || ''} · 미정`);
+        button.querySelector('.calendar-plan-status')?.remove();
+      }
+    });
+  }
+
+  planBlockEditSheet?.querySelector('[data-plan-block-importance]')?.addEventListener('change', async event => {
+    const group = event.currentTarget;
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || !input.checked || planBlockChangePending) return;
+    const form = group.closest('form');
+    const blockId = form.querySelector('#calendarPlanBlockId').value;
+    const previous = group.dataset.savedImportance || 'D';
+    const body = planBlockChangeBody(blockId);
+    body.set('importance', input.value);
+    setPlanBlockChangePending(true);
+    try {
+      await savePlanBlockChange(form.action, body);
+      planLayer.querySelectorAll('[data-plan-item-open]').forEach(button => {
+        if (button.dataset.planBlockId !== blockId) return;
+        button.dataset.planItemImportance = input.value;
+        ['a', 'b', 'c', 'd'].forEach(value => button.classList.remove(`importance-${value}`));
+        button.classList.add(`importance-${input.value.toLowerCase()}`);
+        const badge = button.querySelector('.calendar-importance-badge');
+        if (badge) badge.textContent = input.value;
+      });
+      if (form.querySelector('#calendarPlanBlockId').value === blockId && !planBlockEditSheet.hidden) closePanels();
+    } catch (error) {
+      if (form.querySelector('#calendarPlanBlockId').value === blockId) checkRadio(group, 'importance', previous);
+      showPlanBlockChangeError(error, '중요도를 변경하지 못했습니다.');
+    } finally { setPlanBlockChangePending(false); }
+  });
+
+  async function detachPlanBlockActuals() {
+    if (!planBlockDetachButton || planBlockChangePending || planBlockEditSheet.hidden) return;
+    const form = planBlockDetachButton.closest('form');
+    const blockId = form.querySelector('#calendarPlanBlockId').value;
+    const itemId = form.querySelector('#calendarPlanBlockItemId').value;
+    setPlanBlockChangePending(true);
+    try {
+      const result = await savePlanBlockChange('/calendar/plan-block/detach', planBlockChangeBody(blockId));
+      clearPlanBlockActualLinks(blockId);
+      refreshPlanLinkOptions(itemId);
+      if (form.querySelector('#calendarPlanBlockId').value === blockId && !planBlockEditSheet.hidden) closePanels();
+      showCalendarToast(result.message);
+    } catch (error) {
+      showPlanBlockChangeError(error, '연결을 해제하지 못했습니다.');
+    } finally { setPlanBlockChangePending(false); }
+  }
+
+  document.getElementById('calendarPlanBlockDeleteForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!planBlockDeleteAuthorized) {
+      showCalendarToast('삭제하려면 1.5초 이상 눌러서 삭제하세요.');
+      return;
+    }
+    planBlockDeleteAuthorized = false;
+    if (planBlockChangePending) return;
+    const form = event.currentTarget;
+    const blockId = form.querySelector('#calendarPlanBlockDeleteId').value;
+    const itemId = planBlockEditSheet.querySelector('#calendarPlanBlockItemId').value;
+    setPlanBlockChangePending(true);
+    try {
+      const result = await savePlanBlockChange(form.action, new FormData(form));
+      clearPlanBlockActualLinks(blockId);
+      planLayer.querySelectorAll('[data-plan-item-open]').forEach(button => { if (button.dataset.planBlockId === blockId) button.remove(); });
+      refreshPlanLinkOptions(itemId);
+      if (planBlockEditSheet.querySelector('#calendarPlanBlockId').value === blockId && !planBlockEditSheet.hidden) closePanels();
+      showCalendarToast(result.message);
+    } catch (error) {
+      showPlanBlockChangeError(error, '계획 블록을 삭제하지 못했습니다.');
+    } finally { setPlanBlockChangePending(false); }
+  });
 
   let pendingGoalSelect = null;
   let returnPanelAfterGoalCreate = null;
@@ -1019,7 +1312,7 @@
     Array.from(list.querySelectorAll('[data-plan-block-source]')).sort((a, b) =>
       rank(a.dataset.planItemImportance) - rank(b.dataset.planItemImportance)
       || (a.dataset.planCreatedAt || '').localeCompare(b.dataset.planCreatedAt || '')
-    ).forEach(source => list.append(source));
+    ).forEach(source => list.insertBefore(source, list.querySelector('[data-calendar-todo-create-open]')));
   }
   sortPlanSources();
 
@@ -1028,6 +1321,7 @@
   // fails to initialize later in this large page script.
   const initialWorkspace = new URL(window.location.href).searchParams.get('workspace');
   setCalendarWorkMode(initialWorkspace === 'plan-placement' || initialWorkspace === 'tag-paint' ? initialWorkspace : 'normal');
+  window.requestAnimationFrame(() => window.requestAnimationFrame(() => { page.dataset.calendarViewReady = '1'; }));
   if (activityPanel && window.ResizeObserver) new ResizeObserver(syncMobileWorkBar).observe(activityPanel);
   window.addEventListener('resize', syncMobileWorkBar, { passive: true });
   if (page.dataset.calendarWorkModeControlsBound !== '1') {
@@ -1122,14 +1416,17 @@
 
   function clearPlanResizePreview() {
     daygrid.querySelectorAll('.plan-resize-preview').forEach(cell => cell.classList.remove('plan-resize-preview'));
+    updateWorkStatus();
   }
 
   function clearPlanMovePreview() {
     daygrid.querySelectorAll('.plan-move-preview').forEach(cell => cell.classList.remove('plan-move-preview'));
+    updateWorkStatus();
   }
 
   function previewPlanMove(start, end) {
     clearPlanMovePreview();
+    updateWorkStatus('move');
     for (let index = start; index < end; index += 1) {
       daygrid.querySelector(`.cell[data-index="${index}"]`)?.classList.add('plan-move-preview');
     }
@@ -1137,6 +1434,7 @@
 
   function previewPlanResize(start, end) {
     clearPlanResizePreview();
+    updateWorkStatus('resize');
     for (let index = start; index < end; index += 1) {
       daygrid.querySelector(`.cell[data-index="${index}"]`)?.classList.add('plan-resize-preview');
     }
@@ -1178,6 +1476,10 @@
   function appendPlanBlock(itemId, blockId, start, end, source) {
     const title = source?.dataset.planTitle || '계획';
     const importance = source?.dataset.planItemImportance || 'D';
+    const followsTodo = !source?.dataset.blockTemplateId;
+    const status = followsTodo ? (source?.dataset.planTodoStatus || 'pending') : 'pending';
+    const statusLabels = {pending: '미정', in_progress: '진행 중', completed: '완료', postponed: '연기', cancelled: '취소', external: '위임'};
+    const statusIcons = {in_progress: '·', completed: 'V', postponed: '→', cancelled: 'X', external: '○'};
     let cursor = start;
     while (cursor < end) {
       const row = Math.floor(cursor / 6);
@@ -1185,6 +1487,8 @@
       const eventButton = document.createElement('button');
       eventButton.type = 'button';
       eventButton.className = `event plan-event importance-${importance.toLowerCase()}`;
+      eventButton.classList.toggle('is-compact-duration', end - start <= 2);
+      eventButton.setAttribute('aria-label', `${title} · ${statusLabels[status] || '미정'}`);
       eventButton.style.setProperty('--row', String(row));
       eventButton.style.setProperty('--col', String(cursor % 6));
       eventButton.style.setProperty('--span', String(rowEnd - cursor));
@@ -1193,6 +1497,8 @@
       eventButton.dataset.planBlockId = String(blockId);
       eventButton.dataset.planItemTitle = title;
       eventButton.dataset.planItemImportance = importance;
+      eventButton.dataset.planFollowsTodo = followsTodo ? '1' : '0';
+      eventButton.dataset.planManualStatus = status;
       eventButton.dataset.planItemGoalId = source?.dataset.planItemGoalId || '';
       eventButton.dataset.planItemLinked = '0';
       eventButton.dataset.planItemStartIndex = String(start);
@@ -1201,9 +1507,7 @@
       eventButton.innerHTML = `<span class="calendar-importance-badge is-neutral"></span><span class="event-title"></span>${cursor === start ? '<span class="plan-block-resize-handle is-start" data-plan-block-resize="start" aria-hidden="true"></span>' : ''}${rowEnd === end ? '<span class="plan-block-resize-handle is-end" data-plan-block-resize="end" aria-hidden="true"></span>' : ''}`;
       eventButton.querySelector('.calendar-importance-badge').textContent = importance;
       eventButton.querySelector('.event-title').textContent = title;
-      eventButton.addEventListener('click', () => {
-        if (calendarWorkMode === 'normal') openPlanItemEditSheet(eventButton);
-      });
+      if (statusIcons[status]) { const badge = document.createElement('span'); badge.className = 'calendar-plan-status'; badge.setAttribute('aria-hidden', 'true'); badge.textContent = statusIcons[status]; eventButton.appendChild(badge); }
       planLayer.append(eventButton);
       cursor = rowEnd;
     }
@@ -1239,19 +1543,75 @@
     }
   }
 
-  function submitPlanBlockUpdate(itemId, blockId, start, end) {
+  let rangeSavePending = false;
+
+  function replaceRangeSegments(layer, selector, idKey, id, start, end, isActual) {
+    const buttons = Array.from(layer.querySelectorAll(selector)).filter(button => button.dataset[idKey] === String(id));
+    if (!buttons.length) return;
+    const template = (isActual ? buttons[0].closest('.actual-event-form') : buttons[0]).cloneNode(true);
+    buttons.forEach(button => (isActual ? button.closest('.actual-event-form') : button).remove());
+    for (let cursor = start; cursor < end;) {
+      const rowEnd = Math.min(end, (Math.floor(cursor / 6) + 1) * 6);
+      const segment = template.cloneNode(true);
+      const button = isActual ? segment.querySelector(selector) : segment;
+      segment.style.setProperty('--row', String(Math.floor(cursor / 6)));
+      segment.style.setProperty('--col', String(cursor % 6));
+      segment.style.setProperty('--span', String(rowEnd - cursor));
+      button.classList.remove('is-resizing');
+      button.classList.toggle('is-compact-duration', end - start <= 2);
+      button.dataset[isActual ? 'eventStartIndex' : 'planItemStartIndex'] = String(start);
+      button.dataset[isActual ? 'eventEndIndex' : 'planItemEndIndex'] = String(end);
+      button.querySelectorAll(isActual ? '[data-actual-block-resize]' : '[data-plan-block-resize]').forEach(handle => handle.remove());
+      for (const edge of ['start', 'end']) {
+        if ((edge === 'start' && cursor !== start) || (edge === 'end' && rowEnd !== end)) continue;
+        const handle = document.createElement('span');
+        handle.className = `${isActual ? 'actual' : 'plan'}-block-resize-handle is-${edge}`;
+        handle.dataset[isActual ? 'actualBlockResize' : 'planBlockResize'] = edge;
+        handle.setAttribute('aria-hidden', 'true');
+        button.append(handle);
+      }
+      layer.append(segment);
+      cursor = rowEnd;
+    }
+  }
+
+  async function saveRange(url, fields, onSuccess) {
+    if (rangeSavePending) return;
     const token = document.querySelector('input[name="_csrf_token"]')?.value || '';
-    if (!itemId || !blockId || !token) return;
-    const form = document.createElement('form');
-    form.method = 'post'; form.action = '/calendar/plan-block/update';
-    [['_csrf_token', token], ['date', page.dataset.calendarDate || ''], ['calendar_mode', calendarMode], ['daily_plan_item_id', itemId], ['daily_plan_block_id', blockId], ['start_index', start], ['end_index', end]].forEach(([name, value]) => {
-      const input = document.createElement('input');
-      input.type = 'hidden'; input.name = name; input.value = String(value); form.append(input);
+    if (!token) { showCalendarToast('요청이 만료되었습니다. 다시 시도해 주세요.'); return; }
+    const body = new FormData();
+    Object.entries({ _csrf_token:token, date:page.dataset.calendarDate || '', ...fields }).forEach(([key, value]) => body.set(key, String(value)));
+    rangeSavePending = true;
+    try {
+      const response = await fetch(url, { method:'POST', body, headers:{ Accept:'application/json', 'X-Requested-With':'XMLHttpRequest' } });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || '시간 변경을 저장하지 못했습니다.');
+      onSuccess(result);
+    } catch (error) {
+      showCalendarToast(error instanceof TypeError || error instanceof SyntaxError ? '저장 결과를 확인하지 못했습니다. 새로고침해 확인해 주세요.' : (error.message || '시간 변경을 저장하지 못했습니다.'));
+    } finally { rangeSavePending = false; }
+  }
+
+  function submitPlanBlockUpdate(itemId, blockId, start, end) {
+    if (!itemId || !blockId) return;
+    saveRange('/calendar/plan-block/update', { calendar_mode:calendarMode, daily_plan_item_id:itemId, daily_plan_block_id:blockId, start_index:start, end_index:end }, result => {
+      replaceRangeSegments(planLayer, '[data-plan-item-open]', 'planBlockId', blockId, start, end, false);
+      const ranges = new Map();
+      planLayer.querySelectorAll('[data-plan-item-open]').forEach(button => {
+        if (button.dataset.planItemId !== String(itemId) || !button.dataset.planBlockId) return;
+        ranges.set(button.dataset.planBlockId, [Number(button.dataset.planItemStartIndex), Number(button.dataset.planItemEndIndex)]);
+      });
+      const detail = Array.from(ranges.values()).sort((a, b) => a[0] - b[0]).map(range => `${formatGridTime(range[0])}~${formatGridTime(range[1])}`).join(', ');
+      document.querySelectorAll('input[name="daily_plan_item_id"][data-plan-detail]').forEach(input => {
+        if (input.value !== String(itemId)) return;
+        input.dataset.planDetail = detail;
+        const label = input.closest('.calendar-plan-link');
+        const text = label?.querySelector('small');
+        if (text) text.textContent = detail + (label.dataset.planDisabled === '1' ? ' · 이미 연결됨' : '');
+      });
+      document.querySelectorAll('[data-create-plan-group], [data-edit-plan-group]').forEach(syncPlanLinkSummary);
+      if (result.notificationSyncPayload) window.LifeFlowAndroidBridge?.syncNotifications(result.notificationSyncPayload);
     });
-    document.body.append(form);
-    cancelCurrentTimeFocus();
-    preserveCalendarScroll();
-    form.submit();
   }
 
   function gridIndexFrom(grid, x, y) {
@@ -1267,6 +1627,75 @@
   function actualGridIndexFromPoint(x, y) {
     return actualDaygrid ? gridIndexFrom(actualDaygrid, x, y) : null;
   }
+
+  let planCreateRange = null;
+  let planTouch = null;
+  let planTouchTimer = null;
+  let planPullSuspended = false;
+  function clearPlanTouch() {
+    window.clearTimeout(planTouchTimer);
+    planTouchTimer = null;
+    planTouch = null;
+    daygrid.classList.remove('is-range-selecting');
+    daygrid.querySelectorAll('.selecting').forEach(cell => cell.classList.remove('selecting'));
+    if (planPullSuspended) window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(true);
+    planPullSuspended = false;
+    updateWorkStatus();
+  }
+  function previewPlanTouch(start, end) {
+    daygrid.querySelectorAll('.selecting').forEach(cell => cell.classList.remove('selecting'));
+    for (let index = Math.min(start, end); index <= Math.max(start, end); index++) daygrid.querySelector(`.cell[data-index="${index}"]`)?.classList.add('selecting');
+    updateWorkStatus('plan-selection');
+  }
+  daygrid.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1) { if (planTouch) clearPlanTouch(); return; }
+    if (planTouch || rangeSavePending || planPlacementSaving || calendarWorkMode === 'tag-paint' || (calendarWorkMode === 'plan-placement' && selectedPlanBlockSource)) return;
+    if (event.target.closest('[data-plan-item-open], button, input, select, textarea, a')) return;
+    const touch = event.changedTouches[0];
+    const index = gridIndexFromPoint(touch.clientX, touch.clientY);
+    if (index === null) return;
+    const selection = { id:touch.identifier, x:touch.clientX, y:touch.clientY, start:index, current:index, active:false };
+    planTouch = selection;
+    planTouchTimer = window.setTimeout(() => {
+      if (planTouch !== selection) return;
+      selection.active = true;
+      daygrid.classList.add('is-range-selecting');
+      planPullSuspended = Boolean(window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(false));
+      previewPlanTouch(index, index);
+      navigator.vibrate?.(18);
+    }, 360);
+  }, { passive:true });
+  document.addEventListener('touchmove', event => {
+    if (!planTouch) return;
+    const touch = Array.from(event.changedTouches).find(item => item.identifier === planTouch.id);
+    if (!touch) return;
+    if (!planTouch.active) {
+      if (Math.max(Math.abs(touch.clientX - planTouch.x), Math.abs(touch.clientY - planTouch.y)) >= 8) clearPlanTouch();
+      return;
+    }
+    if (event.cancelable) event.preventDefault();
+    const index = gridIndexFromPoint(touch.clientX, touch.clientY);
+    if (index !== null) { planTouch.current = index; previewPlanTouch(planTouch.start, index); }
+  }, { passive:false });
+  document.addEventListener('touchend', event => {
+    if (!planTouch) return;
+    const touch = Array.from(event.changedTouches).find(item => item.identifier === planTouch.id);
+    if (!touch) return;
+    const selection = planTouch;
+    const index = gridIndexFromPoint(touch.clientX, touch.clientY) ?? selection.current;
+    clearPlanTouch();
+    if (!selection.active) return;
+    if (event.cancelable) event.preventDefault();
+    const endIndex = index;
+    const start = Math.min(selection.start, endIndex), end = Math.max(selection.start, endIndex) + 1;
+    if (hasOccupiedRange(start, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex')) { showCalendarToast('이미 등록된 계획 블록과 시간이 겹칩니다.'); return; }
+    openCalendarPlanCreate({ start, end });
+  }, { passive:false });
+  document.addEventListener('touchcancel', event => {
+    if (planTouch && Array.from(event.changedTouches).some(item => item.identifier === planTouch.id)) clearPlanTouch();
+  }, { passive:true });
+  window.addEventListener('pagehide', clearPlanTouch);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearPlanTouch(); });
 
   daygrid.addEventListener('pointerdown', event => {
     if (!planPlacement && !planPlacementSaving && calendarWorkMode === 'plan-placement' && selectedPlanBlockSource && event.isPrimary !== false) {
@@ -1338,6 +1767,7 @@
   let blockResize = null;
   let suppressPlanBlockClick = false;
   planLayer.addEventListener('pointerdown', event => {
+    if (rangeSavePending) return;
     if (calendarWorkMode !== 'normal') return;
     const handle = event.target.closest('[data-plan-block-resize]');
     const block = event.target.closest('[data-plan-block-id]');
@@ -1379,6 +1809,8 @@
     if (!blockResize) return;
     const resize = blockResize; blockResize = null;
     resize.block.classList.remove('is-resizing');
+    resize.block.dataset.planItemStartIndex = String(resize.originalStart);
+    resize.block.dataset.planItemEndIndex = String(resize.originalEnd);
     clearPlanResizePreview();
     try { resize.block.releasePointerCapture(event.pointerId); } catch (error) { /* Capture can already be released. */ }
     if (resize.start < resize.end) {
@@ -1405,10 +1837,14 @@
   function clearActualPreview() {
     actualDaygrid?.querySelectorAll('.actual-selection-preview, .actual-resize-preview, .actual-copy-preview')
       .forEach(cell => cell.classList.remove('actual-selection-preview', 'actual-resize-preview', 'actual-copy-preview'));
+    updateWorkStatus();
   }
 
   function previewActualRange(start, end, className) {
     clearActualPreview();
+    if (className === 'actual-resize-preview') updateWorkStatus('resize');
+    else if (className === 'actual-copy-preview') updateWorkStatus(planCopyDrag ? 'copy' : 'move');
+    else if (actualTouchSelection?.active) updateWorkStatus('actual-selection');
     for (let index = start; index < end; index += 1) {
       actualDaygrid?.querySelector(`.cell[data-index="${index}"]`)?.classList.add(className);
     }
@@ -1434,17 +1870,10 @@
   }
 
   function submitActualRangeUpdate(eventId, start, end) {
-    const token = document.querySelector('input[name="_csrf_token"]')?.value || '';
-    if (!eventId || !token) return;
-    const form = document.createElement('form');
-    form.method = 'post'; form.action = '/calendar/event/time-range';
-    [['_csrf_token', token], ['date', page.dataset.calendarDate || ''], ['event_id', eventId], ['start_index', start], ['end_index', end]].forEach(([name, value]) => {
-      const input = document.createElement('input');
-      input.type = 'hidden'; input.name = name; input.value = String(value); form.append(input);
+    if (!eventId) return;
+    saveRange('/calendar/event/time-range', { event_id:eventId, start_index:start, end_index:end }, () => {
+      replaceRangeSegments(actualLayer, '[data-event-open]', 'eventId', eventId, start, end, true);
     });
-    document.body.append(form);
-    preserveCalendarScroll();
-    form.submit();
   }
 
   function submitPlanBlockCopy(blockId, start, end) {
@@ -1466,9 +1895,87 @@
   let actualMove = null;
   let planCopyDrag = null;
   let suppressActualEventClick = false;
+  let actualTouchSelection = null;
+  let actualTouchTimer = null;
+  let actualTouchPullToRefreshSuspended = false;
+
+  function clearActualTouchSelection() {
+    window.clearTimeout(actualTouchTimer);
+    actualTouchTimer = null;
+    actualTouchSelection = null;
+    actualDaygrid?.classList.remove('is-actual-touch-selecting');
+    updateWorkStatus();
+    if (actualTouchPullToRefreshSuspended) {
+      window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(true);
+      actualTouchPullToRefreshSuspended = false;
+    }
+    clearActualPreview();
+  }
+
+  actualDaygrid?.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1) {
+      if (actualTouchSelection) clearActualTouchSelection();
+      return;
+    }
+    if (calendarWorkMode !== 'normal' || actualTouchSelection) return;
+    if (event.target.closest('[data-event-open], [data-actual-block-resize], button, input, select, textarea, a')) return;
+    const touch = event.changedTouches[0];
+    const index = actualGridIndexFromPoint(touch.clientX, touch.clientY);
+    if (index === null) return;
+    const selection = { identifier:touch.identifier, startX:touch.clientX, startY:touch.clientY, startIndex:index, currentIndex:index, active:false };
+    actualTouchSelection = selection;
+    actualTouchTimer = window.setTimeout(() => {
+      if (actualTouchSelection !== selection) return;
+      selection.active = true;
+      updateWorkStatus('actual-selection');
+      actualDaygrid.classList.add('is-actual-touch-selecting');
+      actualTouchPullToRefreshSuspended = Boolean(window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(false));
+      previewActualRange(index, index + 1, 'actual-selection-preview');
+      if (navigator.vibrate) navigator.vibrate(18);
+    }, 360);
+  }, { passive:true });
+  document.addEventListener('touchmove', event => {
+    const selection = actualTouchSelection;
+    if (!selection) return;
+    const touch = Array.from(event.changedTouches).find(item => item.identifier === selection.identifier);
+    if (!touch) return;
+    if (!selection.active) {
+      if (Math.max(Math.abs(touch.clientX - selection.startX), Math.abs(touch.clientY - selection.startY)) >= 8) clearActualTouchSelection();
+      return;
+    }
+    if (event.cancelable) event.preventDefault();
+    const index = actualGridIndexFromPoint(touch.clientX, touch.clientY);
+    if (index === null) return;
+    selection.currentIndex = index;
+    const range = actualRangeFromStartAndPointer(selection.startIndex, index);
+    previewActualRange(range.start, range.end, 'actual-selection-preview');
+  }, { passive:false });
+  document.addEventListener('touchend', event => {
+    const selection = actualTouchSelection;
+    if (!selection) return;
+    const touch = Array.from(event.changedTouches).find(item => item.identifier === selection.identifier);
+    if (!touch) return;
+    if (!selection.active) {
+      clearActualTouchSelection();
+      return;
+    }
+    const index = actualGridIndexFromPoint(touch.clientX, touch.clientY);
+    const range = actualRangeFromStartAndPointer(selection.startIndex, index === null ? selection.currentIndex : index);
+    clearActualTouchSelection();
+    if (event.cancelable) event.preventDefault();
+    if (hasActualConflict(range.start, range.end)) {
+      showCalendarToast('이미 등록된 실제 일정과 시간이 겹칩니다.');
+      return;
+    }
+    openEventSheet(range.start, range.end);
+  }, { passive:false });
+  document.addEventListener('touchcancel', event => {
+    if (actualTouchSelection && Array.from(event.changedTouches).some(item => item.identifier === actualTouchSelection.identifier)) clearActualTouchSelection();
+  }, { passive:true });
 
   actualDaygrid?.addEventListener('pointerdown', event => {
     if (calendarWorkMode !== 'normal') return;
+    if (event.pointerType === 'touch') return;
     if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
     if (event.target.closest('[data-event-open], [data-actual-block-resize], button, input, select, textarea, a')) return;
     const index = actualGridIndexFromPoint(event.clientX, event.clientY);
@@ -1506,6 +2013,7 @@
   });
 
   actualLayer.addEventListener('pointerdown', event => {
+    if (rangeSavePending) return;
     if (calendarWorkMode !== 'normal') return;
     const handle = event.target.closest('[data-actual-block-resize]');
     const block = event.target.closest('[data-event-open]');
@@ -1567,6 +2075,7 @@
   }, true);
 
   actualLayer.addEventListener('pointerdown', event => {
+    if (rangeSavePending) return;
     if (calendarWorkMode !== 'normal') return;
     if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
     if (event.target.closest('[data-actual-block-resize]')) return;
@@ -1621,6 +2130,7 @@
   });
 
   planLayer.addEventListener('pointerdown', event => {
+    if (rangeSavePending) return;
     if (calendarWorkMode !== 'normal') return;
     if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
     if (event.target.closest('[data-plan-block-resize]')) return;
@@ -1766,23 +2276,18 @@
       false
     ));
   });
-  document.querySelectorAll('[data-plan-item-open]').forEach(button => {
-    button.addEventListener('click', () => {
+  planLayer.addEventListener('click', event => {
+      const button = event.target.closest('[data-plan-item-open]');
+      if (!button || rangeSavePending) return;
       if (calendarWorkMode !== 'normal') return;
       if (isMobileActualMode()) {
         showCalendarToast('시간 블록을 실제 시간표 위로 드래그하세요.');
         return;
       }
       openPlanItemEditSheet(button);
-    });
   });
   document.querySelectorAll('[data-plan-item-details-open]').forEach(button => {
     button.addEventListener('click', () => openPlanItemEditSheet(button, true));
-  });
-  document.getElementById('calendarPlanBlockEditForm')?.addEventListener('submit', event => {
-    const action = document.getElementById('calendarPlanBlockActualLinkAction');
-    if (!(action instanceof HTMLSelectElement) || action.value !== 'detach_all') return;
-    if (!window.confirm('이 계획 블록에 연결된 Actual을 모두 해제할까요? Actual 기록은 삭제되지 않습니다.')) event.preventDefault();
   });
   document.querySelectorAll('[data-plan-block-source]').forEach(button => {
     const handle = button.querySelector('[data-plan-block-source-handle]');
@@ -1813,12 +2318,19 @@
       }
     });
   });
-  document.querySelectorAll('[data-calendar-todo-create-open]').forEach(button => button.addEventListener('click', () => {
+  function openCalendarPlanCreate(range = null) {
     if (!calendarTodoCreateLayer) return;
+    planCreateRange = range;
+    const form = calendarTodoCreateLayer.querySelector('[data-calendar-plan-create-form]');
+    const rangeLabel = form?.querySelector('[data-calendar-create-range]');
+    if (rangeLabel) { rangeLabel.hidden = !range; rangeLabel.textContent = range ? `${formatGridTime(range.start)} ~ ${formatGridTime(range.end)}` : ''; }
+    const hint = form?.querySelector('input[name="schedule_type"] + .muted');
+    if (hint) hint.hidden = Boolean(range);
     calendarTodoCreateLayer.hidden = false;
     document.body.classList.add('is-menu-open');
     window.setTimeout(() => document.getElementById('calendarTodoCreateInputTitle')?.focus(), 0);
-  }));
+  }
+  document.querySelectorAll('[data-calendar-todo-create-open]').forEach(button => button.addEventListener('click', () => openCalendarPlanCreate()));
   document.querySelector('[data-calendar-day-template]')?.addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1868,6 +2380,7 @@
   document.querySelectorAll('[data-calendar-todo-create-close]').forEach(button => button.addEventListener('click', () => {
     if (!calendarTodoCreateLayer) return;
     calendarTodoCreateLayer.hidden = true;
+    planCreateRange = null;
     document.body.classList.remove('is-menu-open');
   }));
   document.querySelector('[data-calendar-plan-create-form]')?.addEventListener('submit', async event => {
@@ -1877,9 +2390,12 @@
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) submitButton.disabled = true;
     try {
-      const response = await fetch(form.action, {
+      const body = new FormData(form);
+      const range = planCreateRange;
+      if (range) { body.set('start_index', String(range.start)); body.set('end_index', String(range.end)); }
+      const response = await fetch(range ? '/calendar/plan-item/with-block' : form.action, {
         method: 'POST',
-        body: new FormData(form),
+        body,
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       });
       const payload = await response.json();
@@ -1917,10 +2433,16 @@
       );
       list.insertBefore(source, nextSource || null);
       sortPlanSources();
+      if (range && payload.segments?.length) {
+        appendPlanBlock(item.id, payload.segments[0].blockId, range.start, range.end, source);
+        if (payload.notificationSyncPayload) window.LifeFlowAndroidBridge?.syncNotifications(payload.notificationSyncPayload);
+      }
       document.querySelector('[data-calendar-day-template]')?.remove();
       form.reset();
       calendarTodoCreateLayer.hidden = true;
       document.body.classList.remove('is-menu-open');
+      planCreateRange = null;
+      if (range) setCalendarWorkMode('plan-placement', true);
       source.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
       source.querySelector('.calendar-plan-source-title')?.click();
       showCalendarToast(payload.message || '계획을 추가했습니다.');
@@ -2317,8 +2839,13 @@
     body.set('date', page.dataset.calendarDate || '');
     fetch('/calendar/retrospect-prompt', { method:'POST', body, headers:{ Accept:'application/json' } })
       .then(response => response.ok ? response.json() : null)
-      .then(result => {
-        if (result?.show) openPanel(retrospectPreview);
+      .then(async result => {
+        if (!result?.show) return;
+        const message = '최근 발행한 회고를 확인하고 오늘 계획을 세워볼까요?';
+        const confirmed = window.LifeFlowUI?.confirm
+          ? await window.LifeFlowUI.confirm({ title:'발행 회고 보기', message, confirmText:'회고 보기', cancelText:'다음에' })
+          : window.confirm(message);
+        if (confirmed) openPanel(retrospectPreview);
       })
       .catch(() => { /* The manual preview remains available. */ });
   }
@@ -2507,7 +3034,7 @@
         option.setAttribute('aria-pressed', option === button ? 'true' : 'false');
       });
     });
-    list.append(button);
+    list.insertBefore(button, list.querySelector('[data-paint-tag-toggle]'));
     return button;
   }
 
@@ -2515,6 +3042,8 @@
   const paintTagToggle = document.querySelector('[data-paint-tag-toggle]');
   paintTagToggle?.addEventListener('click', () => {
     if (!paintTagEditor) return;
+    selectedPaintTagId = null;
+    document.querySelectorAll('[data-calendar-tag-paint]').forEach(option => { option.classList.remove('is-selected'); option.setAttribute('aria-pressed', 'false'); });
     syncCalendarViewport();
     paintTagEditor.hidden = false;
     paintTagToggle.hidden = true;
@@ -2736,121 +3265,15 @@
     }
   });
 
-  document.querySelectorAll('[data-event-open]').forEach(button => {
-    button.addEventListener('click', () => {
+  actualLayer.addEventListener('click', event => {
+      const button = event.target.closest('[data-event-open]');
+      if (!button || rangeSavePending) return;
       if (calendarWorkMode === 'tag-paint') {
         paintActualEventTag(button);
         return;
       }
       if (calendarWorkMode === 'plan-placement') return;
       openEditSheet(button);
-    });
-  });
-
-  document.querySelectorAll('[data-calendar-date-picker]').forEach(input => {
-    input.addEventListener('change', () => {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(input.value)) {
-        window.location.href = `/calendar?date=${encodeURIComponent(input.value)}&mode=${encodeURIComponent(calendarMode)}`;
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-calendar-date-picker-open]').forEach(button => {
-    button.addEventListener('click', () => {
-      const input = button.closest('.calendar-date-picker-control')?.querySelector('[data-calendar-date-picker]');
-      if (!input) return;
-      try {
-        if (typeof input.showPicker === 'function') {
-          input.showPicker();
-          return;
-        }
-      } catch (error) {
-        // Fall through to the click-based picker.
-      }
-      if (typeof input.click === 'function') {
-        input.click();
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-calendar-date-swipe]').forEach(header => {
-    let startX = null;
-    let startY = null;
-    let activePointerId = null;
-    let suppressClick = false;
-
-    function navigateFromGesture(endX, endY) {
-      if (startX === null || startY === null) {
-        startX = null;
-        startY = null;
-        return;
-      }
-
-      const deltaX = endX - startX;
-      const deltaY = endY - startY;
-      startX = null;
-      startY = null;
-
-      if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
-
-      const targetDate = deltaX > 0 ? header.dataset.prevDate : header.dataset.nextDate;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate || '')) return;
-
-      suppressClick = true;
-      window.setTimeout(() => { suppressClick = false; }, 500);
-      window.location.href = `/calendar?date=${encodeURIComponent(targetDate)}&mode=${encodeURIComponent(calendarMode)}`;
-    }
-
-    if (window.PointerEvent) {
-      header.addEventListener('pointerdown', event => {
-        if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
-        activePointerId = event.pointerId;
-        startX = event.clientX;
-        startY = event.clientY;
-      });
-
-      document.addEventListener('pointerup', event => {
-        if (event.pointerId !== activePointerId) return;
-        activePointerId = null;
-        navigateFromGesture(event.clientX, event.clientY);
-      });
-
-      document.addEventListener('pointercancel', event => {
-        if (event.pointerId !== activePointerId) return;
-        activePointerId = null;
-        startX = null;
-        startY = null;
-      });
-    } else {
-      header.addEventListener('touchstart', event => {
-        if (event.touches.length !== 1) return;
-        startX = event.touches[0].clientX;
-        startY = event.touches[0].clientY;
-      }, { passive: true });
-
-      document.addEventListener('touchend', event => {
-        if (event.changedTouches.length !== 1) {
-          startX = null;
-          startY = null;
-          return;
-        }
-        navigateFromGesture(event.changedTouches[0].clientX, event.changedTouches[0].clientY);
-      }, { passive: true });
-
-      document.addEventListener('touchcancel', () => {
-        startX = null;
-        startY = null;
-      }, { passive: true });
-    }
-
-    header.addEventListener('dragstart', event => event.preventDefault());
-
-    document.addEventListener('click', event => {
-      if (!suppressClick) return;
-      event.preventDefault();
-      event.stopPropagation();
-      suppressClick = false;
-    }, true);
   });
 
   if (planPicker) {
@@ -2947,6 +3370,11 @@
       page.classList.remove('is-plan-copy-dragging');
       clearActualPreview();
       clearPlanMovePreview();
+      showCalendarToast('실제 일정 조작을 취소했습니다.');
+      return;
+    }
+    if (event.key === 'Escape' && actualTouchSelection) {
+      clearActualTouchSelection();
       showCalendarToast('실제 일정 조작을 취소했습니다.');
       return;
     }

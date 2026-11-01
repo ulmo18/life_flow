@@ -1,41 +1,26 @@
 <?php
 $energyFieldPrefix = isset($energyFieldPrefix) ? (string) $energyFieldPrefix : 'calendarEnergy';
-$energyDefaultType = isset($energyDefaultType) ? (string) $energyDefaultType : 'consume';
-$energyTypeName = 'execution_energy_type';
+$energyDefaultType = ($energyDefaultType ?? 'consume') === 'none' ? 'none' : 'consume';
 ?>
-<fieldset class="calendar-energy-links" data-energy-fields data-energy-direction="<?= e($energyDefaultType) ?>">
+<fieldset class="calendar-energy-compact" data-energy-fields>
     <legend class="sr-only">실행력 변화 설정</legend>
-    <span class="calendar-energy-field-label">변화</span>
-    <div class="calendar-energy-effect" role="radiogroup" aria-label="실행력 변화">
-        <?php foreach (['consume' => '− 감소', 'none' => '0 유지', 'recover' => '+ 증가'] as $type => $label): ?>
-            <label>
-                <input type="radio" name="<?= e($energyTypeName) ?>" value="<?= e($type) ?>" <?= $energyDefaultType === $type ? 'checked' : '' ?>>
-                <span><?= e($label) ?></span>
-            </label>
-        <?php endforeach; ?>
-    </div>
-
-    <div class="calendar-energy-amount-panel" data-energy-amount-panel <?= $energyDefaultType === 'none' ? 'hidden' : '' ?>>
-        <span class="calendar-energy-field-label">변화량</span>
-        <div class="calendar-energy-amounts" role="radiogroup" aria-label="실행력 변화량">
-            <?php foreach ([10, 25, 50, 75, 100] as $value): ?>
-                <label>
-                    <input type="radio" name="execution_energy_amount" value="<?= $value ?>" <?= $value === 25 ? 'checked' : '' ?>>
-                    <span data-energy-amount-option data-energy-amount-value="<?= $value ?>"><?= $energyDefaultType === 'recover' ? '+' : '−' ?><?= $value ?></span>
-                </label>
-            <?php endforeach; ?>
-            <label>
-                <input type="radio" name="execution_energy_amount" value="custom">
-                <span>직접 입력</span>
-            </label>
+    <input type="hidden" name="execution_energy_type" value="<?= e($energyDefaultType) ?>" data-energy-type>
+    <input type="hidden" name="execution_energy_amount" value="25" data-energy-amount>
+    <input type="hidden" name="execution_energy_custom_value" value="" data-energy-value>
+    <input type="hidden" name="execution_energy_compact" value="1">
+    <div class="calendar-energy-controls" data-energy-controls>
+        <div class="calendar-energy-direction"><button type="button" data-energy-mode>직접 입력</button><div><button type="button" data-energy-direction="recover" aria-label="실행력 증가" aria-pressed="false"><span>+</span></button><button type="button" data-energy-direction="consume" aria-label="실행력 감소" aria-pressed="false"><span>−</span></button></div></div>
+        <div class="calendar-energy-input-area">
+            <div data-energy-slider-panel>
+                <label class="sr-only" for="<?= e($energyFieldPrefix) ?>Slider">실행력 변화량</label>
+                <input type="range" id="<?= e($energyFieldPrefix) ?>Slider" data-energy-slider min="0" max="100" step="25" value="25" aria-valuetext="25">
+                <div class="calendar-energy-ticks" aria-label="실행력 눈금">
+                    <?php foreach ([0, 25, 50, 75, 100] as $value): ?><button type="button" data-energy-tick="<?= $value ?>" aria-label="변화량 <?= $value ?>"><?= $value ?></button><?php endforeach; ?>
+                </div>
+            </div>
+            <label class="calendar-energy-direct" data-energy-direct hidden><span data-energy-sign aria-hidden="true">+</span><span class="sr-only">실행력 변화량 직접 입력</span><input class="input" type="text" inputmode="numeric" autocomplete="off" aria-describedby="<?= e($energyFieldPrefix) ?>EnergyHint" data-energy-direct-input></label>
         </div>
-        <label class="calendar-energy-custom" data-energy-custom hidden>
-            <span>직접 입력 변화량</span>
-            <span class="calendar-energy-custom-control">
-                <b data-energy-custom-prefix aria-hidden="true"><?= $energyDefaultType === 'recover' ? '+' : '−' ?></b>
-                <input class="input" id="<?= e($energyFieldPrefix) ?>CustomValue" name="execution_energy_custom_value" type="number" min="5" max="1000" step="5" inputmode="numeric" placeholder="5~1000" aria-label="실행력 변화량 직접 입력" disabled>
-            </span>
-        </label>
+        <p class="calendar-energy-hint" id="<?= e($energyFieldPrefix) ?>EnergyHint" data-energy-hint>5단위로 5~100까지 입력할 수 있어요.</p>
+        <p class="calendar-energy-message" data-energy-message aria-live="polite">방향을 선택해 주세요</p>
     </div>
-    <p class="calendar-form-hint" data-energy-hint>이 일정은 실행력을 −25 사용합니다.</p>
 </fieldset>

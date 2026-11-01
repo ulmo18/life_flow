@@ -79,6 +79,14 @@ final class Database
         return 'sqlite:' . $sqlitePath;
     }
 
+    private static function ensureSqliteTodoStatus(PDO $connection): void
+    {
+        $columns = array_column($connection->query('PRAGMA table_info(daily_plan_items)')->fetchAll(), 'name');
+        if ($columns !== [] && !in_array('todo_status', $columns, true)) {
+            self::runSqliteMigration($connection, 'migration.daily_plan_item_todo_status.sqlite.sql');
+        }
+    }
+
     private static function ensureSqliteSchemaReady(PDO $connection): void
     {
         $exists = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='user' LIMIT 1");
@@ -90,10 +98,13 @@ final class Database
             self::ensureSqliteDailyPlans($connection);
             self::ensureSqliteUntimedDailyPlans($connection);
             self::ensureSqliteDailyPlanEstimatedDuration($connection);
+            self::ensureSqliteTodoStatus($connection);
             self::ensureSqliteDailyPlanBlocks($connection);
             self::ensureSqliteCalendarBlockSnapshots($connection);
+            self::ensureSqliteDailyPlanBlockStatus($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteRetrospectReviewColumns($connection);
+            self::ensureSqliteRoutineFeedbackSnapshot($connection);
             self::ensureSqliteRetrospectExecutionEnergyColumns($connection);
             self::ensureSqliteRetrospectPlanBlockSnapshot($connection);
             self::ensureSqliteUntimedRetrospectPlans($connection);
@@ -273,6 +284,14 @@ final class Database
         self::backfillSqliteDailyPlanBlocks($connection);
     }
 
+    private static function ensureSqliteDailyPlanBlockStatus(PDO $connection): void
+    {
+        $columns = array_column($connection->query('PRAGMA table_info(daily_plan_blocks)')->fetchAll(), 'name');
+        if (!in_array('manual_status', $columns, true)) {
+            self::runSqliteMigration($connection, 'migration.daily_plan_block_status.sqlite.sql');
+        }
+    }
+
     private static function ensureSqliteCalendarBlockSnapshots(PDO $connection): void
     {
         $columns = array_column($connection->query('PRAGMA table_info(daily_plan_blocks)')->fetchAll(), 'name');
@@ -432,6 +451,16 @@ final class Database
             if (!in_array($column, $columnNames, true)) {
                 $connection->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' TEXT NULL');
             }
+        }
+    }
+
+    private static function ensureSqliteRoutineFeedbackSnapshot(PDO $connection): void
+    {
+        $table = $connection->query("SELECT name FROM sqlite_master WHERE type='table' AND name='retrospect_report_routine_items' LIMIT 1");
+        if ($table === false || $table->fetchColumn() === false) return;
+        $columns = $connection->query('PRAGMA table_info(retrospect_report_routine_items)');
+        if (!in_array('completed_dates_snapshot', array_column($columns->fetchAll(), 'name'), true)) {
+            $connection->exec('ALTER TABLE retrospect_report_routine_items ADD COLUMN completed_dates_snapshot TEXT NULL');
         }
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Csrf;
+use App\Services\DailyDateAppearanceService;
 use App\Services\TodoService;
 use DateTimeImmutable;
 
@@ -25,12 +26,14 @@ final class TodoController
         $this->render('pages/todo/index', [
             'title' => t('todo.title'),
             'todo' => $todo,
+            'dailyDateClass' => (new DailyDateAppearanceService())->getClass($date),
             'todayDate' => $today,
             'prevDate' => (new DateTimeImmutable($date))->modify('-1 day')->format('Y-m-d'),
             'nextDate' => (new DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d'),
             'isToday' => $date === $today,
             'isFuture' => $date > $today,
             'canEdit' => $date === $today,
+            'activeTab' => ($_GET['tab'] ?? '') === 'recurring' ? 'recurring' : 'items',
             'csrfToken' => Csrf::token(),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
@@ -113,6 +116,42 @@ final class TodoController
 
         header('Location: /todo');
         exit;
+    }
+
+    public function updateStatus(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->respond(['ok' => false, 'message' => '요청이 만료되었습니다.'], 419);
+        }
+        $itemId = filter_var($_POST['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $status = is_string($_POST['status'] ?? null) ? $_POST['status'] : '';
+        try {
+            if ($itemId === false || $itemId <= 0 || !$this->todoService->updateStatus($this->userId(), (int) $itemId, $status)) {
+                $this->respond(['ok' => false, 'message' => '상태를 변경하지 못했습니다.'], 422);
+            }
+        } catch (\Throwable $exception) {
+            error_log('[todo] status update failed: ' . $exception->getMessage());
+            $this->respond(['ok' => false, 'message' => '상태를 변경하지 못했습니다. 다시 시도해 주세요.'], 500);
+        }
+        $this->respond(['ok' => true, 'status' => $status], 200);
+    }
+
+    public function delete(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->respond(['ok' => false, 'message' => '요청이 만료되었습니다.'], 419);
+        }
+        $itemId = filter_var($_POST['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $result = $this->todoService->deleteToday($this->userId(), $itemId === false ? 0 : (int) $itemId);
+        $this->respond($result, $result['ok'] ? 200 : 422);
+    }
+
+    public function storeRecurring(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) $this->respond(['ok' => false, 'message' => '요청이 만료되었습니다.'], 419);
+        $result = $this->todoService->createRecurring($this->userId(), $_POST);
+        if ($result['ok']) $_SESSION['flash_success'] = $result['message'];
+        $this->respond($result, $result['ok'] ? 201 : 422);
     }
 
     private function userId(): int

@@ -1,7 +1,7 @@
 <?php require __DIR__ . '/../../layouts/header.php'; ?>
 
 <main class="page plan-page">
-    <h1 class="sr-only">계획</h1>
+    <h1 class="sr-only"><?= e(t('nav.recurring_plan')) ?></h1>
 
     <?php if (!empty($flashSuccess)): ?>
         <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
@@ -14,19 +14,19 @@
     <?php endforeach; ?>
 
     <nav class="plan-view-tabs" aria-label="계획 템플릿 종류">
-        <a href="/plan" <?= ($activeView ?? 'days') === 'days' ? 'aria-current="page"' : '' ?>>하루 템플릿</a>
-        <a href="/plan?view=blocks" <?= ($activeView ?? 'days') === 'blocks' ? 'aria-current="page"' : '' ?>>계획 블록</a>
+        <a href="/plan?view=blocks" <?= ($activeView ?? 'blocks') === 'blocks' ? 'aria-current="page"' : '' ?>>할 일 블록</a>
+        <a href="/plan?view=days" <?= ($activeView ?? 'blocks') === 'days' ? 'aria-current="page"' : '' ?>>하루 템플릿</a>
     </nav>
 
-    <?php if (($activeView ?? 'days') === 'blocks'): ?>
+    <?php if (($activeView ?? 'blocks') === 'blocks'): ?>
         <section class="plan-block-template-section" aria-labelledby="blockTemplateHeading">
             <div class="plan-block-template-intro">
-                <h2 id="blockTemplateHeading">계획 블록 템플릿</h2>
-                <p>반복해서 사용하는 일정명과 기본 소요 시간, 중요도, 목표를 저장합니다. 시작 시각은 하루 템플릿이나 캘린더에서 정합니다.</p>
+                <h2 id="blockTemplateHeading">할 일 블록</h2>
+                <p>반복해서 사용하는 일정명과 중요도, 목표를 저장합니다. 시작 시각은 하루 템플릿이나 캘린더에서 정합니다.</p>
             </div>
 
             <?php if (empty($blockTemplates)): ?>
-                <div class="plan-empty"><strong>저장된 계획 블록이 없습니다.</strong></div>
+                <div class="plan-empty"><strong>저장된 할 일 블록이 없습니다.</strong></div>
             <?php else: ?>
                 <ul class="plan-block-template-list">
                     <?php foreach ($blockTemplates as $template): ?>
@@ -34,7 +34,7 @@
                             <div class="plan-block-template-summary-row">
                                 <div class="plan-block-template-summary">
                                     <span class="importance-badge importance-<?= e(strtolower((string) $template['importance'])) ?>"><?= e((string) $template['importance']) ?></span>
-                                    <div><strong><?= e((string) $template['title']) ?></strong><small><?= e((string) $template['durationLabel']) ?><?= $template['goalTitle'] !== '' ? ' · ' . e((string) $template['goalTitle']) : '' ?></small></div>
+                                    <div><strong><?= e((string) $template['title']) ?></strong><?php if ($template['goalTitle'] !== ''): ?><small><?= e((string) $template['goalTitle']) ?></small><?php endif; ?></div>
                                 </div>
                                 <div class="plan-block-template-actions">
                                     <form method="post" action="/plan/block-template/enabled">
@@ -53,7 +53,7 @@
                                         data-template-importance="<?= e((string) $template['importance']) ?>"
                                         data-template-goal="<?= $template['goalId'] === null ? '' : e((string) $template['goalId']) ?>"
                                     >수정</button>
-                                    <form method="post" action="/plan/block-template/delete" data-confirm-title="계획 블록 삭제" data-confirm="‘<?= e((string) $template['title']) ?>’ 계획 블록을 삭제할까요? 이미 복사한 일정은 유지됩니다." data-confirm-text="삭제">
+                                    <form method="post" action="/plan/block-template/delete" data-confirm-title="할 일 블록 삭제" data-confirm="‘<?= e((string) $template['title']) ?>’ 할 일 블록을 삭제할까요? 이미 복사한 일정은 유지됩니다." data-confirm-text="삭제">
                                         <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                                         <input type="hidden" name="block_template_id" value="<?= e((string) $template['id']) ?>">
                                         <button type="submit" class="btn btn-ghost">삭제</button>
@@ -65,7 +65,7 @@
                 </ul>
             <?php endif; ?>
         </section>
-        <button type="button" class="btn btn-primary plan-block-floating-add" data-plan-block-create>계획 블록 추가</button>
+        <button type="button" class="btn btn-primary plan-block-floating-add" data-plan-block-create>할 일 블록 추가</button>
 
         <div
             class="plan-block-local-layer"
@@ -78,17 +78,18 @@
             data-reopen-goal="<?= e((string) ($blockFormOld['goal'] ?? '')) ?>"
             hidden
         >
-            <button type="button" class="plan-block-local-overlay" data-plan-block-close aria-label="계획 블록 입력창 닫기"></button>
+            <button type="button" class="plan-block-local-overlay" data-plan-block-close aria-label="할 일 블록 입력창 닫기"></button>
             <section class="plan-block-sheet ui-form-sheet" role="dialog" aria-modal="true" aria-labelledby="planBlockSheetTitle">
                 <div class="plan-block-sheet-header ui-form-sheet-header">
-                    <strong id="planBlockSheetTitle" data-plan-block-sheet-title>계획 블록 추가</strong>
+                    <strong id="planBlockSheetTitle" data-plan-block-sheet-title>할 일 블록 추가</strong>
                     <button type="button" class="ui-close-button" data-plan-block-close aria-label="닫기">×</button>
                 </div>
                 <form class="plan-block-template-form" method="post" action="/plan/block-template" data-plan-block-form>
                     <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                     <input type="hidden" name="block_template_id" value="" data-plan-block-id disabled>
-                    <label class="form-label" for="planBlockTemplateTitle">계획 블록명</label>
+                    <label class="form-label" for="planBlockTemplateTitle">할 일 블록명</label>
                     <input class="input" id="planBlockTemplateTitle" name="title" type="text" maxlength="80" required data-plan-block-title>
+                    <div hidden>
                     <label class="form-label" for="planBlockTemplateDuration">기본 소요 시간</label>
                     <select class="input" id="planBlockTemplateDuration" name="duration_index" required data-plan-block-duration>
                         <?php for ($durationIndex = 1; $durationIndex <= 143; $durationIndex++): ?>
@@ -103,6 +104,7 @@
                             <option value="<?= $durationIndex ?>" <?= $durationIndex === 6 ? 'selected' : '' ?>><?= e($durationLabel) ?></option>
                         <?php endfor; ?>
                     </select>
+                    </div>
                     <fieldset class="importance-choice-group">
                         <legend>중요도</legend>
                         <?php foreach (['A' => '중요·긴급', 'B' => '중요·비긴급', 'C' => '긴급·비중요', 'D' => '일반'] as $importance => $label): ?>
@@ -114,14 +116,14 @@
                         <option value="">목표 연결 없음</option>
                         <?php foreach (($goalOptions ?? []) as $goal): ?><option value="<?= e((string) $goal['id']) ?>"><?= e((string) ($goal['label'] ?? $goal['title'] ?? '목표')) ?></option><?php endforeach; ?>
                     </select>
-                    <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary" data-plan-block-submit>계획 블록 저장</button></div>
+                    <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary" data-plan-block-submit>할 일 블록 저장</button></div>
                 </form>
             </section>
         </div>
     <?php else: ?>
         <section class="plan-list-section" aria-label="저장된 하루 템플릿">
             <?php if (empty($plans)): ?>
-                <div class="plan-empty"><strong>아직 저장된 하루 템플릿이 없습니다.</strong><p class="muted">계획 블록을 시간대에 배치해 반복 가능한 하루 흐름을 만들어보세요.</p></div>
+                <div class="plan-empty"><strong>아직 저장된 하루 템플릿이 없습니다.</strong><p class="muted">할 일 블록을 시간대에 배치해 반복 가능한 하루 흐름을 만들어보세요.</p></div>
             <?php else: ?>
                 <ul class="plan-list">
                     <?php foreach ($plans as $plan): ?>

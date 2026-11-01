@@ -220,8 +220,14 @@ final class ExecutionEnergyService
         if ($effectType !== 'none') {
             if ($amount === 'custom') {
                 $customValue = filter_var($input['execution_energy_custom_value'] ?? null, FILTER_VALIDATE_INT);
-                if ($customValue === false || !$this->isValidUnit((int) $customValue)) {
-                    $errors['execution_energy_value'] = '직접 입력 변화량은 5~1000 사이의 5단위로 입력해주세요.';
+                $legacyUnchanged = $customValue !== false && (int) $customValue > 100
+                    && filter_var($input['event_id'] ?? null, FILTER_VALIDATE_INT)
+                    && $this->repository->matchesEventSetting($userId, (int) $input['event_id'], $effectType, (int) $customValue);
+                if ($customValue === false || !$this->isValidUnit((int) $customValue)
+                    || (($input['execution_energy_compact'] ?? '') === '1' && (int) $customValue > 100 && !$legacyUnchanged)) {
+                    $errors['execution_energy_value'] = ($input['execution_energy_compact'] ?? '') === '1'
+                        ? '5단위로 5~100을 입력해 주세요.'
+                        : '직접 입력 변화량은 5~1000 사이의 5단위로 입력해주세요.';
                 } else {
                     $value = (int) $customValue;
                 }

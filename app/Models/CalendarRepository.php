@@ -12,6 +12,7 @@ final class CalendarRepository
 {
     private PDO $db;
     private ?bool $dailyPlanBlocksSupported = null;
+    private ?bool $todoStatusSupported = null;
 
     public function __construct()
     {
@@ -212,16 +213,22 @@ final class CalendarRepository
                     dp.source_plan_group_id AS plan_group_id,
                     dpi.source_plan_template_id AS plan_template_id,
                     dpi.source_plan_block_id, dpi.goal_id, dpi.title, dpi.importance,
+                    ' . ($this->supportsTodoStatus() ? 'dpi.todo_status' : "'pending'") . ' AS todo_status,
                     dpi.start_index, dpi.end_index, dpi.estimated_duration_minutes, dpi.sort_order, dpi.created_at,
                     g.title AS goal_title,
-                    (SELECT ce.id FROM calendar_events ce
-                     WHERE ce.daily_plan_item_id = dpi.id
-                       AND ce.user_id = dp.user_id
-                       AND ce.deleted_at IS NULL
-                     LIMIT 1) AS linked_event_id
+                    linked_event.id AS linked_event_id,
+                    linked_event.start_index AS linked_event_start_index,
+                    linked_event.end_index AS linked_event_end_index
              FROM daily_plan_items dpi
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
              LEFT JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id AND g.deleted_at IS NULL
+             LEFT JOIN calendar_events linked_event ON linked_event.id = (
+                 SELECT ce.id FROM calendar_events ce
+                 WHERE ce.daily_plan_item_id = dpi.id
+                   AND ce.user_id = dp.user_id
+                   AND ce.deleted_at IS NULL
+                 ORDER BY ce.id ASC LIMIT 1
+             )
              WHERE dp.user_id = :user_id
                AND dp.calendar_day_id = :calendar_day_id
                ' . ($includeBlockItems
@@ -232,6 +239,57 @@ final class CalendarRepository
         $stmt->execute(['user_id' => $userId, 'calendar_day_id' => $calendarDayId]);
 
         return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function getTodoLinkedActualEvents(int $userId, int $calendarDayId): array
+    {
+        $blockColumn = $this->supportsDailyPlanBlocks() ? 'daily_plan_block_id' : 'NULL AS daily_plan_block_id';
+        $stmt = $this->db->prepare(
+            'SELECT daily_plan_item_id, ' . $blockColumn . ', title, start_index, end_index
+             FROM calendar_events
+             WHERE user_id = :user_id AND calendar_day_id = :calendar_day_id AND deleted_at IS NULL
+             ORDER BY start_index ASC, id ASC'
+        );
+        $stmt->execute(['user_id' => $userId, 'calendar_day_id' => $calendarDayId]);
+        return $stmt->fetchAll();
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function getTodoTreeActualEvents(int $userId, int $calendarDayId): array
+    {
+        if (!$this->supportsDailyPlanBlocks()) return $this->getTodoLinkedActualEvents($userId, $calendarDayId);
+        $stmt = $this->db->prepare(
+            'SELECT ce.daily_plan_item_id, ce.daily_plan_block_id, ce.title, ce.start_index, ce.end_index, cd.calendar_date AS actual_date
+             FROM calendar_events ce
+             LEFT JOIN daily_plan_blocks dpb ON dpb.id = ce.daily_plan_block_id
+             INNER JOIN daily_plan_items dpi ON dpi.id = COALESCE(dpb.daily_plan_item_id, ce.daily_plan_item_id)
+             INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+             INNER JOIN calendar_days cd ON cd.id = ce.calendar_day_id
+             WHERE ce.user_id = :user_id AND dp.user_id = :owner_id AND dp.calendar_day_id = :calendar_day_id AND ce.deleted_at IS NULL
+             ORDER BY cd.calendar_date, ce.start_index, ce.id'
+        );
+        $stmt->execute(['user_id' => $userId, 'owner_id' => $userId, 'calendar_day_id' => $calendarDayId]);
+        return $stmt->fetchAll();
+    }
+
+    public function supportsTodoStatus(): bool
+    {
+        if ($this->todoStatusSupported !== null) return $this->todoStatusSupported;
+        if ($this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+            $columns = $this->db->query('PRAGMA table_info(daily_plan_items)')->fetchAll();
+            return $this->todoStatusSupported = in_array('todo_status', array_column($columns, 'name'), true);
+        }
+        $column = $this->db->query("SHOW COLUMNS FROM daily_plan_items LIKE 'todo_status'");
+        return $this->todoStatusSupported = $column !== false && $column->fetchColumn() !== false;
+    }
+
+    public function updateTodoStatus(int $userId, int $itemId, string $status): bool
+    {
+        if (!$this->supportsTodoStatus() || !in_array($status, ['pending', 'completed', 'cancelled', 'postponed', 'in_progress', 'external'], true)) return false;
+        $stmt = $this->db->prepare('UPDATE daily_plan_items SET todo_status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND deleted_at IS NULL AND daily_plan_id IN (SELECT id FROM daily_plans WHERE user_id = :user_id)');
+        $stmt->execute(['status' => $status, 'id' => $itemId, 'user_id' => $userId]);
+        return $stmt->rowCount() > 0 || $this->getDailyPlanItemForCompletion($userId, $itemId) !== null;
     }
 
     public function supportsDailyPlanBlocks(): bool
@@ -270,8 +328,10 @@ final class CalendarRepository
             'SELECT dpb.id AS daily_plan_block_id, dpi.id AS daily_plan_item_id,
                     dp.source_plan_group_id AS plan_group_id,
                     dpi.source_plan_template_id AS plan_template_id,
-                    dpi.source_plan_block_id, CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END AS goal_id, COALESCE(dpb.title_snapshot, dpi.title) AS title, COALESCE(dpb.importance_snapshot, dpi.importance) AS importance,
-                    dpb.start_index, dpb.end_index, dpb.sort_order,
+                    dpi.source_plan_block_id, dpi.source_block_template_id, CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END AS goal_id, COALESCE(dpb.title_snapshot, dpi.title) AS title, COALESCE(dpb.importance_snapshot, dpi.importance) AS importance,
+                    dpb.start_index, dpb.end_index, dpb.sort_order, dpb.manual_status,
+                    dpi.deleted_at AS source_deleted_at, dpi.importance AS source_importance,
+                    ' . ($this->supportsTodoStatus() ? 'dpi.todo_status' : "'pending'") . ' AS source_todo_status,
                     g.title AS goal_title,
                     EXISTS (
                         SELECT 1 FROM calendar_events ce
@@ -479,27 +539,83 @@ final class CalendarRepository
         }
     }
 
-    public function updateDailyPlanBlockDetails(int $userId, int $blockId, string $importance, bool $detachActuals): bool
+    public function updateDailyPlanBlockDetails(int $userId, int $blockId, string $importance, bool $detachActuals, ?string $manualStatus = null): bool
     {
         if (!$this->supportsDailyPlanBlocks()) return false;
+        if ($manualStatus !== null && !in_array($manualStatus, ['pending', 'in_progress', 'completed', 'postponed', 'cancelled', 'external'], true)) return false;
         try {
             $this->db->beginTransaction();
             $block = $this->findOwnedDailyPlanBlock($userId, $blockId);
             if ($block === null) { $this->db->rollBack(); return false; }
-            $stmt = $this->db->prepare('UPDATE daily_plan_blocks SET importance_snapshot = :importance, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
-            $stmt->execute(['importance' => $importance, 'id' => $blockId]);
+            if ($manualStatus === 'completed') {
+                $linked = $this->db->prepare('SELECT 1 FROM calendar_events WHERE user_id = :user_id AND daily_plan_block_id = :block_id AND deleted_at IS NULL LIMIT 1');
+                $linked->execute(['user_id' => $userId, 'block_id' => $blockId]);
+                if ($detachActuals || $linked->fetchColumn() === false) { $this->db->rollBack(); return false; }
+            }
+            $statusSql = $manualStatus === null ? '' : ', manual_status = :manual_status';
+            $stmt = $this->db->prepare('UPDATE daily_plan_blocks SET importance_snapshot = :importance' . $statusSql . ', updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $params = ['importance' => $importance, 'id' => $blockId];
+            if ($manualStatus !== null) $params['manual_status'] = $manualStatus;
+            $stmt->execute($params);
             if ($detachActuals) {
                 $clear = $this->db->prepare(
                     'UPDATE calendar_events SET daily_plan_block_id = NULL, daily_plan_item_id = NULL, plan_template_id = NULL, updated_at = CURRENT_TIMESTAMP
                      WHERE user_id = :user_id AND daily_plan_block_id = :block_id AND deleted_at IS NULL'
                 );
                 $clear->execute(['user_id' => $userId, 'block_id' => $blockId]);
+                if ($clear->rowCount() > 0) $this->resetManualStatusIfUnlinked($userId, $blockId);
             }
             $this->db->commit();
             return true;
         } catch (Throwable $exception) {
             if ($this->db->inTransaction()) $this->db->rollBack();
             error_log('[calendar] update daily plan block details failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
+
+    public function updateDailyPlanBlockStatus(int $userId, int $blockId, string $status): bool
+    {
+        if (!$this->supportsDailyPlanBlocks() || !in_array($status, ['pending', 'in_progress', 'completed', 'postponed', 'cancelled', 'external'], true)) return false;
+        try {
+            $this->db->beginTransaction();
+            $block = $this->findOwnedDailyPlanBlock($userId, $blockId);
+            if ($block === null) { $this->db->rollBack(); return false; }
+            if ($status === 'completed') {
+                $linked = $this->db->prepare('SELECT 1 FROM calendar_events WHERE user_id = :user_id AND daily_plan_block_id = :block_id AND deleted_at IS NULL LIMIT 1');
+                $linked->execute(['user_id' => $userId, 'block_id' => $blockId]);
+                if ($linked->fetchColumn() === false) { $this->db->rollBack(); return false; }
+            }
+            $stmt = $this->db->prepare('UPDATE daily_plan_blocks SET manual_status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+            $stmt->execute(['status' => $status, 'id' => $blockId]);
+            $this->db->commit();
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('[calendar] update plan block status failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
+
+    public function detachDailyPlanBlockActuals(int $userId, int $blockId): bool
+    {
+        if (!$this->supportsDailyPlanBlocks()) return false;
+        try {
+            $this->db->beginTransaction();
+            if ($this->findOwnedDailyPlanBlock($userId, $blockId) === null) { $this->db->rollBack(); return false; }
+            $stmt = $this->db->prepare(
+                'UPDATE calendar_events SET daily_plan_block_id = NULL, daily_plan_item_id = NULL,
+                 plan_template_id = NULL, updated_at = CURRENT_TIMESTAMP
+                 WHERE user_id = :user_id AND daily_plan_block_id = :block_id AND deleted_at IS NULL'
+            );
+            $stmt->execute(['user_id' => $userId, 'block_id' => $blockId]);
+            if ($stmt->rowCount() === 0) { $this->db->rollBack(); return false; }
+            $this->resetManualStatusIfUnlinked($userId, $blockId);
+            $this->db->commit();
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('[calendar] detach plan block actuals failed: ' . $exception->getMessage());
             return false;
         }
     }
@@ -699,11 +815,18 @@ final class CalendarRepository
         ?int $goalId,
         ?int $startIndex,
         ?int $endIndex,
-        ?int $estimatedDurationMinutes
+        ?int $estimatedDurationMinutes,
+        ?array $placementRange = null
     ): ?int {
         try {
             $this->db->beginTransaction();
             $day = $this->getOrCreateDay($userId, $date);
+            if ($placementRange !== null && (!$this->supportsDailyPlanBlocks()
+                || $placementRange[0] < 0 || $placementRange[1] > 144 || $placementRange[0] >= $placementRange[1]
+                || $this->hasOverlappingDailyPlanBlockForDay((int) $day['id'], $placementRange[0], $placementRange[1]))) {
+                $this->db->rollBack();
+                return null;
+            }
             $dailyPlan = $this->getDailyPlanForDay($userId, (int) $day['id']);
 
             if ($dailyPlan === null) {
@@ -761,6 +884,8 @@ final class CalendarRepository
             $itemId = (int) $this->db->lastInsertId();
             if ($this->supportsDailyPlanBlocks() && $startIndex !== null && $endIndex !== null) {
                 $this->createInitialDailyPlanBlock($itemId, $startIndex, $endIndex);
+            } elseif ($placementRange !== null) {
+                $this->createInitialDailyPlanBlock($itemId, $placementRange[0], $placementRange[1]);
             }
             $this->db->commit();
 
@@ -807,6 +932,12 @@ final class CalendarRepository
                 $estimatedDurationMinutes = null;
             }
             if ($linkedEventId !== null && $linkAction === 'detach') {
+                $oldBlockId = null;
+                if ($this->supportsDailyPlanBlocks()) {
+                    $previousLink = $this->db->prepare('SELECT daily_plan_block_id FROM calendar_events WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL');
+                    $previousLink->execute(['id' => $linkedEventId, 'user_id' => $userId]);
+                    $oldBlockId = (int) $previousLink->fetchColumn();
+                }
                 $stmt = $this->db->prepare(
                     'UPDATE calendar_events
                      SET daily_plan_item_id = NULL' . ($this->supportsDailyPlanBlocks() ? ', daily_plan_block_id = NULL' : '') . ',
@@ -814,6 +945,7 @@ final class CalendarRepository
                      WHERE id = :id AND user_id = :user_id'
                 );
                 $stmt->execute(['id' => $linkedEventId, 'user_id' => $userId]);
+                if ($oldBlockId > 0) $this->resetManualStatusIfUnlinked($userId, $oldBlockId);
             } elseif ($linkedEventId !== null && $linkAction === 'sync') {
                 if ($startIndex === null || $endIndex === null) {
                     $stmt = $this->db->prepare(
@@ -1141,6 +1273,11 @@ final class CalendarRepository
             }
             $stmt->execute($params);
 
+            $oldBlockId = (int) ($currentEvent['daily_plan_block_id'] ?? 0);
+            if ($oldBlockId > 0 && $oldBlockId !== (int) ($dailyPlanBlockId ?? 0)) {
+                $this->resetManualStatusIfUnlinked($userId, $oldBlockId);
+            }
+
             $this->db->commit();
             return true;
         } catch (Throwable $exception) {
@@ -1387,20 +1524,44 @@ final class CalendarRepository
 
     public function softDeleteEvent(int $userId, int $eventId): bool
     {
-        $sql = 'UPDATE calendar_events
+        try {
+            $this->db->beginTransaction();
+            $blockColumn = $this->supportsDailyPlanBlocks() ? 'daily_plan_block_id' : 'NULL AS daily_plan_block_id';
+            $event = $this->db->prepare('SELECT ' . $blockColumn . ' FROM calendar_events WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL');
+            $event->execute(['id' => $eventId, 'user_id' => $userId]);
+            $row = $event->fetch();
+            if ($row === false) { $this->db->rollBack(); return false; }
+            $sql = 'UPDATE calendar_events
                 SET deleted_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                     AND user_id = :user_id
                     AND deleted_at IS NULL';
 
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            'id' => $eventId,
-            'user_id' => $userId,
-        ]);
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute(['id' => $eventId, 'user_id' => $userId]);
+            if ($stmt->rowCount() === 0) { $this->db->rollBack(); return false; }
+            if ((int) ($row['daily_plan_block_id'] ?? 0) > 0) $this->resetManualStatusIfUnlinked($userId, (int) $row['daily_plan_block_id']);
+            $this->db->commit();
+            return true;
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('[calendar] delete event failed: ' . $exception->getMessage());
+            return false;
+        }
+    }
 
-        return $stmt->rowCount() > 0;
+    private function resetManualStatusIfUnlinked(int $userId, int $blockId): void
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE daily_plan_blocks SET manual_status = 'pending', updated_at = CURRENT_TIMESTAMP
+             WHERE id = :block_id
+               AND EXISTS (SELECT 1 FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                           WHERE dpi.id = daily_plan_blocks.daily_plan_item_id AND dp.user_id = :owner_id)
+               AND NOT EXISTS (SELECT 1 FROM calendar_events ce WHERE ce.daily_plan_block_id = :linked_block_id
+                               AND ce.user_id = :event_user_id AND ce.deleted_at IS NULL)"
+        );
+        $stmt->execute(['block_id' => $blockId, 'owner_id' => $userId, 'linked_block_id' => $blockId, 'event_user_id' => $userId]);
     }
 
     private function clearEventPlanLinks(int $userId, int $calendarDayId): void
@@ -1639,7 +1800,7 @@ final class CalendarRepository
     private function findOwnedDailyPlanBlock(int $userId, int $blockId): ?array
     {
         $stmt = $this->db->prepare(
-            'SELECT dpb.id, dpb.daily_plan_item_id, dp.calendar_day_id
+            'SELECT dpb.id, dpb.daily_plan_item_id, dp.calendar_day_id, dpi.source_block_template_id
              FROM daily_plan_blocks dpb
              INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
@@ -1650,6 +1811,13 @@ final class CalendarRepository
         $block = $stmt->fetch();
 
         return $block !== false ? $block : null;
+    }
+
+    public function planBlockFollowsTodo(int $userId, int $blockId): bool
+    {
+        if (!$this->supportsDailyPlanBlocks() || !$this->supportsTodoStatus()) return false;
+        $block = $this->findOwnedDailyPlanBlock($userId, $blockId);
+        return $block !== null && $block['source_block_template_id'] === null;
     }
 
     private function userOwnsGoal(int $userId, int $goalId): bool

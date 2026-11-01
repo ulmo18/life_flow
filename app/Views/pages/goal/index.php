@@ -56,6 +56,7 @@ $renderGoalBranch = static function (array $nodes, int $depth = 0, ?int $parentI
     <nav class="goal-mode-switch" aria-label="목표 범위">
         <a href="/goal" <?= $selectedMode === 'focus' ? 'aria-current="page"' : '' ?>>지금 집중</a>
         <a href="/goal?mode=all" <?= $selectedMode === 'all' ? 'aria-current="page"' : '' ?>>전체 목표</a>
+        <a href="/goal/review">목표 회고</a>
     </nav>
     <?php if ($selectedMode === 'all' && !empty($goalTree)): ?><div class="goal-map-toolbar"><button type="button" class="btn btn-secondary" data-goal-toggle-all>전부 펼치기</button></div><?php endif; ?>
 

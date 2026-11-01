@@ -1,5 +1,9 @@
 # Database Migrations
 
+To-do item states require `sql/migration.daily_plan_item_todo_status.mysql.sql` once on existing MySQL/MariaDB databases. SQLite applies the equivalent migration automatically. Existing items begin at `pending`; existing per-block states are preserved separately and are not converted into item completion.
+
+Placed Plan block manual state requires `migration.daily_plan_block_status.mysql.sql` once on existing MySQL/MariaDB databases after backup. Existing rows default to `pending`. SQLite adds the same column automatically on connection; `migration.daily_plan_block_status.sqlite.sql` is available for controlled manual migration. Do not reapply either one-time `ALTER TABLE` to a database where the column already exists.
+
 The Calendar daily published-Retrospect prompt uses `calendar_retrospect_prompt_date` in `user_preferences`. New schemas contain it; existing installations may apply `migration.calendar_retrospect_prompt.mysql.sql` or `migration.calendar_retrospect_prompt.sqlite.sql` once. The existing preference repository also adds missing columns when initialized.
 
 Independent Calendar blocks require `migration.calendar_block_snapshots.mysql.sql` once on existing MySQL installations, after a verified backup and before deploying the updated application. SQLite upgrades existing databases at connection time; new databases include the columns. Existing block snapshots preserve the source values at migration time; existing duplicate-looking placement items cannot be identified retroactively and are not changed. The SQLite in-memory and MySQL connection-local temporary-table smoke tests are `tests/calendar_block_migration.php` and `tests/calendar_block_migration_mysql.php`.
@@ -24,6 +28,8 @@ Apply after Goal, Plan, and Calendar base tables:
 The migration creates `daily_plans` and `daily_plan_items`, copies existing `calendar_days.plan_group_id` selections, preserves copied goal links, and backfills actual-event links where a source template match exists.
 
 ## Purpose
+
+Before deploying explicit Plan-block completion, back up the database and run `sql/migration.plan_block_explicit_completion.mysql.sql` or `sql/migration.plan_block_explicit_completion.sqlite.sql` once. It marks previously Actual-linked blocks completed to preserve their old interpretation. A marker prevents reapplying it from overwriting later user choices; do not run this backfill on a new database after users start creating explicit states.
 
 This document records the deployment order for the current Calendar, notification-preference, and Memo schema additions. Both MySQL and SQLite remain supported.
 
@@ -114,3 +120,10 @@ Execution Energy feedback now records 50%, 25%, and 0% remaining-capacity milest
 - SQLite: `sql/migration.execution_energy_zero_notice.sqlite.sql`
 
 SQLite fallback performs this compatibility migration automatically when the old 25/50-only constraint is detected.
+# 회고 루틴 누적 기록 스냅샷
+
+기존 MySQL DB에 `sql/migration.retrospect_routine_feedback.mysql.sql`을 한 번 적용한다. SQLite는 앱이 기존 DB의 누락된 열을 자동 추가하며, 별도 수동 마이그레이션이 필요한 경우 `sql/migration.retrospect_routine_feedback.sqlite.sql`을 사용한다. 두 스크립트는 이미 열이 존재하면 다시 실행하지 않는다. 기존 발행 회고의 데이터를 소급 변경하지 않는다.
+
+## Try와 실제 일정의 명시적 연결
+
+기존 MySQL DB에 `sql/migration.retrospect_try_event_links.mysql.sql`을 적용한다. SQLite는 앱 시작 시 현재 스키마의 테이블을 보강하며, 수동 적용 시 `sql/migration.retrospect_try_event_links.sqlite.sql`을 사용한다. 두 스크립트는 테이블이 이미 있으면 기존 연결을 보존한다.

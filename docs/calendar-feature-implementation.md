@@ -1,7 +1,27 @@
 # Calendar Feature Implementation
 
+Plans backed by a To-do display that To-do's state and importance, including its last values after the source is deleted. The block detail sheet displays the importance badge and status symbol with labels on one read-only line. On mobile in the 50:50 view the timetable hides Plan importance/state icons and Actual tag dots; single-timetable views retain them. Actual tag background colors remain visible. State and importance are changed on the To-do; an Actual link does not change them and completion does not require a link. Template-only blocks without a To-do retain their existing independent block state and importance.
+
+The state choices and timetable indicators display `V 완료`, `X 취소`, `→ 연기`, `· 진행 중`, and `○ 위임`. The existing `postponed` and `external` values are retained and displayed as 연기 and 위임, including previously saved records; the unspecific initial state remains 미정.
+
+For template-only blocks, the Plan block editor retains the six immediate-save state choices and independent importance. Completion requires a linked Actual under the existing block rules.
+
+The Plan block editor has no general save button. To-do-backed blocks expose only Actual-link detachment and deletion in the editor; block movement and resize remain available on the timetable. The `실제 일정 연결 해제` button appears only for linked blocks and detaches all of them without changing the To-do's state or importance. Successful detachment or deletion closes the editor without a reload. Failures leave the editor open. Deletion and detachment preserve Actual records while removing their Plan links.
+
+Plan block deletion, Actual-link detachment and Actual-event deletion use delay buttons: each action starts only after a continuous 1.5-second hold, with a red progress fill. Early release shows the relevant instruction and makes no request. Pointer cancellation, movement outside, focus loss, closing the sheet or hiding the page cancels the hold; keyboard users can hold Space or Enter. A successful request retains each action's existing server behavior: Plan deletion and detachment preserve linked Actual records, while Actual-event deletion keeps its existing redirect.
+
+Manual check: create one To-do with two Plan blocks, change its state and importance in To-do, then verify both blocks and their detail sheets show those values in Calendar. Complete without an Actual, then attach and detach an Actual and confirm the To-do state does not reset. Move and resize a block and delete another; check links and remaining records. Delete the source and verify the last inherited values remain. Separately check that a directly placed reusable template block retains its existing independent controls.
+
+- Energy input modes occupy the same grid cell. The direct input is vertically centered in the slider's reserved height, and an always-reserved hint row explains the 5-unit, 5–100 range in direct mode. The inactive slider retains its natural height without interaction, keeping mode transitions stable and allowing validation messages to expand.
+- Switching from an invalid direct-entry draft to the slider discards the draft and restores the value from before direct entry (−25 for a new event). Valid off-tick values remain unchanged and the slider shows no selected tick until the user chooses one.
+
+- Actual-event create and edit sheets group title and time in a borderless subtle surface, keep tags ungrouped, use compact 44px inputs and centered borderless additional-record cards, and retain the fixed header and save actions. 생활 기록, 메모 and 실행력 have centered label, status and chevron columns; 실행력 opens its compact input controls.
+- Actual-sheet memo textarea width accounts for the disclosure card margins. Compact time selectors remain 44px high and align to opposite edges, and tags have extra vertical spacing. Calendar's energy component keeps UI state separate from the existing `execution_energy_type` and amount fields: creation initially shows −25, choosing 0 serializes to `none`, and a direction without a value blocks submission. Direct-input mode is on the left, direction controls on the right, and the sign shares one field container with the direct input. Increase uses green and decrease red, with small visual buttons that retain 44px targets. Slider values are 0/25/50/75/100; custom values use 5-unit increments through 100. A pre-existing value above 100 is accepted only if it and its direction remain unchanged.
+
+- Empty Plan and Actual grid touch input distinguishes scrolling from entry: movement of 8px before a 360ms hold cancels the pending selection and allows native scroll; after the hold, non-passive touch movement prevents scrolling and updates the snapped 10-minute selection. Releasing after a stationary long press opens a single-cell entry; a short tap does nothing. Mouse and pen behavior remains unchanged. Touch cancellation and Escape clear the preview.
+
 - The mobile date navigation groups the compact date, weekday, visible picker caret and borderless 44px arrows into the swipe target without stretching the gap; the picker, navigation, search and menu share a vertically centered 44px row. Search and menu remain right-aligned outside the swipe target. The pointer end is tracked on the document so a swipe ending outside the group still navigates.
-- The `+` menu opens the existing published-Retrospect popup. On the first visit to today's Calendar per user-local date, a CSRF-protected JSON claim atomically records the date in `user_preferences`; the server opens the latest published report only when that first visit has no Plan blocks and a report exists. Actual events do not block the prompt. Past/future date visits do not consume the claim.
+- The `+` menu opens the existing published-Retrospect popup. On the first visit to today's Calendar per user-local date, a CSRF-protected JSON claim atomically records the date in `user_preferences`; when that first visit has no Plan blocks and a report exists, a confirmation dialog asks whether to open the report. Declining does not reopen the prompt that day. Actual events do not block it. Past/future date visits do not consume the claim.
 
 ## Responsive workspace and scrolling
 
@@ -15,7 +35,7 @@
 - If the selected date has no daily Plan items, a guide points to the compact-workspace 계획 배치 button until the user opens it. Timetable titles are non-interactive labels.
 - On mobile, centered abbreviated timetable labels sit in the sticky date header and follow the visible timetable; the tag-paint choices wrap and scroll vertically rather than horizontally. The tag drawer header links to `/tags`, and plan block outlines are solid.
 - A successful Plan placement clears its source selection so another placement requires a new selection. Failed saves preserve selection for retry, and a pending save blocks another placement request.
-- Plan blocks store their own title, importance and goal snapshots. Source edits or soft deletion leave placed blocks and their block-linked Actual events intact; each block's importance is edited independently. Newly copied template source items are marked and excluded from the placement list, without guessing the origin of pre-existing items.
+- Plan blocks store title, importance and Goal snapshots. Source edits or soft deletion leave blocks and their linked Actual events intact; in Calendar, To-do-backed blocks display the source's current or last state and importance, while template-only blocks retain independent values. Newly copied template sources are excluded from the placement list.
 - Plan-link options list the daily item's placed block ranges chronologically and use the legacy item range or 시간 미정 only when no blocks exist. Plan-to-Actual copy writes the default 25-point consumption in the event transaction; failures roll back both writes, and overlapping duplicate copies are rejected. MySQL serializes these copies per calendar day; existing events are not backfilled.
 - The Calendar 계획 추가 sheet submits the existing `POST /todo` form with `Accept: application/json`. `TodoController::store()` retains redirect behavior for ordinary form navigation and returns `201` JSON with the new item for this request. Calendar appends and selects the new source card without reloading.
 - Tag painting uses the same bottom-sheet container as 계획 배치, rather than a palette above the timetable.
@@ -52,7 +72,7 @@
 - On mobile, each visible workspace title toggles its own temporary 80:20 split; selecting it again restores the default 40:60 split. The selected state applies direct grid columns rather than relying only on inherited variables.
 - In mobile Actual mode, Plan blocks are copy sources only: tap, resize, and intra-Plan movement are disabled; drag from Plan to Actual creates the copy. A compact overlapping-card-and-arrow cue and the Actual target-grid treatment communicate the direction without persistent instructional prose.
 - Plan-tab changes do not auto-scroll to the current time. Plan block creation captures and restores the user's working scroll position across its redirect.
-- `계획 수정` changes the Plan block's importance and can detach every Actual connected to that block. Detach preserves each Actual record and clears its Plan connection only.
+- For a To-do-backed Plan, `계획 수정` shows inherited state and importance and can detach every connected Actual. Detach preserves each Actual record and clears its Plan connection only.
 - Condition, quick memo, and existing template-link actions reuse the Calendar FAB sheets in one vertical action column. No Pomodoro action is rendered because there is no reusable Pomodoro service.
 
 ## Scope
@@ -312,6 +332,8 @@ Retrospect persistence is handled by the Retrospect feature. Calendar remains th
 - See `docs/database-migrations.md` for the recommended deployment order when applying this together with other current migrations.
 
 ## Manual Test Checklist
+
+- In the Actual edit sheet, release `일정 삭제` before 1.5 seconds and confirm the toast appears and the record remains. Hold it for 1.5 seconds and confirm the progress fill, deletion and existing redirect. Repeat with pointer cancellation and with Space or Enter; a cancelled hold must not delete.
 
 - Compare Calendar with another feature menu at mobile, tablet, and desktop widths. Confirm both content containers use the same responsive width and the Calendar `+` action stays aligned with the container's right edge.
 - Connect a Plan template, edit the template from Plan, and confirm the already-copied Calendar day does not change.

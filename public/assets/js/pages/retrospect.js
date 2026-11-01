@@ -1,5 +1,38 @@
 (function () {
-  const settingsLayer = document.querySelector('[data-retrospect-settings-layer]');
+  const historyMonthInput = document.getElementById('historyMonth');
+  const historyMonthOpen = document.querySelector('[data-history-month-open]');
+  const historyMonthDialog = document.getElementById('historyMonthDialog');
+  if (historyMonthInput && historyMonthOpen && historyMonthDialog && typeof historyMonthDialog.showModal === 'function') {
+    const yearLabel = historyMonthDialog.querySelector('[data-history-year]');
+    const monthGrid = historyMonthDialog.querySelector('[data-history-month-grid]');
+    let year = 0;
+    function updateMonthLabel() {
+      const [selectedYear, selectedMonth] = historyMonthInput.value.split('-');
+      historyMonthOpen.textContent = `${selectedYear}년 ${Number(selectedMonth)}월 ▾`;
+      historyMonthOpen.setAttribute('aria-label', `${selectedYear}년 ${Number(selectedMonth)}월 선택`);
+    }
+    function renderMonths() {
+      yearLabel.textContent = `${year}년`;
+      historyMonthDialog.querySelector('[data-history-year-prev]').disabled = year <= 1;
+      historyMonthDialog.querySelector('[data-history-year-next]').disabled = year >= 9999;
+      monthGrid.replaceChildren();
+      for (let month = 1; month <= 12; month++) {
+        const value = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+        const button = document.createElement('button');
+        button.type = 'button'; button.textContent = `${month}월`;
+        if (value === historyMonthInput.value) { button.classList.add('is-selected'); button.setAttribute('aria-pressed', 'true'); }
+        button.addEventListener('click', () => { historyMonthInput.value = value; updateMonthLabel(); historyMonthDialog.close(); });
+        monthGrid.append(button);
+      }
+    }
+    historyMonthOpen.addEventListener('click', () => { year = Number(historyMonthInput.value.slice(0, 4)); renderMonths(); historyMonthDialog.showModal(); (monthGrid.querySelector('.is-selected') || monthGrid.querySelector('button'))?.focus(); });
+    historyMonthDialog.querySelector('[data-history-year-prev]').addEventListener('click', () => { if (year > 1) { year--; renderMonths(); } });
+    historyMonthDialog.querySelector('[data-history-year-next]').addEventListener('click', () => { if (year < 9999) { year++; renderMonths(); } });
+    historyMonthDialog.querySelector('[data-history-month-close]').addEventListener('click', () => historyMonthDialog.close());
+    historyMonthDialog.addEventListener('click', event => { if (event.target === historyMonthDialog) historyMonthDialog.close(); });
+    historyMonthDialog.addEventListener('close', () => historyMonthOpen.focus({ preventScroll:true }));
+    updateMonthLabel(); historyMonthInput.hidden = true; historyMonthOpen.hidden = false;
+  }
   const dateLayer = document.querySelector('[data-retrospect-date-layer]');
   const detailLayers = {
     routine: document.querySelector('[data-routine-detail-layer]'),
@@ -10,6 +43,18 @@
   const kptSheet = document.querySelector('[data-kpt-sheet]');
   const kptForm = document.querySelector('[data-kpt-form]');
   const routineState = window.LifeFlowRoutineState;
+  const compositionInfo = document.querySelector('[data-composition-info]');
+  const compositionHelp = document.getElementById('retrospectCompositionHelp');
+  function setCompositionHelp(open) {
+    if (!compositionInfo || !compositionHelp) return;
+    compositionHelp.hidden = !open;
+    compositionInfo.setAttribute('aria-expanded', String(open));
+  }
+  compositionInfo?.addEventListener('click', () => setCompositionHelp(compositionHelp?.hidden !== false));
+  document.addEventListener('click', event => {
+    if (compositionHelp && !compositionHelp.hidden && !compositionInfo?.contains(event.target) && !compositionHelp.contains(event.target)) setCompositionHelp(false);
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && compositionHelp && !compositionHelp.hidden) { setCompositionHelp(false); compositionInfo?.focus(); } });
 
   function openModal(layer) {
     if (!layer) return;
@@ -20,18 +65,17 @@
   function closeModal(layer) {
     if (!layer) return;
     layer.hidden = true;
-    if ([settingsLayer, dateLayer, ...Object.values(detailLayers)].every(item => !item || item.hidden)) {
+    if ([dateLayer, ...Object.values(detailLayers)].every(item => !item || item.hidden)) {
       document.body.classList.remove('is-ui-open');
     }
   }
 
-  document.querySelector('[data-retrospect-open-settings]')?.addEventListener('click', () => openModal(settingsLayer));
   document.querySelector('[data-retrospect-open-date]')?.addEventListener('click', () => openModal(dateLayer));
-  document.querySelectorAll('[data-retrospect-close-settings]').forEach(button => button.addEventListener('click', () => closeModal(settingsLayer)));
   document.querySelectorAll('[data-retrospect-close-date]').forEach(button => button.addEventListener('click', () => closeModal(dateLayer)));
-  document.querySelectorAll('[data-detail-close]').forEach(button => button.addEventListener('click', () => {
-    closeModal(button.closest('.retrospect-local-layer'));
-  }));
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-detail-close]');
+    if (button) closeModal(button.closest('.retrospect-local-layer'));
+  });
 
   function selectRecordTab(name) {
     document.querySelectorAll('[data-record-tab]').forEach(button => {
@@ -43,21 +87,80 @@
   }
 
   document.querySelectorAll('[data-record-tab]').forEach(button => {
-    button.addEventListener('click', () => selectRecordTab(button.dataset.recordTab || 'routine'));
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-composition-target]').forEach(item => { item.classList.remove('is-active'); item.setAttribute('aria-pressed', 'false'); });
+      document.querySelectorAll('[data-composition-category]').forEach(row => row.classList.remove('is-composition-match'));
+      selectRecordTab(button.dataset.recordTab || 'routine');
+    });
+  });
+  document.querySelectorAll('[data-composition-target]').forEach(button => {
+    button.addEventListener('click', () => {
+      const kind = button.dataset.compositionTarget;
+      document.querySelectorAll('[data-composition-target]').forEach(item => { item.classList.toggle('is-active', item === button); item.setAttribute('aria-pressed', String(item === button)); });
+      document.querySelectorAll('[data-composition-category]').forEach(row => row.classList.toggle('is-composition-match', (row.dataset.compositionCategory || '').split(/\s+/).includes(kind)));
+      selectRecordTab(kind === 'plan' || kind === 'actual' ? 'schedule' : kind);
+      document.querySelector('.retrospect-daily-card')?.scrollIntoView({ behavior:'auto', block:'nearest' });
+    });
   });
   if (window.location.hash === '#schedule') selectRecordTab('schedule');
   if (window.location.hash === '#memo') selectRecordTab('memo');
 
-  document.querySelectorAll('[data-detail-open]').forEach(button => {
-    button.addEventListener('click', () => {
-      const target = button.dataset.detailOpen || '';
-      const detailKind = target.split('-detail-')[0];
-      const detailLayer = detailLayers[detailKind];
-      detailLayer?.querySelectorAll('[data-detail-panel]').forEach(panel => {
-        panel.hidden = panel.dataset.detailPanel !== target;
-      });
-      openModal(detailLayer);
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-detail-open]');
+    if (!button) return;
+    const target = button.dataset.detailOpen || '';
+    const detailKind = target.split('-detail-')[0];
+    const detailLayer = detailLayers[detailKind];
+    detailLayer?.querySelectorAll('[data-detail-panel]').forEach(panel => {
+      panel.hidden = panel.dataset.detailPanel !== target;
     });
+    openModal(detailLayer);
+  });
+
+  let sortController = null;
+  let sortRequestId = 0;
+  document.addEventListener('click', async event => {
+    const link = event.target.closest('.retrospect-sort-tabs a');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (typeof fetch !== 'function' || typeof AbortController !== 'function' || typeof DOMParser !== 'function') return;
+    const panel = link.closest('[data-record-panel="schedule"]');
+    if (!panel || !detailLayers.schedule) return;
+    event.preventDefault();
+    sortController?.abort();
+    sortController = new AbortController();
+    const requestId = ++sortRequestId;
+    const error = panel.querySelector('[data-schedule-sort-error]');
+    if (error) { error.hidden = true; error.textContent = ''; }
+    panel.setAttribute('aria-busy', 'true');
+    try {
+      const requested = new URL(link.href, window.location.href);
+      const endpoint = new URL('/retrospect/schedule-sort', window.location.origin);
+      for (const key of ['date', 'sort', 'edit']) {
+        if (requested.searchParams.has(key)) endpoint.searchParams.set(key, requested.searchParams.get(key));
+      }
+      const response = await fetch(endpoint.toString(), { headers: { Accept: 'application/json' }, signal: sortController.signal });
+      const payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.message || '일정 정렬에 실패했습니다. 다시 시도해 주세요.');
+      if (requestId !== sortRequestId) return;
+      const parsedPanel = new DOMParser().parseFromString(payload.panel, 'text/html').querySelector('[data-record-panel="schedule"]');
+      const parsedDetails = new DOMParser().parseFromString(payload.details, 'text/html').querySelector('[data-schedule-detail-layer]');
+      if (!parsedPanel || !parsedDetails) throw new Error('일정 정렬 결과를 불러오지 못했습니다.');
+      parsedPanel.hidden = panel.hidden;
+      panel.replaceWith(parsedPanel);
+      detailLayers.schedule.replaceWith(parsedDetails);
+      detailLayers.schedule = parsedDetails;
+      const activeKind = document.querySelector('[data-composition-target].is-active')?.dataset.compositionTarget;
+      if (activeKind === 'plan' || activeKind === 'actual') {
+        parsedPanel.querySelectorAll('[data-composition-category]').forEach(row => row.classList.toggle('is-composition-match', (row.dataset.compositionCategory || '').split(/\s+/).includes(activeKind)));
+      }
+      window.history.replaceState(window.history.state, '', requested.href);
+      if (!parsedPanel.hidden) parsedPanel.querySelector('.retrospect-sort-tabs [aria-current="page"]')?.focus({ preventScroll: true });
+    } catch (exception) {
+      if (exception.name === 'AbortError' || requestId !== sortRequestId) return;
+      if (error) { error.textContent = '일정 정렬에 실패했습니다. 다시 시도해 주세요.'; error.hidden = false; }
+    } finally {
+      if (requestId === sortRequestId) panel.removeAttribute('aria-busy');
+    }
   });
 
   document.querySelectorAll('[data-retrospect-routine-toggle-form]').forEach(form => {
@@ -145,11 +248,14 @@
     }
 
     function renderStep() {
+      const collapsed = body.hidden;
       steps.forEach((step, index) => { step.hidden = index !== currentStep; });
       if (progress) progress.textContent = `${currentStep + 1} / ${steps.length}`;
-      if (previous) previous.hidden = currentStep === 0;
-      if (next) next.hidden = currentStep === steps.length - 1;
-      if (publish) publish.hidden = currentStep !== steps.length - 1;
+      if (close) close.hidden = !collapsed;
+      if (previous) previous.hidden = collapsed || currentStep === 0;
+      if (next) next.hidden = collapsed || currentStep === steps.length - 1;
+      if (publish) publish.hidden = collapsed || currentStep !== steps.length - 1;
+      if (collapse) collapse.textContent = collapsed ? '돌아가기' : '기록 보기';
     }
 
     async function saveDraft() {
@@ -180,7 +286,7 @@
       body.hidden = false;
       kptSheet.classList.remove('is-collapsed');
       retrospectPage?.classList.add('is-kpt-open');
-      collapse.textContent = '기록 보기';
+      renderStep();
       startReviewTimer();
       activeStepInput()?.focus();
       window.setTimeout(updateKeyboardLayout, 80);
@@ -189,7 +295,7 @@
       body.hidden = !body.hidden;
       kptSheet.classList.toggle('is-collapsed', body.hidden);
       retrospectPage?.classList.toggle('is-kpt-open', !body.hidden);
-      collapse.textContent = body.hidden ? '작성으로 돌아가기' : '기록 보기';
+      renderStep();
       if (body.hidden) {
         window.clearTimeout(saveTimer);
         saveDraft();
@@ -207,7 +313,7 @@
       body.hidden = false;
       kptSheet.classList.remove('is-collapsed');
       retrospectPage?.classList.remove('is-kpt-open');
-      collapse.textContent = '기록 보기';
+      renderStep();
       stopReviewTimer();
     });
     function moveStep(step) {
@@ -243,7 +349,6 @@
 
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
-    closeModal(settingsLayer);
     closeModal(dateLayer);
     Object.values(detailLayers).forEach(closeModal);
   });

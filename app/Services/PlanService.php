@@ -52,7 +52,7 @@ final class PlanService
         $errors = [];
 
         if ($title === '' || mb_strlen($title) > 80) {
-            $errors['title'] = '계획 블록명은 1자 이상 80자 이내로 입력해주세요.';
+            $errors['title'] = '할 일 블록명은 1자 이상 80자 이내로 입력해주세요.';
         }
         if ($durationIndex === false || $durationIndex < 1 || $durationIndex > 143) {
             $errors['duration'] = '기본 소요 시간은 10분부터 23시간 50분까지 선택해주세요.';

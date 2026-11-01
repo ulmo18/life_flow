@@ -402,6 +402,7 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
   `goal_id` BIGINT UNSIGNED NULL,
   `title` VARCHAR(80) NOT NULL,
   `importance` CHAR(1) NOT NULL DEFAULT 'D',
+  `todo_status` VARCHAR(20) NOT NULL DEFAULT 'pending',
   `start_index` SMALLINT UNSIGNED NULL,
   `end_index` SMALLINT UNSIGNED NULL,
   `estimated_duration_minutes` SMALLINT UNSIGNED NULL,
@@ -434,6 +435,7 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
 CREATE TABLE IF NOT EXISTS `daily_plan_blocks` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `daily_plan_item_id` BIGINT UNSIGNED NOT NULL,
+  `manual_status` VARCHAR(20) NOT NULL DEFAULT 'pending',
   `title_snapshot` VARCHAR(80) NULL,
   `importance_snapshot` CHAR(1) NULL,
   `goal_id_snapshot` BIGINT UNSIGNED NULL,
@@ -711,6 +713,20 @@ CREATE TABLE IF NOT EXISTS `retrospect_reports` (
     CHECK (`status` IN ('draft', 'submitted'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `retrospect_try_event_links` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `report_id` BIGINT UNSIGNED NOT NULL,
+  `event_id` BIGINT UNSIGNED NOT NULL,
+  `try_text_snapshot` TEXT NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_try_event_link` (`report_id`, `event_id`),
+  CONSTRAINT `fk_try_link_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_try_link_report` FOREIGN KEY (`report_id`) REFERENCES `retrospect_reports` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_try_link_event` FOREIGN KEY (`event_id`) REFERENCES `calendar_events` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `retrospect_report_plan_items` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `report_id` BIGINT UNSIGNED NOT NULL,
@@ -769,6 +785,7 @@ CREATE TABLE IF NOT EXISTS `retrospect_report_routine_items` (
   `routine_name_snapshot` VARCHAR(60) NOT NULL,
   `goal_title_snapshot` VARCHAR(120) NULL,
   `state_snapshot` VARCHAR(10) NOT NULL DEFAULT 'blank',
+  `completed_dates_snapshot` TEXT NULL,
   `was_active` TINYINT(1) NOT NULL DEFAULT 1,
   `sort_order` INT UNSIGNED NOT NULL DEFAULT 1,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

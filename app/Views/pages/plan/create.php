@@ -7,7 +7,7 @@
             <h1 class="calendar-date"><?= e((string) ($heading ?? '계획 추가')) ?></h1>
             <p class="calendar-subtitle">블록을 드래그한 뒤 이름과 중요도를 입력합니다.</p>
         </div>
-        <a class="calendar-icon-button" href="/plan" aria-label="계획 리스트로 이동">←</a>
+        <a class="calendar-icon-button" href="/plan?view=days" aria-label="하루 템플릿 목록으로 이동">←</a>
     </section>
 
     <?php if (!empty($errors['general'])): ?>
@@ -55,7 +55,7 @@
         <?php endif; ?>
 
         <div class="time-grid-toolbar">
-            <label for="planBlockTemplatePicker">계획 블록</label>
+            <label for="planBlockTemplatePicker">할 일 블록</label>
             <select class="input" id="planBlockTemplatePicker">
                 <option value="">직접 입력</option>
                 <?php foreach (($blockTemplates ?? []) as $template): ?>

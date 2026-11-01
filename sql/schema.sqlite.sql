@@ -279,6 +279,7 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
   goal_id INTEGER NULL,
   title TEXT NOT NULL,
   importance TEXT NOT NULL DEFAULT 'D',
+  todo_status TEXT NOT NULL DEFAULT 'pending',
   start_index INTEGER NULL,
   end_index INTEGER NULL,
   estimated_duration_minutes INTEGER NULL,
@@ -305,6 +306,7 @@ CREATE INDEX IF NOT EXISTS idx_daily_plan_items_source_template ON daily_plan_it
 CREATE TABLE IF NOT EXISTS daily_plan_blocks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   daily_plan_item_id INTEGER NOT NULL,
+  manual_status TEXT NOT NULL DEFAULT 'pending',
   title_snapshot TEXT NULL,
   importance_snapshot TEXT NULL,
   goal_id_snapshot INTEGER NULL,
@@ -505,6 +507,19 @@ CREATE TABLE IF NOT EXISTS retrospect_reports (
 CREATE INDEX IF NOT EXISTS idx_retrospect_reports_user_status ON retrospect_reports(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_retrospect_reports_date ON retrospect_reports(report_date);
 
+CREATE TABLE IF NOT EXISTS retrospect_try_event_links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  report_id INTEGER NOT NULL,
+  event_id INTEGER NOT NULL,
+  try_text_snapshot TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(report_id, event_id),
+  FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
+  FOREIGN KEY (report_id) REFERENCES retrospect_reports(id) ON DELETE CASCADE,
+  FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS retrospect_report_plan_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   report_id INTEGER NOT NULL,
@@ -557,6 +572,7 @@ CREATE TABLE IF NOT EXISTS retrospect_report_routine_items (
   routine_name_snapshot TEXT NOT NULL,
   goal_title_snapshot TEXT NULL,
   state_snapshot TEXT NOT NULL DEFAULT 'blank',
+  completed_dates_snapshot TEXT NULL,
   was_active INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

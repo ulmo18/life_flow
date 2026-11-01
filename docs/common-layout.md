@@ -13,11 +13,16 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 
 ## Header
 - The authenticated header is part of normal document flow rather than sticky. It contains the current top-level menu label, a search button, and a hamburger menu button. Public/authentication surfaces retain the `LifeFlow` brand.
+- The `/plan` header and aside use the same localized `반복 할 일` menu label.
 - On mobile the four daily bottom-navigation pages (Retrospect, Routine, To-do, and Schedule) hide the shared header because each page owns a compact sticky context area. Those local contexts retain Search and aside-menu buttons; opening Search temporarily reveals only the shared header search form. Tablet and desktop keep the normal-flow header visible.
+- Their mobile date rows share 8px horizontal and 4px vertical padding (respecting the top safe area), a 4px gap between date and actions, vertically centered 44px controls, and the same date-picker caret width. Page-specific content below the row remains independent.
+- All four daily pages use the same date-navigation component, typography and localized date format. Saturdays are blue; Sundays and registered holidays or substitute holidays are red, with holidays taking precedence. Other dates use the normal text color. Calendar retains its current mode when changing dates.
 - Do not place primary navigation links directly in the header.
 - Dashboard remains available through the aside rather than turning the current-menu label into a misleading link.
 - A feature may supply one compact, single-line contextual action between the current-menu label and hamburger. Calendar uses this slot only for today's highest-priority Plan, Actual, or Retrospect next action; the text truncates rather than increasing the header height.
 - The search button immediately precedes the hamburger. It expands a header-covering GET form, focuses the query, and submits to `/search` from either Enter or the `검색` button. The submit button includes a move-to-results icon; Escape or the close control restores the normal header, and opening the aside closes search first.
+- The header search form presents its compact input and neutral submit action as one joined, outlined field, with a separate close control inside an evenly padded, vertically centered square-cornered surface in both themes.
+- While header search is open, a dimmed backdrop blocks the rest of the workspace and scrolling; backdrop click, Escape, or close dismisses it. Keyboard focus stays in the search form and returns to its opener on close.
 
 ## Aside Menu
 - The aside is opened from either the shared-header hamburger or a daily page's mobile context button.
@@ -25,7 +30,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The aside header uses a settings gear link instead of a text brand.
 - The aside owns infrequent navigation:
   - Dashboard
-  - Management: Plan, Routine Management, Goal, Execution Energy Management
+  - Management: Recurring To-dos (`반복 할 일`, `/plan`), Routine Management, Goal, Execution Energy Management
   - Tools: Memo, Search, Schedule Tag Management
 - Use visible group labels for Management and Tools. Daily execution pages stay in the bottom navigator.
 - Logout lives inside the Settings page and must remain a POST form with a CSRF token.
@@ -38,7 +43,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
   - Routine
   - To-do
   - Schedule
-- Schedule links to Calendar and defaults to today. Routine and To-do also default to today in the signed-in user's time zone but preserve an explicitly selected date in `?date=YYYY-MM-DD`.
+- The four daily menus share the date last viewed in this browser tab and authenticated session through bottom-navigation links. An explicit date in a destination URL takes precedence; a new authenticated session starts at the account-local today. Calendar's current-time focus is only requested when navigating to today.
 - Keep active page state through `aria-current="page"`.
 - Execution Energy is a separate 52px HUD on the left of the four-item navigator. It opens usage history, preserves the glass-liquid fill and restrained motion, and does not occupy a navigation column or protrude into the floating-action area. Device orientation and pointer movement remain optional effects, and reduced-motion preferences are respected.
 
@@ -47,6 +52,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The shared app stylesheet URL includes its file modification time so header and shell changes are refreshed in browsers and WebViews after deployment.
 - Shared UI and Toast component assets use file-modification cache keys so input-sheet and feedback changes are not hidden by an older browser or WebView cache.
 - Shared layout JavaScript lives in `public/assets/js/components/app-layout.js`, and its URL uses a file-modification cache key like the shared stylesheets.
+- The reusable date picker lives in `public/assets/js/components/date-picker.js` and `public/assets/css/components/date-picker.css`. `LifeFlowDatePicker.open(input, trigger)` respects the input's value, min and max, uses its `data-today` for the account-local date, emits native input/change events, and falls back to the native control when modal dialogs are unavailable. Calendar, Routine, To-do and Retrospect date navigation use it; existing form date inputs can opt in separately without nesting sheets.
 - Page-specific CSS and JavaScript should continue using `$pageStyles` and `$pageScripts`.
 - Android bridge JavaScript is loaded as a shared component so Settings and feature pages can sync notification payloads and temporarily control native pull-to-refresh during touch range selection.
 - Native bridge calls must degrade safely in normal browsers and try both `window.AndroidBridge` and `window.AndroidInterface` when the requested method exists.
@@ -62,7 +68,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - Right-side panels align content to the top and scroll internally when content exceeds the viewport. Page-level create actions use a shared pill-shaped floating button above the bottom navigator.
 - Daily Retrospect, Routine, To-do, and Memo primary actions use the shared centered floating button above the navigator. The bottom navigation shell, including the separate Execution Energy HUD, stays below the floating-action area. Compact page-header actions use a shared 36px secondary pill so Today, Routine Management, and Retrospect controls remain visually consistent.
 - Shared `.btn` styling applies the same centering and no-underline treatment to both buttons and links, including Retrospect empty-state actions.
-- Compact header actions rendered as links remove the browser's default underline while retaining their visible focus outline. Routine and To-do reuse the shared sticky date context; only the page-specific management/Schedule link remains below it.
+- Compact header actions rendered as links remove the browser's default underline while retaining their visible focus outline. Routine and To-do reuse the shared sticky date context; their respective management links remain below it.
 - The aside fills the viewport, begins at the top, and scrolls internally when its navigation content is taller than the screen.
 
 ## Input bottom sheets

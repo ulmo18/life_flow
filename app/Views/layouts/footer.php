@@ -16,7 +16,7 @@
                 </span>
                 <span class="sr-only"><?= e(t('nav.execution_energy')) ?></span>
             </a>
-            <nav class="bottom-navigator" aria-label="<?= e(t('nav.primary')) ?>">
+            <nav class="bottom-navigator" data-daily-date-session="<?= e(substr(hash('sha256', session_id()), 0, 24)) ?>" aria-label="<?= e(t('nav.primary')) ?>">
                 <a class="bottom-nav-item" href="/retrospect" <?= ($currentPath ?? '') === '/retrospect' ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">▥</span>
                     <span><?= e(t('nav.retrospect')) ?></span>
@@ -89,6 +89,8 @@ $uiJsVersion = is_file($uiJsPath) ? filemtime($uiJsPath) : false;
 ?>
 <script src="/assets/js/components/ui.js<?= $uiJsVersion === false ? '' : '?v=' . e((string) $uiJsVersion) ?>"></script>
 <script src="/assets/js/components/android-bridge.js"></script>
+<?php $datePickerJsPath = dirname(__DIR__, 3) . '/public/assets/js/components/date-picker.js'; $datePickerJsVersion = is_file($datePickerJsPath) ? filemtime($datePickerJsPath) : false; ?>
+<script src="/assets/js/components/date-picker.js<?= $datePickerJsVersion === false ? '' : '?v=' . e((string) $datePickerJsVersion) ?>"></script>
 <?php if ($showAppChrome ?? false): ?>
     <?php $appLayoutJsPath = dirname(__DIR__, 3) . '/public/assets/js/components/app-layout.js'; $appLayoutJsVersion = is_file($appLayoutJsPath) ? filemtime($appLayoutJsPath) : false; ?>
     <script src="/assets/js/components/app-layout.js<?= $appLayoutJsVersion === false ? '' : '?v=' . e((string) $appLayoutJsVersion) ?>"></script>

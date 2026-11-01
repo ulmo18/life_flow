@@ -7,7 +7,7 @@
             <h1 class="calendar-date"><?= e((string) $plan['name']) ?></h1>
             <p class="calendar-subtitle"><?= count($plan['blocks']) ?>개 블록</p>
         </div>
-        <a class="calendar-icon-button" href="/plan" aria-label="계획 리스트로 이동">←</a>
+        <a class="calendar-icon-button" href="/plan?view=days" aria-label="하루 템플릿 목록으로 이동">←</a>
     </section>
 
     <div class="plan-detail-actions">

@@ -67,6 +67,64 @@ final class RetrospectRepository
         return $report !== false ? $report : null;
     }
 
+    public function listTryEvents(int $userId, int $reportId, string $date): array
+    {
+        $stmt = $this->db->prepare('SELECT e.id, e.title, e.start_index, e.end_index, d.calendar_date,
+                    l.id AS link_id, l.try_text_snapshot
+                FROM calendar_events e
+                INNER JOIN calendar_days d ON d.id = e.calendar_day_id AND d.user_id = e.user_id
+                LEFT JOIN retrospect_try_event_links l ON l.event_id = e.id AND l.report_id = :report_id AND l.user_id = e.user_id
+                WHERE e.user_id = :user_id AND e.deleted_at IS NULL AND d.calendar_date > :report_date
+                ORDER BY d.calendar_date DESC, e.start_index ASC, e.id ASC');
+        $stmt->execute(['report_id' => $reportId, 'user_id' => $userId, 'report_date' => $date]);
+        return $stmt->fetchAll();
+    }
+
+    public function listUnavailableTryEvents(int $userId, int $reportId, string $date): array
+    {
+        $stmt = $this->db->prepare('SELECT l.id AS link_id, e.title, d.calendar_date
+                FROM retrospect_try_event_links l
+                INNER JOIN calendar_events e ON e.id = l.event_id AND e.user_id = l.user_id
+                INNER JOIN calendar_days d ON d.id = e.calendar_day_id AND d.user_id = e.user_id
+                WHERE l.user_id = :user_id AND l.report_id = :report_id
+                  AND (e.deleted_at IS NOT NULL OR d.calendar_date <= :report_date)
+                ORDER BY l.id DESC');
+        $stmt->execute(['user_id' => $userId, 'report_id' => $reportId, 'report_date' => $date]);
+        return $stmt->fetchAll();
+    }
+
+    public function linkTryEvent(int $userId, string $date, int $eventId): bool
+    {
+        $report = $this->findReport($userId, $date);
+        if ($report === null || $report['status'] !== 'submitted' || trim((string) ($report['tomorrow_plan'] ?? '')) === '') return false;
+        $check = $this->db->prepare('SELECT e.id FROM calendar_events e INNER JOIN calendar_days d ON d.id = e.calendar_day_id AND d.user_id = e.user_id WHERE e.id = :event_id AND e.user_id = :user_id AND e.deleted_at IS NULL AND d.calendar_date > :report_date');
+        $check->execute(['event_id' => $eventId, 'user_id' => $userId, 'report_date' => $date]);
+        if (!$check->fetchColumn()) return false;
+        $exists = $this->db->prepare('SELECT id FROM retrospect_try_event_links WHERE report_id = :report_id AND event_id = :event_id AND user_id = :user_id');
+        $params = ['report_id' => (int) $report['id'], 'event_id' => $eventId, 'user_id' => $userId];
+        $exists->execute($params);
+        if ($exists->fetchColumn()) return true;
+        try {
+            $stmt = $this->db->prepare('INSERT INTO retrospect_try_event_links (user_id, report_id, event_id, try_text_snapshot) VALUES (:user_id, :report_id, :event_id, :try_text)');
+            $stmt->execute($params + ['try_text' => (string) $report['tomorrow_plan']]);
+            return true;
+        } catch (\PDOException $exception) {
+            $exists->execute($params);
+            if ($exists->fetchColumn()) return true;
+            error_log('[retrospect] try link failed');
+            return false;
+        }
+    }
+
+    public function unlinkTryEvent(int $userId, string $date, int $linkId): bool
+    {
+        $report = $this->findReport($userId, $date);
+        if ($report === null || $report['status'] !== 'submitted') return false;
+        $stmt = $this->db->prepare('DELETE FROM retrospect_try_event_links WHERE id = :id AND report_id = :report_id AND user_id = :user_id');
+        $stmt->execute(['id' => $linkId, 'report_id' => (int) $report['id'], 'user_id' => $userId]);
+        return $stmt->rowCount() > 0;
+    }
+
     /** @return array<string, mixed>|null */
     public function findLatestSubmittedReport(int $userId, ?string $maxDate = null): ?array
     {
@@ -92,71 +150,6 @@ final class RetrospectRepository
         $report = $stmt->fetch();
 
         return $report !== false ? $report : null;
-    }
-
-    /** @return array<string, mixed> */
-    public function getSettings(int $userId): array
-    {
-        $stmt = $this->db->prepare(
-            'SELECT auto_publish_enabled, auto_publish_time
-             FROM retrospect_settings
-             WHERE user_id = :user_id
-             LIMIT 1'
-        );
-        $stmt->execute(['user_id' => $userId]);
-        $settings = $stmt->fetch();
-
-        if ($settings !== false) {
-            return $settings;
-        }
-
-        $sql = 'INSERT INTO retrospect_settings (
-                    user_id, auto_publish_enabled, auto_publish_time, created_at, updated_at
-                ) VALUES (
-                    :user_id, 0, :auto_publish_time, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                )';
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            'user_id' => $userId,
-            'auto_publish_time' => '22:00',
-        ]);
-
-        return [
-            'auto_publish_enabled' => 0,
-            'auto_publish_time' => '22:00',
-        ];
-    }
-
-    public function updateSettings(int $userId, bool $enabled, string $time): void
-    {
-        if ($this->driver() === 'mysql') {
-            $sql = 'INSERT INTO retrospect_settings (
-                        user_id, auto_publish_enabled, auto_publish_time, created_at, updated_at
-                    ) VALUES (
-                        :user_id, :enabled, :time, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                    )
-                    ON DUPLICATE KEY UPDATE
-                        auto_publish_enabled = VALUES(auto_publish_enabled),
-                        auto_publish_time = VALUES(auto_publish_time),
-                        updated_at = CURRENT_TIMESTAMP';
-        } else {
-            $sql = 'INSERT INTO retrospect_settings (
-                        user_id, auto_publish_enabled, auto_publish_time, created_at, updated_at
-                    ) VALUES (
-                        :user_id, :enabled, :time, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                    )
-                    ON CONFLICT(user_id) DO UPDATE SET
-                        auto_publish_enabled = excluded.auto_publish_enabled,
-                        auto_publish_time = excluded.auto_publish_time,
-                        updated_at = CURRENT_TIMESTAMP';
-        }
-
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            'user_id' => $userId,
-            'enabled' => $enabled ? 1 : 0,
-            'time' => $time,
-        ]);
     }
 
     /** @param array{today_review: string, today_thoughts: string, tomorrow_plan: string} $texts */
@@ -420,19 +413,31 @@ final class RetrospectRepository
     }
 
     /** @return array<int, array<string, mixed>> */
-    public function listPublishedReports(int $userId, int $limit, int $offset): array
+    public function listPublishedReports(int $userId, int $limit, int $offset, ?string $monthStart = null, ?string $monthEnd = null): array
     {
         $limit = max(1, min(51, $limit));
         $offset = max(0, $offset);
+        $dateFilter = $monthStart !== null && $monthEnd !== null ? ' AND report_date >= :month_start AND report_date <= :month_end' : '';
+        $blockMissing = $this->supportsActualBlockSnapshot() ? '(a.daily_plan_block_id_snapshot IS NULL OR a.daily_plan_block_id_snapshot = 0)' : '1 = 1';
         $stmt = $this->db->prepare(
-            'SELECT id, report_date, today_review, today_thoughts, tomorrow_plan,
-                    plan_achievement_rate, routine_achievement_rate, submitted_at, updated_at
+            'SELECT id, report_date, today_review, today_thoughts, tomorrow_plan, plan_total_count,
+                    plan_achievement_rate, routine_achievement_rate, submitted_at, updated_at,
+                    EXISTS (SELECT 1 FROM retrospect_report_actual_items a
+                        WHERE a.report_id = retrospect_reports.id AND ' . $blockMissing . '
+                          AND a.plan_template_id_snapshot IS NOT NULL
+                          AND (SELECT COUNT(*) FROM retrospect_report_plan_items p
+                               WHERE p.report_id = a.report_id AND p.plan_template_id = a.plan_template_id_snapshot) > 1) AS has_ambiguous_links
              FROM retrospect_reports
-             WHERE user_id = :user_id AND status = :status
+             WHERE user_id = :user_id AND status = :status' . $dateFilter . '
              ORDER BY report_date DESC, id DESC
              LIMIT ' . $limit . ' OFFSET ' . $offset
         );
-        $stmt->execute(['user_id' => $userId, 'status' => 'submitted']);
+        $params = ['user_id' => $userId, 'status' => 'submitted'];
+        if ($dateFilter !== '') {
+            $params['month_start'] = $monthStart;
+            $params['month_end'] = $monthEnd;
+        }
+        $stmt->execute($params);
 
         return $stmt->fetchAll();
     }
@@ -485,6 +490,7 @@ final class RetrospectRepository
                 ' . $sortOrder . ' AS sort_order,
                 ' . $title . ' AS title,
                 ' . $importance . ' AS importance,
+                ' . ($this->supportsDailyPlanBlocks() ? 'dpb.manual_status' : "'pending'") . ' AS manual_status,
                 g.title AS goal_title
              FROM daily_plan_items dpi
              INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
@@ -919,10 +925,10 @@ final class RetrospectRepository
     {
         $sql = 'INSERT INTO retrospect_report_routine_items (
                     report_id, routine_id, routine_name_snapshot,
-                    goal_title_snapshot, state_snapshot, was_active, sort_order, created_at
+                    goal_title_snapshot, state_snapshot, completed_dates_snapshot, was_active, sort_order, created_at
                 ) VALUES (
                     :report_id, :routine_id, :routine_name_snapshot,
-                    :goal_title_snapshot, :state_snapshot, :was_active, :sort_order, CURRENT_TIMESTAMP
+                    :goal_title_snapshot, :state_snapshot, :completed_dates_snapshot, :was_active, :sort_order, CURRENT_TIMESTAMP
                 )';
         $stmt = $this->db->prepare($sql);
 
@@ -933,6 +939,7 @@ final class RetrospectRepository
                 'routine_name_snapshot' => $item['name'],
                 'goal_title_snapshot' => (string) ($item['goalTitle'] ?? ''),
                 'state_snapshot' => $item['state'],
+                'completed_dates_snapshot' => isset($item['completedDates']) ? json_encode(['version' => 2, 'startDate' => $item['startDate'], 'dates' => $item['completedDates']], JSON_THROW_ON_ERROR) : null,
                 'was_active' => 1,
                 'sort_order' => $item['sort_order'],
             ]);
@@ -940,6 +947,17 @@ final class RetrospectRepository
     }
 
     /** @param array<int, array<string, mixed>> $items */
+    public function routineCompletionDates(int $userId, int $routineId, string $date): array
+    {
+        $stmt = $this->db->prepare('SELECT l.log_date FROM routine_logs l
+            INNER JOIN routines r ON r.id = l.routine_id AND r.user_id = l.user_id
+            WHERE l.user_id = :user_id AND l.routine_id = :routine_id AND l.is_done = 1
+              AND l.log_date >= r.start_date AND l.log_date <= :report_date
+            ORDER BY l.log_date ASC');
+        $stmt->execute(['user_id' => $userId, 'routine_id' => $routineId, 'report_date' => $date]);
+        return $stmt->fetchAll(\PDO::FETCH_COLUMN);
+    }
+
     private function insertMemoItems(int $reportId, array $items): void
     {
         $stmt = $this->db->prepare(
