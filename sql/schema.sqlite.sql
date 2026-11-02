@@ -276,6 +276,7 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
   source_plan_block_id INTEGER NULL,
   source_plan_template_id INTEGER NULL,
   source_block_template_id INTEGER NULL,
+  recurring_template_id INTEGER NULL,
   goal_id INTEGER NULL,
   title TEXT NOT NULL,
   importance TEXT NOT NULL DEFAULT 'D',

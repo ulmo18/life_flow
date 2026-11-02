@@ -399,6 +399,7 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
   `source_plan_block_id` BIGINT UNSIGNED NULL,
   `source_plan_template_id` BIGINT UNSIGNED NULL,
   `source_block_template_id` BIGINT UNSIGNED NULL,
+  `recurring_template_id` BIGINT UNSIGNED NULL,
   `goal_id` BIGINT UNSIGNED NULL,
   `title` VARCHAR(80) NOT NULL,
   `importance` CHAR(1) NOT NULL DEFAULT 'D',

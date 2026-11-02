@@ -172,10 +172,6 @@ final class TodoService
 
         $importanceRank = ['A' => 0, 'B' => 1, 'C' => 2, 'D' => 3];
         usort($items, static function (array $left, array $right) use ($importanceRank): int {
-            if ($left['isCompleted'] !== $right['isCompleted']) {
-                return $left['isCompleted'] ? 1 : -1;
-            }
-
             $importanceComparison = ($importanceRank[$left['importance']] ?? 4)
                 <=> ($importanceRank[$right['importance']] ?? 4);
             if ($importanceComparison !== 0) {
@@ -240,6 +236,7 @@ final class TodoService
             ($left['startIndex'] <=> $right['startIndex']) ?: ($left['id'] <=> $right['id'])
         );
 
+        $usedRecurringTemplateIds = $day === null ? [] : $this->calendarRepository->getUsedRecurringTemplateIds($userId, (int) $day['id']);
         return [
             'date' => $date,
             'todoStatusSupported' => $this->calendarRepository->supportsTodoStatus(),
@@ -248,10 +245,10 @@ final class TodoService
             'items' => $items,
             'pendingItems' => array_values(array_filter($items, static fn(array $item): bool => !$item['isCompleted'])),
             'completedItems' => array_values(array_filter($items, static fn(array $item): bool => $item['isCompleted'])),
-            'blockTemplates' => array_values(array_filter(
-                $this->planService->getBlockTemplates($userId),
-                static fn(array $template): bool => $template['isEnabled']
-            )),
+            'blockTemplates' => array_map(static function (array $template) use ($usedRecurringTemplateIds): array {
+                $template['isUsedOnDate'] = in_array((int) $template['id'], $usedRecurringTemplateIds, true);
+                return $template;
+            }, $this->planService->getBlockTemplates($userId)),
             'goalOptions' => $this->goalService->activeGoalOptions($userId),
         ];
     }
@@ -344,21 +341,21 @@ final class TodoService
     {
         if (array_key_exists('plan_block_template_id', $input)) {
             $templateId = filter_var($input['plan_block_template_id'], FILTER_VALIDATE_INT);
-            $template = null;
-            foreach ($this->planService->getBlockTemplates($userId) as $candidate) {
-                if ($candidate['id'] === $templateId && $candidate['isEnabled']) {
-                    $template = $candidate;
-                    break;
-                }
-            }
-            if ($template === null) {
+            if ($templateId === false || $templateId <= 0) {
                 return ['ok' => false, 'message' => '사용할 수 있는 계획 블록을 찾을 수 없습니다.'];
             }
-            $input = [
-                'date' => date('Y-m-d'),
-                'title' => $template['title'],
-                'importance' => $template['importance'],
-                'goal_id' => $template['goalId'],
+            $result = $this->calendarRepository->useRecurringTemplate($userId, date('Y-m-d'), (int) $templateId);
+            if ($result === null) return ['ok' => false, 'message' => '사용할 수 있는 계획 블록을 찾을 수 없습니다.'];
+            return [
+                'ok' => true,
+                'message' => '계획을 추가했습니다.',
+                'item' => [
+                    'id' => $result['itemId'],
+                    'title' => (string) $result['item']['title'],
+                    'importance' => (string) $result['item']['importance'],
+                    'goalId' => $result['item']['goal_id'] === null ? null : (int) $result['item']['goal_id'],
+                    'scheduleType' => 'unscheduled',
+                ],
             ];
         }
         $validation = $this->calendarService->validateDailyPlanItemInput([

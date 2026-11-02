@@ -9,6 +9,15 @@
   const createLayer = document.querySelector('[data-todo-create-layer]');
   const recurringLayer = document.querySelector('[data-todo-recurring-layer]');
   const recurringForm = document.querySelector('[data-todo-recurring-form]');
+  const recurringDelete = document.querySelector('[data-recurring-delete]');
+  const recurringId = recurringForm?.querySelector('[data-recurring-template-id]');
+  const recurringDuration = recurringForm?.querySelector('[data-recurring-duration]');
+  const recurringSubmit = recurringForm?.querySelector('[data-recurring-submit]');
+  const recurringEnabled = recurringForm?.querySelector('[data-recurring-enabled]');
+  const recurringHeading = document.getElementById('todoRecurringCreateTitle');
+  let recurringTrigger = null;
+  let recurringHold = null;
+  let ignoreRecurringClick = false;
   let recurringSaving = false;
   const editLayer = document.querySelector('[data-todo-edit-layer]');
   const editForm = document.querySelector('[data-todo-edit-form]');
@@ -175,9 +184,6 @@
 
   const createTabs = Array.from(document.querySelectorAll('[data-todo-create-tab]'));
   const createPanels = Array.from(document.querySelectorAll('[data-todo-create-panel]'));
-  const templateSearch = document.querySelector('[data-todo-template-search]');
-  const templateRows = Array.from(document.querySelectorAll('.todo-template-row'));
-  const templateNoResults = document.querySelector('[data-todo-template-no-results]');
   function selectCreateTab(name) {
     createTabs.forEach(tab => {
       const selected = tab.dataset.todoCreateTab === name;
@@ -197,17 +203,6 @@
       createTabs[next].focus();
     });
   });
-  templateSearch?.addEventListener('input', () => {
-    const query = templateSearch.value.trim().toLocaleLowerCase();
-    let visibleCount = 0;
-    templateRows.forEach(row => {
-      const matches = (row.querySelector('strong')?.textContent || '').toLocaleLowerCase().includes(query);
-      row.hidden = !matches;
-      if (matches) visibleCount++;
-    });
-    if (templateNoResults) templateNoResults.hidden = visibleCount !== 0;
-  });
-
   document.querySelectorAll('[data-todo-create-open]').forEach(button => button.addEventListener('click', () => {
     if (!createLayer) return;
     selectCreateTab('direct');
@@ -222,41 +217,193 @@
   }));
   function closeRecurring() {
     if (!recurringLayer || recurringSaving) return;
+    cancelRecurringHold();
     recurringLayer.hidden = true;
     document.body.classList.remove('is-menu-open');
-    document.querySelector('[data-todo-recurring-open]')?.focus();
+    recurringTrigger?.focus();
+    recurringTrigger = null;
   }
-  document.querySelector('[data-todo-recurring-open]')?.addEventListener('click', () => {
+  function openRecurring(trigger, editing) {
     if (!recurringLayer || !recurringForm) return;
     recurringForm.reset();
+    recurringTrigger = trigger;
+    recurringForm.action = editing ? '/plan/block-template/update' : '/todo/recurring';
+    recurringId.value = editing ? trigger.dataset.templateId : '';
+    recurringDuration.value = editing ? trigger.dataset.duration : '6';
+    recurringHeading.textContent = editing ? '반복 할 일 수정' : '반복 할 일 추가';
+    recurringSubmit.textContent = editing ? '수정 저장' : '반복 할 일 추가';
+    recurringDelete.hidden = !editing;
+    recurringEnabled.hidden = !editing;
+    recurringEnabled.dataset.nextEnabled = editing && trigger.dataset.enabled === '1' ? '0' : '1';
+    recurringEnabled.textContent = recurringEnabled.dataset.nextEnabled === '0' ? '미사용으로 변경' : '사용으로 변경';
+    if (editing) {
+      recurringForm.elements.title.value = trigger.dataset.title || '';
+      const importance = Array.from(recurringForm.querySelectorAll('input[name="importance"]')).find(input => input.value === trigger.dataset.importance);
+      if (importance) importance.checked = true;
+      recurringForm.elements.goal_id.value = trigger.dataset.goalId || '';
+    }
     recurringLayer.hidden = false;
     document.body.classList.add('is-menu-open');
     window.setTimeout(() => document.getElementById('todoRecurringName')?.focus(), 0);
-  });
+  }
+  document.querySelector('[data-todo-recurring-open]')?.addEventListener('click', event => openRecurring(event.currentTarget, false));
+  document.querySelectorAll('[data-todo-recurring-edit]').forEach(button => button.addEventListener('click', () => openRecurring(button, true)));
   document.querySelectorAll('[data-todo-recurring-close]').forEach(button => button.addEventListener('click', closeRecurring));
+  recurringEnabled?.addEventListener('click', async () => {
+    if (recurringSaving || !recurringId.value) return;
+    cancelRecurringHold();
+    recurringSaving = true;
+    recurringEnabled.disabled = true;
+    recurringDelete.disabled = true;
+    recurringSubmit.disabled = true;
+    const body = new FormData();
+    body.set('_csrf_token', recurringForm.querySelector('input[name="_csrf_token"]').value);
+    body.set('block_template_id', recurringId.value);
+    body.set('enabled', recurringEnabled.dataset.nextEnabled);
+    try {
+      const response = await fetch('/plan/block-template/enabled', {method:'POST', body, headers:{'Accept':'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || '사용 상태를 변경하지 못했습니다.');
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'recurring');
+      window.location.assign(url.toString());
+    } catch (error) {
+      recurringSaving = false;
+      recurringEnabled.disabled = false;
+      recurringDelete.disabled = false;
+      recurringSubmit.disabled = false;
+      showTodoDeleteMessage(error.message || '사용 상태를 변경하지 못했습니다.');
+    }
+  });
+  function cancelRecurringHold() {
+    if (!recurringHold) return;
+    window.clearTimeout(recurringHold.timer);
+    recurringDelete.classList.remove('is-holding');
+    recurringHold = null;
+  }
+  async function deleteRecurring() {
+    if (recurringSaving || !recurringId.value) return;
+    recurringSaving = true;
+    recurringDelete.disabled = true;
+    recurringSubmit.disabled = true;
+    const body = new FormData();
+    body.set('_csrf_token', recurringForm.querySelector('input[name="_csrf_token"]').value);
+    body.set('block_template_id', recurringId.value);
+    try {
+      const response = await fetch('/plan/block-template/delete', {method: 'POST', body, headers: {'Accept': 'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || '반복 할 일을 삭제하지 못했습니다.');
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'recurring');
+      window.location.assign(url.toString());
+    } catch (error) {
+      recurringSaving = false;
+      recurringDelete.disabled = false;
+      recurringSubmit.disabled = false;
+      showTodoDeleteMessage(error.message || '반복 할 일을 삭제하지 못했습니다.');
+    }
+  }
+  function completeRecurringHold(hold) {
+    if (recurringHold !== hold) return;
+    if (recurringLayer.hidden) { cancelRecurringHold(); return; }
+    cancelRecurringHold();
+    deleteRecurring();
+  }
+  function startRecurringHold(kind, key) {
+    if (recurringSaving || recurringHold || recurringLayer.hidden || recurringDelete.hidden) return;
+    const hold = {kind, key, startedAt: window.performance.now(), timer: null};
+    recurringHold = hold;
+    recurringDelete.classList.add('is-holding');
+    hold.timer = window.setTimeout(() => completeRecurringHold(hold), 1500);
+  }
+  function finishRecurringHold(kind, key) {
+    const hold = recurringHold;
+    if (!hold || hold.kind !== kind || hold.key !== key) return;
+    if (window.performance.now() - hold.startedAt >= 1500) { completeRecurringHold(hold); return; }
+    cancelRecurringHold();
+    ignoreRecurringClick = true;
+    window.setTimeout(() => { ignoreRecurringClick = false; }, 0);
+    showTodoDeleteMessage(todoDeleteMessage);
+  }
+  recurringDelete?.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    startRecurringHold('pointer', event.pointerId);
+    if (recurringHold?.kind === 'pointer' && recurringHold.key === event.pointerId) {
+      try { recurringDelete.setPointerCapture(event.pointerId); } catch (error) { /* Optional. */ }
+    }
+  });
+  recurringDelete?.addEventListener('pointermove', event => {
+    if (recurringHold?.kind !== 'pointer' || recurringHold.key !== event.pointerId) return;
+    const bounds = recurringDelete.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) cancelRecurringHold();
+  });
+  recurringDelete?.addEventListener('pointerup', event => finishRecurringHold('pointer', event.pointerId));
+  ['pointercancel', 'lostpointercapture'].forEach(type => recurringDelete?.addEventListener(type, event => {
+    if (recurringHold?.kind === 'pointer' && recurringHold.key === event.pointerId) cancelRecurringHold();
+  }));
+  recurringDelete?.addEventListener('contextmenu', event => { if (recurringHold) event.preventDefault(); });
+  recurringDelete?.addEventListener('keydown', event => {
+    if (event.key !== ' ' && event.key !== 'Enter') return;
+    event.preventDefault();
+    if (!event.repeat) startRecurringHold('keyboard', event.key);
+  });
+  recurringDelete?.addEventListener('keyup', event => {
+    if (event.key !== ' ' && event.key !== 'Enter') return;
+    event.preventDefault();
+    finishRecurringHold('keyboard', event.key);
+  });
+  recurringDelete?.addEventListener('blur', cancelRecurringHold);
+  recurringDelete?.addEventListener('click', event => {
+    event.preventDefault();
+    if (event.detail === 0 && !ignoreRecurringClick && !recurringSaving) showTodoDeleteMessage(todoDeleteMessage);
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelRecurringHold(); });
   recurringForm?.addEventListener('submit', async event => {
     event.preventDefault();
     if (recurringSaving) return;
+    cancelRecurringHold();
     recurringSaving = true;
     const submit = recurringForm.querySelector('button[type="submit"]');
     if (submit) submit.disabled = true;
+    const fallbackMessage = recurringId.value ? '반복 할 일을 수정하지 못했습니다.' : '반복 할 일을 추가하지 못했습니다.';
     try {
       const response = await fetch(recurringForm.action, {method: 'POST', body: new FormData(recurringForm), headers: {'Accept': 'application/json'}});
       const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.message || '반복 할 일을 추가하지 못했습니다.');
+      if (!response.ok || !result.ok) throw new Error(result.message || fallbackMessage);
       const url = new URL(window.location.href);
       url.searchParams.set('tab', 'recurring');
       window.location.assign(url.toString());
     } catch (error) {
       recurringSaving = false;
       if (submit) submit.disabled = false;
-      if (window.LifeFlowToast?.show) window.LifeFlowToast.show(error.message || '반복 할 일을 추가하지 못했습니다.');
-      else window.alert(error.message || '반복 할 일을 추가하지 못했습니다.');
+      if (window.LifeFlowToast?.show) window.LifeFlowToast.show(error.message || fallbackMessage);
+      else window.alert(error.message || fallbackMessage);
     }
   });
   document.querySelectorAll('[data-todo-template-form]').forEach(form => form.addEventListener('submit', () => {
     form.querySelector('button[type="submit"]').disabled = true;
   }));
+  const todoSortList = page.querySelector('[data-todo-sort-list]');
+  const todoSortButtons = Array.from(page.querySelectorAll('[data-todo-sort]'));
+  const todoSortRows = todoSortList ? Array.from(todoSortList.querySelectorAll('[data-todo-item]')) : [];
+  const todoImportanceOrder = {A: 0, B: 1, C: 2, D: 3};
+  const todoStatusOrder = {pending: 0, in_progress: 1, completed: 2, cancelled: 3, postponed: 4, external: 5};
+  let todoSortMode = 'importance';
+  function sortTodoRows() {
+    if (!todoSortList) return;
+    const rank = row => todoSortMode === 'status'
+      ? (todoStatusOrder[row.querySelector('[data-todo-block-status]')?.dataset.savedStatus] ?? 6)
+      : (todoImportanceOrder[row.dataset.sortImportance] ?? 4);
+    const ordered = todoSortRows.map((row, index) => ({row, index}));
+    ordered.sort((left, right) => rank(left.row) - rank(right.row) || left.index - right.index);
+    ordered.forEach(({row}) => todoSortList.append(row));
+  }
+  todoSortButtons.forEach(button => button.addEventListener('click', () => {
+    todoSortMode = button.dataset.todoSort === 'status' ? 'status' : 'importance';
+    todoSortButtons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    sortTodoRows();
+  }));
+
   const statusLayer = document.querySelector('[data-todo-status-layer]');
   const statusOptions = Array.from(document.querySelectorAll('[data-todo-status-option]'));
   const statusTitle = document.querySelector('[data-todo-status-title]');
@@ -323,6 +470,7 @@
           itemTime.querySelector('.todo-time').textContent = display || '';
         }
       });
+      sortTodoRows();
       statusSaving = false;
       closeStatus();
     } catch (error) {

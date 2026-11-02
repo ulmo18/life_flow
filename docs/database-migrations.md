@@ -1,5 +1,7 @@
 # Database Migrations
 
+Recurring-template placements require `sql/migration.daily_plan_recurring_source.mysql.sql` once on existing MySQL/MariaDB databases. SQLite adds the equivalent nullable column automatically; the matching SQLite migration is available for manual use. Existing template-only records are not changed.
+
 To-do item states require `sql/migration.daily_plan_item_todo_status.mysql.sql` once on existing MySQL/MariaDB databases. SQLite applies the equivalent migration automatically. Existing items begin at `pending`; existing per-block states are preserved separately and are not converted into item completion.
 
 Placed Plan block manual state requires `migration.daily_plan_block_status.mysql.sql` once on existing MySQL/MariaDB databases after backup. Existing rows default to `pending`. SQLite adds the same column automatically on connection; `migration.daily_plan_block_status.sqlite.sql` is available for controlled manual migration. Do not reapply either one-time `ALTER TABLE` to a database where the column already exists.

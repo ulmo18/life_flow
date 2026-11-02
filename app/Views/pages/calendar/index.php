@@ -20,7 +20,8 @@ $availableTagPalettes = array_values(array_filter(
 $executionEnergy = $calendar['executionEnergy'] ?? [];
 $calendarMode = ($calendarMode ?? 'actual') === 'plan' ? 'plan' : 'actual';
 $planActivityItems = $calendar['planActivityItems'] ?? [];
-$enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?? [], static fn(array $template): bool => !empty($template['isEnabled'])));
+$usedRecurringTemplateIds = $calendar['usedRecurringTemplateIds'] ?? [];
+$enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?? [], static fn(array $template): bool => !empty($template['isEnabled']) && !in_array((int) $template['id'], $usedRecurringTemplateIds, true)));
 ?>
 
 <main

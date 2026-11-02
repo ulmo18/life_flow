@@ -35,7 +35,9 @@ const options = ['pending', 'completed', 'cancelled', 'postponed', 'in_progress'
 let failure = false;
 let malformed = false;
 let message = '';
+let sortCount = 0;
 const ctx = {
+  sortTodoRows() { sortCount++; },
   document: {
     body: {classList: {add() {}, remove() {}}},
     querySelector(selector) { return selector.includes('layer') ? layer : selector.includes('status-note') ? note : selector.includes('status-record') ? record : title; },
@@ -58,6 +60,7 @@ vm.runInNewContext(source.slice(start, end), ctx);
   assert.equal(button.dataset.savedStatus, 'cancelled');
   assert.equal(sibling.dataset.savedStatus, 'cancelled');
   assert.equal(buttonSymbol.textContent, 'X');
+  assert.equal(sortCount, 1, 'Successful status changes reapply the current sort.');
   assert.equal(layer.hidden, true);
   button.dataset.statusEditable = '0';
   button.handlers.click();
@@ -73,6 +76,7 @@ vm.runInNewContext(source.slice(start, end), ctx);
   assert.equal(button.dataset.savedStatus, 'cancelled');
   assert.equal(layer.hidden, false);
   assert.equal(message, '저장 실패');
+  assert.equal(sortCount, 1, 'Failed status changes do not reorder rows.');
   failure = false;
   malformed = true;
   await options[1].handlers.click();

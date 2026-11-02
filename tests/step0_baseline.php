@@ -976,7 +976,7 @@ $tests['calendar todo blocks follow source state and importance'] = static funct
     $templateId = $plans->createBlockTemplate($userId, ['title' => 'Reusable', 'durationIndex' => 6, 'importance' => 'C', 'goalId' => null]);
     $templateBlock = $repo->placePlanBlockTemplate($userId, $date, (int) $templateId, 102, 108);
     assertTrueValue($templateBlock !== null, 'Reusable template block can be placed.');
-    assertTrueValue(!$calendar->planBlockFollowsTodo($userId, (int) $templateBlock['blockId']), 'Template-only block keeps its independent controls.');
+    assertTrueValue($calendar->planBlockFollowsTodo($userId, (int) $templateBlock['blockId']), 'New recurring placements follow their To-do.');
     assertTrueValue($repo->deleteDailyPlanItem($userId, (int) $item), 'Source can be deleted.');
     $segments = $calendar->getDayViewData($userId, $date)['planSegments'];
     $segments = array_values(array_filter($segments, static fn(array $segment): bool => $segment['blockId'] === $first));
@@ -1031,7 +1031,7 @@ $tests['todo highlight follows individual placed plan duration'] = static functi
     assertTrueValue(!$check(), 'Deleting the long plan removes the highlight.');
 };
 
-$tests['template placements do not add duplicate list items'] = static function (): void {
+$tests['template placement creates one reusable daily todo'] = static function (): void {
     $db = Database::connection();
     $userId = seedUser($db, 'template-source-hidden@example.test');
     $plans = new \App\Services\PlanService();
@@ -1042,15 +1042,29 @@ $tests['template placements do not add duplicate list items'] = static function 
     $result = $repository->placePlanBlockTemplate($userId, $date, (int) $template, 60, 66);
     assertTrueValue($result !== null, 'Template placement must succeed.');
     $day = $repository->findDay($userId, $date);
-    assertSameValue(0, count($repository->getDailyPlanItems($userId, (int) $day['id'])), 'Copied template item must not appear in placement list.');
+    assertSameValue(1, count($repository->getDailyPlanItems($userId, (int) $day['id'])), 'Placement creates a daily To-do.');
+    assertSameValue([(int) $template], $repository->getUsedRecurringTemplateIds($userId, (int) $day['id']), 'The template is hidden for this date.');
+    $todoService = new TodoService();
+    assertSameValue(true, $todoService->getDateData($userId, $date)['blockTemplates'][0]['isUsedOnDate'], 'Calendar placement marks the recurring To-do used.');
+    assertSameValue(false, $todoService->getDateData($userId, date('Y-m-d', strtotime($date . ' +1 day')))['blockTemplates'][0]['isUsedOnDate'], 'Usage is scoped to its date.');
+    $usedAgain = $todoService->create($userId, ['plan_block_template_id' => $template]);
+    assertSameValue($result['itemId'], $usedAgain['item']['id'], 'A duplicate use request reuses the same To-do.');
     assertSameValue(1, count($repository->getDailyPlanBlocksForDay($userId, (int) $day['id'])), 'Placed block must remain visible.');
     assertTrueValue($plans->updateBlockTemplate($userId, (int) $template, ['title' => 'Changed', 'durationIndex' => 6, 'importance' => 'D', 'goalId' => null]), 'Template edit must succeed.');
     $blocks = $repository->getDailyPlanBlocksForDay($userId, (int) $day['id']);
     assertSameValue('Reusable', $blocks[0]['title'], 'Template edit must not change placed block.');
     assertSameValue('B', $blocks[0]['importance'], 'Template edit must not change block importance.');
+    $again = $repository->placePlanBlockTemplate($userId, $date, (int) $template, 72, 78);
+    assertSameValue($result['itemId'], $again['itemId'], 'Repeated placement reuses the daily To-do.');
+    assertSameValue(2, count($repository->getDailyPlanBlocksForDay($userId, (int) $day['id'])), 'Repeated placement creates another block.');
+    assertSameValue(null, $repository->placePlanBlockTemplate($userId, $date, (int) $template, 73, 75), 'Conflicting placement fails.');
+    assertSameValue(1, count($repository->getDailyPlanItems($userId, (int) $day['id'])), 'Failed or repeated placements do not duplicate the To-do.');
+    $tomorrow = date('Y-m-d', strtotime($date . ' +1 day'));
+    $otherDay = $repository->placePlanBlockTemplate($userId, $tomorrow, (int) $template, 60, 66);
+    assertTrueValue($otherDay !== null && $otherDay['itemId'] !== $result['itemId'], 'Another date has its own To-do.');
 };
 
-$tests['todo lists only owned enabled plan block templates without creating dated items'] = static function (): void {
+$tests['todo lists owned active and inactive templates without creating dated items'] = static function (): void {
     $db = Database::connection();
     $userId = seedUser($db, 'todo-enabled-templates@example.test');
     $otherUser = seedUser($db, 'todo-other-templates@example.test');
@@ -1066,7 +1080,9 @@ $tests['todo lists only owned enabled plan block templates without creating date
     $service = new TodoService();
     foreach ([date('Y-m-d'), date('Y-m-d', strtotime('-1 day'))] as $date) {
         $todo = $service->getDateData($userId, $date);
-        assertSameValue(['Enabled template'], array_column($todo['blockTemplates'], 'title'), 'Only the enabled owned template should appear.');
+        $titles = array_column($todo['blockTemplates'], 'title');
+        sort($titles);
+        assertSameValue(['Disabled template', 'Enabled template'], $titles, 'Enabled and disabled owned templates should appear, excluding deleted or other users templates.');
         assertSameValue([], $todo['items'], 'Displaying templates must not create dated To-do items.');
     }
     assertSameValue(false, $service->create($userId, ['plan_block_template_id' => $disabled])['ok'], 'Disabled templates cannot be used.');
@@ -1074,6 +1090,13 @@ $tests['todo lists only owned enabled plan block templates without creating date
     $result = $service->create($userId, ['plan_block_template_id' => $enabled, 'date' => '2000-01-01', 'title' => 'Forged']);
     assertTrueValue($result['ok'], 'Enabled template should create a To-do.');
     $todo = $service->getTodayData($userId);
+    $enabledToday = array_values(array_filter($todo['blockTemplates'], static fn(array $item): bool => $item['id'] === (int) $enabled))[0];
+    $enabledYesterday = array_values(array_filter($service->getDateData($userId, date('Y-m-d', strtotime('-1 day')))['blockTemplates'], static fn(array $item): bool => $item['id'] === (int) $enabled))[0];
+    assertSameValue(true, $enabledToday['isUsedOnDate'], 'Use button marks the template used today.');
+    assertSameValue(false, $enabledYesterday['isUsedOnDate'], 'Use does not mark other dates.');
+    $calendarData = (new CalendarService())->getDayViewData($userId, date('Y-m-d'));
+    assertTrueValue(in_array((int) $enabled, $calendarData['usedRecurringTemplateIds'], true), 'Use button also hides the template in Calendar.');
+    assertSameValue($result['item']['id'], $service->create($userId, ['plan_block_template_id' => $enabled])['item']['id'], 'Repeated use does not duplicate the To-do.');
     assertSameValue(['Enabled template'], array_column($todo['pendingItems'], 'title'), 'Created item must use the template title and be unfinished.');
     assertSameValue('B', $todo['pendingItems'][0]['importance'], 'Created item must copy importance.');
     assertSameValue(null, $todo['pendingItems'][0]['startIndex'], 'Created item must be time-unspecified.');
@@ -1191,6 +1214,19 @@ $tests['plan block importance and actual detachment save independently'] = stati
         assertSameValue(null, $event['daily_plan_item_id'], 'Actual item link must be cleared.');
     }
     assertTrueValue(!$service->detachDailyPlanBlockActuals($userId, (int) $block), 'Repeated detachment must report no change.');
+};
+
+$tests['todo defaults to importance order regardless of completion'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'todo-default-importance-order@example.test');
+    $repository = new CalendarRepository();
+    $service = new TodoService();
+    $date = date('Y-m-d');
+    $low = $repository->createDailyPlanItem($userId, $date, 'Low', 'D', null, null, null, null);
+    $high = $repository->createDailyPlanItem($userId, $date, 'High', 'A', null, null, null, null);
+    assertTrueValue($low !== null && $high !== null, 'To-do fixtures must be created.');
+    assertTrueValue($service->updateStatus($userId, (int) $high, 'completed'), 'High importance item can be completed.');
+    assertSameValue(['High', 'Low'], array_column($service->getDateData($userId, $date)['activityItems'], 'title'), 'Importance order does not demote completed items.');
 };
 
 $passed = 0;

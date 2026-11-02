@@ -3,20 +3,23 @@
 <?php
 $activityItems = $todo['activityItems'] ?? [];
 $blockTemplates = $todo['blockTemplates'] ?? [];
+$enabledTemplates = array_values(array_filter($blockTemplates, static fn(array $template): bool => !empty($template['isEnabled'])));
+$disabledTemplates = array_values(array_filter($blockTemplates, static fn(array $template): bool => empty($template['isEnabled'])));
 $planStatuses = ['pending' => '미정', 'completed' => 'V 완료', 'cancelled' => 'X 취소', 'postponed' => '→ 연기', 'in_progress' => '· 진행 중', 'external' => '○ 위임'];
 $statusSymbols = ['pending' => '—', 'completed' => 'V', 'cancelled' => 'X', 'postponed' => '→', 'in_progress' => '·', 'external' => '○'];
 $statusSupported = !empty($todo['todoStatusSupported']);
 $isRecurringTab = ($activeTab ?? 'items') === 'recurring';
-$renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, $statusSymbols, $statusSupported): void {
+$goalFlag = '<svg class="todo-goal-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4m0 1c5-3 9 3 14 0v10c-5 3-9-3-14 0"/></svg>';
+$renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, $statusSymbols, $statusSupported, $goalFlag): void {
     foreach ($items as $item):
         ?>
-        <tr class="todo-item <?= !empty($item['isLongDuration']) ? 'is-long-duration' : '' ?>" data-todo-item="<?= e((string) $item['id']) ?>">
+        <tr class="todo-item <?= !empty($item['isLongDuration']) ? 'is-long-duration' : '' ?>" data-todo-item="<?= e((string) $item['id']) ?>" data-sort-importance="<?= e((string) $item['importance']) ?>">
             <td><div class="todo-item-copy">
                 <div class="todo-item-title">
                     <span class="todo-importance" aria-label="중요도 <?= e((string) $item['importance']) ?>"><?= e((string) $item['importance']) ?></span>
                     <?php if ($canEdit && empty($item['sourceUnavailable'])): ?>
-                    <button type="button" class="todo-title-button" data-todo-edit-open data-item-id="<?= e((string) $item['id']) ?>" data-title="<?= e((string) $item['title']) ?>" data-importance="<?= e((string) $item['importance']) ?>" data-goal-id="<?= $item['goalId'] === null ? '' : e((string) $item['goalId']) ?>" aria-label="<?= e($item['title']) ?> 할 일 수정"><span class="<?= !empty($item['isLongDuration']) ? 'duration-highlight' : '' ?>"><?= e((string) $item['title']) ?></span></button>
-                    <?php else: ?><strong class="<?= !empty($item['isLongDuration']) ? 'duration-highlight' : '' ?>"><?= e((string) $item['title']) ?></strong><?php endif; ?>
+                    <button type="button" class="todo-title-button" data-todo-edit-open data-item-id="<?= e((string) $item['id']) ?>" data-title="<?= e((string) $item['title']) ?>" data-importance="<?= e((string) $item['importance']) ?>" data-goal-id="<?= $item['goalId'] === null ? '' : e((string) $item['goalId']) ?>" aria-label="<?= e($item['title']) ?><?= $item['goalId'] !== null ? ', 목표 연결됨' : '' ?> 할 일 수정"><span class="todo-title-content"><span class="todo-title-text <?= !empty($item['isLongDuration']) ? 'duration-highlight' : '' ?>"><?= e((string) $item['title']) ?></span><?= $item['goalId'] !== null ? $goalFlag : '' ?></span></button>
+                    <?php else: ?><strong class="todo-title-content"><span class="todo-title-text <?= !empty($item['isLongDuration']) ? 'duration-highlight' : '' ?>"><?= e((string) $item['title']) ?></span><?php if ($item['goalId'] !== null): ?><?= $goalFlag ?><span class="sr-only">목표 연결됨</span><?php endif; ?></strong><?php endif; ?>
                     <?php if (!empty($item['isLongDuration'])): ?><span class="sr-only">1시간 초과 계획</span><?php endif; ?>
                 </div>
                 <?php if (!empty($item['sourceUnavailable'])): ?><small>원본을 사용할 수 없는 계획 기록</small><?php endif; ?>
@@ -57,39 +60,52 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
 
     <div class="todo-list-tabs" role="tablist" aria-label="목록 선택">
         <button type="button" role="tab" id="todoItemsTab" aria-selected="<?= $isRecurringTab ? 'false' : 'true' ?>" aria-controls="todoItemsPanel" <?= $isRecurringTab ? 'tabindex="-1"' : '' ?> data-todo-list-tab="items">할 일 <span><?= count($activityItems) ?></span></button>
-        <button type="button" role="tab" id="todoRecurringTab" aria-selected="<?= $isRecurringTab ? 'true' : 'false' ?>" aria-controls="todoRecurringPanel" <?= !$isRecurringTab ? 'tabindex="-1"' : '' ?> data-todo-list-tab="recurring">반복 할 일 <span><?= count($blockTemplates) ?></span></button>
+        <button type="button" role="tab" id="todoRecurringTab" aria-selected="<?= $isRecurringTab ? 'true' : 'false' ?>" aria-controls="todoRecurringPanel" <?= !$isRecurringTab ? 'tabindex="-1"' : '' ?> data-todo-list-tab="recurring">반복 할 일 <span><?= count($enabledTemplates) ?></span></button>
     </div>
     <section class="todo-group" id="todoItemsPanel" role="tabpanel" aria-labelledby="todoItemsTab" data-todo-list-panel="items" <?= $isRecurringTab ? 'hidden' : '' ?>>
         <header class="todo-group-heading"><h2>할 일</h2><span><?= count($activityItems) ?>개</span></header>
+        <div class="todo-sort" role="group" aria-label="할 일 정렬">
+            <button type="button" data-todo-sort="importance" aria-pressed="true">중요도순</button>
+            <button type="button" data-todo-sort="status" aria-pressed="false">상태순</button>
+        </div>
         <div class="todo-table-wrap">
         <?php if ($activityItems === []): ?><p class="todo-group-empty">등록한 할 일이 없어요.</p>
-        <?php else: ?><table class="todo-table"><caption class="sr-only">할 일 목록</caption><thead><tr><th scope="col">할 일</th><th scope="col" class="todo-status-cell">상태</th></tr></thead><tbody><?php $renderTodoItems($activityItems); ?></tbody></table><?php endif; ?>
+        <?php else: ?><table class="todo-table"><caption class="sr-only">할 일 목록</caption><thead><tr><th scope="col">할 일</th><th scope="col" class="todo-status-cell">상태</th></tr></thead><tbody data-todo-sort-list><?php $renderTodoItems($activityItems); ?></tbody></table><?php endif; ?>
         </div>
     </section>
     <section class="todo-group" id="todoRecurringPanel" role="tabpanel" aria-labelledby="todoRecurringTab" data-todo-list-panel="recurring" <?= !$isRecurringTab ? 'hidden' : '' ?>>
-        <header class="todo-group-heading"><h2>반복 할 일</h2><span><?= count($blockTemplates) ?>개</span></header>
         <?php if (!$canEdit): ?><p class="todo-group-empty">반복 할 일을 오늘의 할 일로 사용하려면 오늘 날짜로 이동해 주세요.</p><?php endif; ?>
         <div class="todo-template-picker">
-            <?php if ($blockTemplates !== []): ?>
-                <label class="sr-only" for="todoTemplateSearch">반복 할 일 검색</label>
-                <input class="input todo-template-search" id="todoTemplateSearch" type="search" placeholder="반복 할 일 검색" autocomplete="off" data-todo-template-search>
-                <ul class="todo-template-list">
-                    <?php foreach ($blockTemplates as $template): ?>
-                        <li class="todo-template-row">
+            <div class="todo-template-groups">
+                <?php foreach (['사용' => $enabledTemplates, '미사용' => $disabledTemplates] as $groupName => $templates): ?>
+                <section class="todo-template-group" aria-label="<?= e($groupName) ?> 반복 할 일">
+                    <?php if ($groupName === '미사용'): ?><details class="todo-template-disclosure"><summary>미사용 <span><?= count($templates) ?>개</span></summary><?php else: ?>
+                    <h3>사용 <span><?= count($templates) ?>개</span></h3><?php endif; ?>
+                    <div class="todo-table-wrap">
+                    <?php if ($templates === []): ?><p class="todo-group-empty"><?= $groupName === '사용' ? '사용 중인 항목이 없어요.' : '미사용 항목이 없어요.' ?></p><?php else: ?>
+                    <table class="todo-table"><caption class="sr-only"><?= e($groupName) ?> 반복 할 일 목록</caption><thead><tr><th scope="col">반복 할 일</th><th scope="col" class="todo-recurring-action-cell"><?= $groupName === '사용' ? '사용' : '' ?></th></tr></thead><tbody>
+                    <?php foreach ($templates as $template): ?>
+                        <tr class="todo-template-row <?= empty($template['isEnabled']) ? 'is-disabled' : '' ?>">
+                            <td><div class="todo-item-title">
                             <span class="todo-importance" aria-label="중요도 <?= e((string) $template['importance']) ?>"><?= e((string) $template['importance']) ?></span>
-                            <strong><?= e((string) $template['title']) ?></strong>
+                            <button type="button" class="todo-title-button" data-todo-recurring-edit data-template-id="<?= e((string) $template['id']) ?>" data-title="<?= e((string) $template['title']) ?>" data-importance="<?= e((string) $template['importance']) ?>" data-goal-id="<?= $template['goalId'] === null ? '' : e((string) $template['goalId']) ?>" data-duration="<?= e((string) $template['durationIndex']) ?>" data-enabled="<?= !empty($template['isEnabled']) ? '1' : '0' ?>" aria-label="<?= e((string) $template['title']) ?><?= $template['goalId'] !== null ? ', 목표 연결됨' : '' ?> 반복 할 일 수정"><span class="todo-title-content"><span class="todo-title-text"><?= e((string) $template['title']) ?></span><?= $template['goalId'] !== null ? $goalFlag : '' ?></span></button>
+                            </div></td><td class="todo-recurring-action-cell">
+                            <?php if (!empty($template['isEnabled'])): ?>
                             <form method="post" action="/todo" data-todo-template-form>
                                 <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                                 <input type="hidden" name="plan_block_template_id" value="<?= e((string) $template['id']) ?>">
-                                <button type="submit" class="btn btn-secondary todo-template-use" <?= !$canEdit ? 'disabled' : '' ?> aria-label="<?= e((string) $template['title']) ?> 사용하기">사용하기</button>
+                                <button type="submit" class="todo-block-status todo-template-use" <?= !$canEdit || !empty($template['isUsedOnDate']) ? 'disabled' : '' ?> aria-label="<?= e((string) $template['title']) ?> <?= !empty($template['isUsedOnDate']) ? '할 일에 추가됨' : '사용하기' ?>" title="<?= !empty($template['isUsedOnDate']) ? '추가됨' : '사용하기' ?>"><span aria-hidden="true"><?= !empty($template['isUsedOnDate']) ? '✓' : '+' ?></span></button>
                             </form>
-                        </li>
+                            <?php endif; ?>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
-                </ul>
-                <p class="todo-template-empty" data-todo-template-no-results hidden>검색 결과가 없어요.</p>
-            <?php else: ?>
-                <p class="todo-template-empty">사용 중인 반복 할 일이 없어요.</p>
-            <?php endif; ?>
+                    </tbody></table><?php endif; ?>
+                    </div>
+                    <?php if ($groupName === '미사용'): ?></details><?php endif; ?>
+                </section>
+                <?php endforeach; ?>
+            </div>
         </div>
     </section>
 
@@ -133,6 +149,9 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
         <div class="todo-sheet-header ui-form-sheet-header"><strong id="todoRecurringCreateTitle">반복 할 일 추가</strong><button type="button" class="ui-close-button" data-todo-recurring-close aria-label="닫기">×</button></div>
         <form class="todo-create-form" method="post" action="/todo/recurring" data-todo-recurring-form>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+            <input type="hidden" name="block_template_id" data-recurring-template-id>
+            <input type="hidden" name="duration_index" data-recurring-duration value="6">
+            <button type="button" class="btn btn-secondary todo-recurring-enabled" data-recurring-enabled hidden></button>
             <label class="form-label" for="todoRecurringName">할 일명</label>
             <input class="input" id="todoRecurringName" name="title" type="text" maxlength="80" required>
             <fieldset class="calendar-activity-importance"><legend>중요도</legend>
@@ -142,7 +161,7 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
             <select class="input" id="todoRecurringGoal" name="goal_id"><option value="">연결하지 않음</option>
                 <?php foreach (($todo['goalOptions'] ?? []) as $goal): ?><option value="<?= e((string) $goal['id']) ?>"><?= e((string) ($goal['label'] ?? $goal['title'] ?? '목표')) ?></option><?php endforeach; ?>
             </select>
-            <div class="ui-form-sheet-actions"><button class="btn btn-primary" type="submit">반복 할 일 추가</button></div>
+            <div class="ui-form-sheet-actions todo-edit-actions"><button type="button" class="btn btn-ghost todo-delay-button" data-recurring-delete aria-describedby="recurringDeleteHoldHelp" hidden><span>반복 할 일 삭제</span></button><button class="btn btn-primary" type="submit" data-recurring-submit>반복 할 일 추가</button><span class="sr-only" id="recurringDeleteHoldHelp">삭제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요.</span></div>
         </form>
     </section>
 </div>

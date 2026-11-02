@@ -275,28 +275,51 @@ final class PlanController
 
     public function setBlockTemplateEnabled(): void
     {
+        $wantsJson = stripos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false;
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($wantsJson) { http_response_code(419); header('Content-Type: application/json; charset=utf-8'); echo json_encode(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], JSON_UNESCAPED_UNICODE); return; }
             $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
         $id = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
-        if ($id === false || $id <= 0 || !$this->planService()->setBlockTemplateEnabled($this->userId(), (int) $id, ($_POST['enabled'] ?? '') === '1')) {
+        $enabled = $_POST['enabled'] ?? '';
+        if ($id === false || $id <= 0 || !in_array($enabled, ['0', '1'], true) || !$this->planService()->setBlockTemplateEnabled($this->userId(), (int) $id, $enabled === '1')) {
+            if ($wantsJson) { http_response_code(422); header('Content-Type: application/json; charset=utf-8'); echo json_encode(['ok' => false, 'message' => '사용 상태를 변경하지 못했습니다.'], JSON_UNESCAPED_UNICODE); return; }
             $this->redirectWithErrors('/plan?view=blocks', ['general' => '사용 상태를 변경하지 못했습니다.']);
         }
+        if ($wantsJson) { header('Content-Type: application/json; charset=utf-8'); echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE); return; }
         $this->redirect('/plan?view=blocks');
     }
 
     public function deleteBlockTemplate(): void
     {
+        $wantsJson = stripos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false;
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            if ($wantsJson) {
+                http_response_code(419);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $templateId = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
         if ($templateId === false || $templateId <= 0
             || !$this->planService()->deleteBlockTemplate($this->userId(), (int) $templateId)) {
+            if ($wantsJson) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'message' => '반복 할 일을 삭제하지 못했습니다.'], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             $this->redirectWithErrors('/plan?view=blocks', ['general' => '할 일 블록을 삭제하지 못했습니다.']);
         }
 
+        if ($wantsJson) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => true, 'message' => '반복 할 일이 삭제되었습니다. 이미 복사한 일정은 유지됩니다.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         $_SESSION['flash_success'] = '할 일 블록이 삭제되었습니다. 이미 복사한 일정은 유지됩니다.';
         $this->redirect('/plan?view=blocks');
     }

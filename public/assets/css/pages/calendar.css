@@ -1588,8 +1588,9 @@ body[data-theme=dark] .calendar-energy-links[data-energy-direction="recover"] .c
   .calendar-timetable-panel.is-actual .actual-event { font-size:10px; }
   .calendar-timetable-panel.is-plan .plan-event { border:0; background:color-mix(in srgb,var(--color-primary) 11%,var(--color-surface)); color:var(--color-text); box-shadow:none; cursor:grab; }
   .calendar-timetable-panel.is-plan .plan-event:active { cursor:grabbing; }
-  .calendar-timetable-panel.is-plan .plan-event,
-  .calendar-timetable-panel.is-actual .actual-event { padding-inline:16px; }
+  /* Short segments must not grow beyond their 10-minute grid cells. */
+  .calendar-timetable-panel.is-plan .plan-event { padding-inline:min(16px, calc((var(--span) * (100% / 6) - 4px) / 4)); }
+  .calendar-timetable-panel.is-actual .actual-event { padding-inline:min(16px, 25%); }
   .calendar-timetable-panel .plan-block-resize-handle::after,
   .calendar-timetable-panel .actual-block-resize-handle::after { background:currentColor; opacity:.35; height:12px; box-shadow:none; }
   .calendar-timetable-panel .plan-event.is-resizing .plan-block-resize-handle::after,

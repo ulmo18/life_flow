@@ -89,6 +89,7 @@ final class CalendarService
             'calendarTags' => $tagData['tags'],
             'tagPalettes' => $tagData['palettes'],
             'blockTemplates' => $this->planService->getBlockTemplates($userId),
+            'usedRecurringTemplateIds' => $this->calendarRepository->getUsedRecurringTemplateIds($userId, (int) $day['id']),
             'planReminderItems' => $planReminderItems,
             // The placement source list must contain every date-specific activity,
             // independently from Actual links or the optional block schema.

@@ -300,6 +300,7 @@ final class Database
         }
         $itemColumns = array_column($connection->query('PRAGMA table_info(daily_plan_items)')->fetchAll(), 'name');
         if (!in_array('source_block_template_id', $itemColumns, true)) $connection->exec('ALTER TABLE daily_plan_items ADD COLUMN source_block_template_id INTEGER NULL');
+        if (!in_array('recurring_template_id', $itemColumns, true)) $connection->exec('ALTER TABLE daily_plan_items ADD COLUMN recurring_template_id INTEGER NULL');
         $connection->exec('UPDATE daily_plan_blocks SET title_snapshot = (SELECT title FROM daily_plan_items WHERE id = daily_plan_item_id), importance_snapshot = (SELECT importance FROM daily_plan_items WHERE id = daily_plan_item_id), goal_id_snapshot = (SELECT goal_id FROM daily_plan_items WHERE id = daily_plan_item_id) WHERE title_snapshot IS NULL');
     }
 

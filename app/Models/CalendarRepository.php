@@ -443,19 +443,28 @@ final class CalendarRepository
         }
     }
 
-    /** @return array{itemId:int, blockId:int}|null */
+    /** @return array{itemId:int, blockId:int, item:array<string, mixed>}|null */
     public function placePlanBlockTemplate(int $userId, string $date, int $templateId, int $startIndex, int $endIndex): ?array
     {
         if (!$this->supportsDailyPlanBlocks() || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex) return null;
+        return $this->useRecurringTemplate($userId, $date, $templateId, $startIndex, $endIndex);
+    }
+
+    /** @return array{itemId:int, blockId:?int, item:array<string, mixed>}|null */
+    public function useRecurringTemplate(int $userId, string $date, int $templateId, ?int $startIndex = null, ?int $endIndex = null): ?array
+    {
+        if (($startIndex === null) !== ($endIndex === null)) return null;
+        if ($startIndex !== null && (!$this->supportsDailyPlanBlocks() || $startIndex < 0 || $endIndex > 144 || $startIndex >= $endIndex)) return null;
         try {
             $this->db->beginTransaction();
-            $template = $this->db->prepare('SELECT title, importance, goal_id FROM plan_block_templates WHERE id = :id AND user_id = :user_id AND is_enabled = 1 AND deleted_at IS NULL');
+            $lock = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $template = $this->db->prepare('SELECT title, importance, goal_id FROM plan_block_templates WHERE id = :id AND user_id = :user_id AND is_enabled = 1 AND deleted_at IS NULL' . $lock);
             $template->execute(['id' => $templateId, 'user_id' => $userId]);
             $source = $template->fetch();
             if (!$source) { $this->db->rollBack(); return null; }
             $day = $this->getOrCreateDay($userId, $date);
             $dayId = (int) $day['id'];
-            if ($this->hasOverlappingDailyPlanBlockForDay($dayId, $startIndex, $endIndex)) { $this->db->rollBack(); return null; }
+            if ($startIndex !== null && $this->hasOverlappingDailyPlanBlockForDay($dayId, $startIndex, $endIndex)) { $this->db->rollBack(); return null; }
             $plan = $this->getDailyPlanForDay($userId, $dayId);
             if ($plan === null) {
                 $stmt = $this->db->prepare('INSERT INTO daily_plans (user_id, calendar_day_id, source_plan_group_id, name, created_at, updated_at) VALUES (:user_id, :day_id, NULL, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
@@ -464,17 +473,33 @@ final class CalendarRepository
             } else $planId = (int) $plan['id'];
             $goalId = $source['goal_id'] === null ? null : (int) $source['goal_id'];
             if ($goalId !== null && !$this->userOwnsGoal($userId, $goalId)) $goalId = null;
-            $stmt = $this->db->prepare('INSERT INTO daily_plan_items (daily_plan_id, source_plan_block_id, source_plan_template_id, source_block_template_id, goal_id, title, importance, start_index, end_index, estimated_duration_minutes, sort_order, deleted_at, created_at, updated_at) VALUES (:plan_id, NULL, NULL, :template_id, :goal_id, :title, :importance, NULL, NULL, NULL, (SELECT COALESCE(MAX(existing.sort_order), 0) + 1 FROM daily_plan_items existing WHERE existing.daily_plan_id = :sort_plan_id), NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
-            $stmt->execute(['plan_id' => $planId, 'sort_plan_id' => $planId, 'template_id' => $templateId, 'goal_id' => $goalId, 'title' => $source['title'], 'importance' => $source['importance']]);
-            $itemId = (int) $this->db->lastInsertId();
-            $blockId = $this->createInitialDailyPlanBlock($itemId, $startIndex, $endIndex);
+            $existing = $this->db->prepare('SELECT id FROM daily_plan_items WHERE daily_plan_id = :plan_id AND recurring_template_id = :template_id AND deleted_at IS NULL ORDER BY id LIMIT 1');
+            $existing->execute(['plan_id' => $planId, 'template_id' => $templateId]);
+            $itemId = (int) $existing->fetchColumn();
+            if ($itemId === 0) {
+                $stmt = $this->db->prepare('INSERT INTO daily_plan_items (daily_plan_id, source_plan_block_id, source_plan_template_id, source_block_template_id, recurring_template_id, goal_id, title, importance, start_index, end_index, estimated_duration_minutes, sort_order, deleted_at, created_at, updated_at) VALUES (:plan_id, NULL, NULL, NULL, :template_id, :goal_id, :title, :importance, NULL, NULL, NULL, (SELECT COALESCE(MAX(existing.sort_order), 0) + 1 FROM daily_plan_items existing WHERE existing.daily_plan_id = :sort_plan_id), NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
+                $stmt->execute(['plan_id' => $planId, 'sort_plan_id' => $planId, 'template_id' => $templateId, 'goal_id' => $goalId, 'title' => $source['title'], 'importance' => $source['importance']]);
+                $itemId = (int) $this->db->lastInsertId();
+            }
+            $blockId = $startIndex === null ? null : $this->createInitialDailyPlanBlock($itemId, $startIndex, $endIndex);
+            $item = $this->db->prepare('SELECT title, importance, todo_status, goal_id FROM daily_plan_items WHERE id = :id');
+            $item->execute(['id' => $itemId]);
+            $savedItem = $item->fetch();
             $this->db->commit();
-            return ['itemId' => $itemId, 'blockId' => $blockId];
+            return ['itemId' => $itemId, 'blockId' => $blockId, 'item' => $savedItem];
         } catch (Throwable $exception) {
             if ($this->db->inTransaction()) $this->db->rollBack();
             error_log('[calendar] template placement failed: ' . $exception->getMessage());
             return null;
         }
+    }
+
+    /** @return int[] */
+    public function getUsedRecurringTemplateIds(int $userId, int $dayId): array
+    {
+        $stmt = $this->db->prepare('SELECT DISTINCT dpi.recurring_template_id FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id WHERE dp.user_id = :user_id AND dp.calendar_day_id = :day_id AND dpi.deleted_at IS NULL AND dpi.recurring_template_id IS NOT NULL');
+        $stmt->execute(['user_id' => $userId, 'day_id' => $dayId]);
+        return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     }
 
     public function updateDailyPlanBlock(int $userId, int $blockId, int $startIndex, int $endIndex, ?string $date = null): bool

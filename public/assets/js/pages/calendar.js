@@ -1527,6 +1527,45 @@
       const response = await fetch('/calendar/plan-block', { method: 'POST', body, headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
       const payload = await response.json();
       if (!response.ok || !payload.ok || !payload.blockId) throw new Error(payload.message || '계획 블록을 추가하지 못했습니다.');
+      if (templateId) {
+        delete source.dataset.blockTemplateId;
+        delete source.dataset.templateDuration;
+        source.dataset.planItemId = String(payload.itemId);
+        source.dataset.planTodoStatus = payload.item?.todo_status || 'pending';
+        source.dataset.planItemScheduleType = 'unscheduled';
+        source.dataset.planTitle = payload.item?.title || source.dataset.planTitle;
+        source.dataset.planItemImportance = payload.item?.importance || source.dataset.planItemImportance;
+        source.dataset.planItemGoalId = payload.item?.goal_id == null ? '' : String(payload.item.goal_id);
+        const select = source.querySelector('[data-plan-block-source-select]');
+        select?.removeAttribute('aria-label');
+        if (select) { select.textContent = source.dataset.planTitle; select.title = source.dataset.planTitle; }
+        const badge = source.querySelector('.calendar-importance-badge');
+        if (badge) { badge.className = `calendar-importance-badge importance-${source.dataset.planItemImportance.toLowerCase()}`; badge.textContent = source.dataset.planItemImportance; }
+        source.querySelector('[data-plan-source-edit]')?.setAttribute('aria-label', `${source.dataset.planTitle} 옵션 수정`);
+        const handle = document.createElement('button');
+        handle.type = 'button';
+        handle.className = 'calendar-plan-source-handle';
+        handle.dataset.planBlockSourceHandle = '';
+        handle.setAttribute('aria-label', '계획 시간표에 배치');
+        handle.innerHTML = '<span aria-hidden="true">⠿</span>';
+        handle.addEventListener('pointerdown', event => {
+          if (calendarWorkMode !== 'plan-placement' || event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
+          sourceDrag = { pointerId: event.pointerId, source };
+          source.classList.add('is-dragging');
+          page.classList.add('is-plan-source-dragging');
+          try { handle.setPointerCapture(event.pointerId); } catch (error) { /* Optional on older browsers. */ }
+        });
+        handle.addEventListener('pointerup', finishPlanSourceDrag);
+        handle.addEventListener('pointercancel', event => {
+          if (sourceDrag?.pointerId !== event.pointerId) return;
+          sourceDrag = null;
+          source.classList.remove('is-dragging');
+          page.classList.remove('is-plan-source-dragging');
+          hidePlanDragGuide();
+        });
+        handle.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); });
+        source.append(handle);
+      }
       appendPlanBlock(payload.itemId || itemId, payload.blockId, start, end, source);
       document.querySelector('[data-calendar-day-template]')?.remove();
       if (selectedPlanBlockSource === source) {
