@@ -101,57 +101,65 @@ final class GoalController
 
     public function focus(): void
     {
+        $returnPath = $this->mapReturnPath($_POST['mode'] ?? 'focus');
         $goalId = filter_var($_POST['goal_id'] ?? null, FILTER_VALIDATE_INT);
         $focused = (string) ($_POST['focused'] ?? '') === '1';
         if (!Csrf::verify($_POST['_csrf_token'] ?? null) || $goalId === false || $goalId <= 0) {
-            $this->redirectWithErrors('/goal?mode=all', ['general' => '집중 목표 요청을 다시 확인해주세요.']);
+            $this->redirectWithErrors($returnPath, ['general' => '집중 목표 요청을 다시 확인해주세요.']);
         }
         $result = $this->goalService->setFocused($this->userId(), (int) $goalId, $focused);
         if ($result === 'limit') {
-            $this->redirectWithErrors('/goal?mode=all', ['general' => '집중 목표는 최대 5개까지 선택할 수 있습니다.']);
+            $this->redirectWithErrors($returnPath, ['general' => '집중 목표는 최대 5개까지 선택할 수 있습니다.']);
         }
         if ($result !== 'updated') {
-            $this->redirectWithErrors('/goal?mode=all', ['general' => '진행 중인 목표만 집중 목표로 선택할 수 있습니다.']);
+            $this->redirectWithErrors($returnPath, ['general' => '진행 중인 목표만 집중 목표로 선택할 수 있습니다.']);
         }
         $_SESSION['flash_success'] = $focused ? '지금 집중할 목표에 추가했습니다.' : '집중 목표에서 제외했습니다.';
-        $this->redirect($focused ? '/goal' : '/goal?mode=all');
+        $this->redirect($returnPath);
     }
 
     public function update(): void
     {
+        $returnPath = $this->mapReturnPath($_POST['mode'] ?? 'focus');
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
-            $this->redirectWithErrors('/goal', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            $this->redirectWithErrors($returnPath, ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $goalId = (int) ($_POST['goal_id'] ?? 0);
         $validation = $this->goalService->validateInput($_POST, $this->userId(), $goalId > 0 ? $goalId : null);
         if ($goalId <= 0 || !$validation['ok']) {
-            $this->redirectWithErrors('/goal', $validation['errors'] ?: ['general' => '수정할 목표를 찾을 수 없습니다.'], $_POST);
+            $this->redirectWithErrors($returnPath, $validation['errors'] ?: ['general' => '수정할 목표를 찾을 수 없습니다.'], $_POST);
         }
 
         if (!$this->goalService->updateGoal($this->userId(), $goalId, $validation['data'])) {
-            $this->redirectWithErrors('/goal', ['general' => '목표 수정 중 오류가 발생했습니다.'], $_POST);
+            $this->redirectWithErrors($returnPath, ['general' => '목표 수정 중 오류가 발생했습니다.'], $_POST);
         }
 
         $_SESSION['flash_success'] = '목표가 수정되었습니다.';
         $_SESSION['notification_sync_goal'] = true;
-        $this->redirect('/goal');
+        $this->redirect($returnPath);
     }
 
     public function delete(): void
     {
+        $returnPath = $this->mapReturnPath($_POST['mode'] ?? 'focus');
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
-            $this->redirectWithErrors('/goal', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            $this->redirectWithErrors($returnPath, ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $goalId = (int) ($_POST['goal_id'] ?? 0);
         if ($goalId <= 0 || !$this->goalService->deleteGoal($this->userId(), $goalId)) {
-            $this->redirectWithErrors('/goal', ['general' => '목표 삭제에 실패했습니다.']);
+            $this->redirectWithErrors($returnPath, ['general' => '목표 삭제에 실패했습니다.']);
         }
 
         $_SESSION['flash_success'] = '목표가 삭제되었습니다.';
         $_SESSION['notification_sync_goal'] = true;
-        $this->redirect('/goal');
+        $this->redirect($returnPath);
+    }
+
+    private function mapReturnPath(mixed $mode): string
+    {
+        return $this->goalService->normalizeMapMode($mode) === 'all' ? '/goal?mode=all' : '/goal';
     }
 
     /** @param array<string, string> $errors */

@@ -13,6 +13,9 @@ final class CalendarRepository
     private PDO $db;
     private ?bool $dailyPlanBlocksSupported = null;
     private ?bool $todoStatusSupported = null;
+    private ?bool $planBlockRemindersSupported = null;
+    private ?bool $todoFollowupSupported = null;
+    private ?bool $todoCarryoverSupported = null;
 
     public function __construct()
     {
@@ -292,6 +295,78 @@ final class CalendarRepository
         return $stmt->rowCount() > 0 || $this->getDailyPlanItemForCompletion($userId, $itemId) !== null;
     }
 
+    public function supportsTodoFollowup(): bool
+    {
+        if ($this->todoFollowupSupported !== null) return $this->todoFollowupSupported;
+        $columns = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
+            ? $this->db->query('PRAGMA table_info(daily_plan_items)')->fetchAll()
+            : $this->db->query('SHOW COLUMNS FROM daily_plan_items')->fetchAll();
+        return $this->todoFollowupSupported = in_array('followup_note', array_column($columns, $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite' ? 'name' : 'Field'), true);
+    }
+
+    public function getTodoFollowup(int $userId, int $itemId): ?array
+    {
+        if (!$this->supportsTodoStatus()) return null;
+        $note = $this->supportsTodoFollowup() ? 'dpi.followup_note' : "'' AS followup_note";
+        $source = $this->supportsTodoCarryover() ? 'dpi.source_carryover_item_id' : 'NULL AS source_carryover_item_id';
+        $stmt = $this->db->prepare('SELECT dpi.id, dpi.title, dpi.importance, dpi.goal_id, dpi.estimated_duration_minutes, dpi.todo_status, ' . $note . ', ' . $source . ', cd.calendar_date FROM daily_plan_items dpi
+            INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id
+            WHERE dpi.id = :id AND dp.user_id = :user_id AND dpi.deleted_at IS NULL AND dpi.source_block_template_id IS NULL');
+        $stmt->execute(['id' => $itemId, 'user_id' => $userId]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public function updateTodoFollowup(int $userId, int $itemId, string $note): bool
+    {
+        if (!$this->supportsTodoFollowup() || $this->getTodoFollowup($userId, $itemId) === null) return false;
+        $stmt = $this->db->prepare('UPDATE daily_plan_items SET followup_note = :note, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id AND deleted_at IS NULL AND daily_plan_id IN (SELECT id FROM daily_plans WHERE user_id = :user_id)');
+        $stmt->execute(['note' => $note, 'id' => $itemId, 'user_id' => $userId]);
+        return true;
+    }
+
+    public function listTodoCarryovers(int $userId, string $beforeDate): array
+    {
+        if (!$this->supportsTodoStatus()) return [];
+        $note = $this->supportsTodoFollowup() ? 'dpi.followup_note' : "'' AS followup_note";
+        $registered = $this->supportsTodoCarryover() ? '(SELECT copy.id FROM daily_plan_items copy
+            INNER JOIN daily_plans copy_plan ON copy_plan.id = copy.daily_plan_id INNER JOIN calendar_days copy_day ON copy_day.id = copy_plan.calendar_day_id
+            WHERE copy.source_carryover_item_id = dpi.id AND copy_plan.user_id = dp.user_id AND copy_day.calendar_date = :target_date LIMIT 1)' : 'NULL';
+        $stmt = $this->db->prepare('SELECT dpi.id, dpi.title, dpi.importance, dpi.todo_status, ' . $note . ', cd.calendar_date, ' . $registered . ' AS registered_item_id
+            FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id
+            WHERE dp.user_id = :user_id AND cd.calendar_date = :date AND dpi.deleted_at IS NULL
+              AND dpi.source_block_template_id IS NULL AND dpi.todo_status IN (\'in_progress\', \'postponed\')
+            ORDER BY cd.calendar_date DESC, dpi.sort_order ASC, dpi.id ASC');
+        $params = ['user_id' => $userId, 'date' => (new \DateTimeImmutable($beforeDate))->modify('-1 day')->format('Y-m-d')];
+        if ($this->supportsTodoCarryover()) $params['target_date'] = $beforeDate;
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function supportsTodoCarryover(): bool
+    {
+        if ($this->todoCarryoverSupported !== null) return $this->todoCarryoverSupported;
+        $sqlite = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite';
+        $columns = $this->db->query($sqlite ? 'PRAGMA table_info(daily_plan_items)' : 'SHOW COLUMNS FROM daily_plan_items')->fetchAll();
+        return $this->todoCarryoverSupported = $this->supportsTodoFollowup() && in_array('source_carryover_item_id', array_column($columns, $sqlite ? 'name' : 'Field'), true);
+    }
+
+    private function findTodoCarryoverRegistration(int $userId, int $sourceId, string $date): ?int
+    {
+        $stmt = $this->db->prepare('SELECT dpi.id FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+            INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id WHERE dp.user_id = :user_id AND cd.calendar_date = :date AND dpi.source_carryover_item_id = :source_id LIMIT 1');
+        $stmt->execute(['user_id' => $userId, 'date' => $date, 'source_id' => $sourceId]);
+        $id = $stmt->fetchColumn();
+        return $id === false ? null : (int) $id;
+    }
+
+    public function registerTodoCarryover(int $userId, int $sourceId, string $date): ?int
+    {
+        if (!$this->supportsTodoCarryover()) return null;
+        return $this->createDailyPlanItem($userId, $date, '', 'D', null, null, null, null, null, $sourceId)
+            ?? $this->findTodoCarryoverRegistration($userId, $sourceId, $date);
+    }
+
     public function supportsDailyPlanBlocks(): bool
     {
         if ($this->dailyPlanBlocksSupported !== null) {
@@ -330,6 +405,7 @@ final class CalendarRepository
                     dpi.source_plan_template_id AS plan_template_id,
                     dpi.source_plan_block_id, dpi.source_block_template_id, CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END AS goal_id, COALESCE(dpb.title_snapshot, dpi.title) AS title, COALESCE(dpb.importance_snapshot, dpi.importance) AS importance,
                     dpb.start_index, dpb.end_index, dpb.sort_order, dpb.manual_status,
+                    ' . ($this->supportsPlanBlockReminders() ? 'dpb.reminder_enabled, dpb.reminder_minutes_before' : '0 AS reminder_enabled, 5 AS reminder_minutes_before') . ',
                     dpi.deleted_at AS source_deleted_at, dpi.importance AS source_importance,
                     ' . ($this->supportsTodoStatus() ? 'dpi.todo_status' : "'pending'") . ' AS source_todo_status,
                     g.title AS goal_title,
@@ -350,6 +426,50 @@ final class CalendarRepository
         $stmt->execute(['user_id' => $userId, 'calendar_day_id' => $calendarDayId]);
 
         return $stmt->fetchAll();
+    }
+
+    public function supportsPlanBlockReminders(): bool
+    {
+        if ($this->planBlockRemindersSupported !== null) return $this->planBlockRemindersSupported;
+        if (!$this->supportsDailyPlanBlocks()) return $this->planBlockRemindersSupported = false;
+        $columns = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
+            ? array_column($this->db->query('PRAGMA table_info(daily_plan_blocks)')->fetchAll(), 'name')
+            : array_column($this->db->query('SHOW COLUMNS FROM daily_plan_blocks')->fetchAll(), 'Field');
+        return $this->planBlockRemindersSupported = in_array('reminder_enabled', $columns, true) && in_array('reminder_minutes_before', $columns, true);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getPlanBlockReminder(int $userId, int $blockId): ?array
+    {
+        if (!$this->supportsPlanBlockReminders()) return null;
+        $stmt = $this->db->prepare(
+            'SELECT dpb.id, dpb.start_index, dpb.end_index, dpb.reminder_enabled, dpb.reminder_minutes_before, cd.calendar_date
+             FROM daily_plan_blocks dpb
+             INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
+             INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+             INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id
+             WHERE dpb.id = :id AND dp.user_id = :user_id LIMIT 1'
+        );
+        $stmt->execute(['id' => $blockId, 'user_id' => $userId]);
+        $row = $stmt->fetch();
+        return $row === false ? null : $row;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function updatePlanBlockReminder(int $userId, int $blockId, bool $enabled, int $minutesBefore): ?array
+    {
+        if (!$this->supportsPlanBlockReminders()) return null;
+        try {
+            $stmt = $this->db->prepare(
+                'UPDATE daily_plan_blocks SET reminder_enabled = :enabled, reminder_minutes_before = :minutes, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id AND daily_plan_item_id IN
+                   (SELECT dpi.id FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id WHERE dp.user_id = :user_id)'
+            );
+            $stmt->execute(['enabled' => $enabled ? 1 : 0, 'minutes' => $minutesBefore, 'id' => $blockId, 'user_id' => $userId]);
+            return $this->getPlanBlockReminder($userId, $blockId);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /** @return array<string, mixed>|null */
@@ -841,10 +961,23 @@ final class CalendarRepository
         ?int $startIndex,
         ?int $endIndex,
         ?int $estimatedDurationMinutes,
-        ?array $placementRange = null
+        ?array $placementRange = null,
+        ?int $carryoverSourceId = null
     ): ?int {
         try {
             $this->db->beginTransaction();
+            $carryover = null;
+            if ($carryoverSourceId !== null) {
+                $carryover = $this->supportsTodoCarryover() ? $this->getTodoFollowup($userId, $carryoverSourceId) : null;
+                if ($carryover === null || $carryover['calendar_date'] !== (new \DateTimeImmutable($date))->modify('-1 day')->format('Y-m-d') || !in_array($carryover['todo_status'], ['in_progress', 'postponed'], true)) {
+                    $this->db->rollBack(); return null;
+                }
+                $existing = $this->findTodoCarryoverRegistration($userId, $carryoverSourceId, $date);
+                if ($existing !== null) { $this->db->commit(); return $existing; }
+                $title = $carryover['title']; $importance = $carryover['importance'];
+                $goalId = $carryover['goal_id'] !== null && $this->userOwnsGoal($userId, (int) $carryover['goal_id']) ? (int) $carryover['goal_id'] : null;
+                $estimatedDurationMinutes = $carryover['estimated_duration_minutes'] === null ? null : (int) $carryover['estimated_duration_minutes'];
+            }
             $day = $this->getOrCreateDay($userId, $date);
             if ($placementRange !== null && (!$this->supportsDailyPlanBlocks()
                 || $placementRange[0] < 0 || $placementRange[1] > 144 || $placementRange[0] >= $placementRange[1]
@@ -887,16 +1020,16 @@ final class CalendarRepository
                 'INSERT INTO daily_plan_items (
                     daily_plan_id, source_plan_block_id, source_plan_template_id, goal_id,
                     title, importance, start_index, end_index, estimated_duration_minutes, sort_order,
-                    deleted_at, created_at, updated_at
+                    deleted_at, created_at, updated_at' . ($carryover !== null ? ', source_carryover_item_id, followup_note' : '') . '
                  ) VALUES (
                     :daily_plan_id, NULL, NULL, :goal_id, :title, :importance,
                     :start_index, :end_index, :estimated_duration_minutes,
                     (SELECT COALESCE(MAX(existing.sort_order), 0) + 1
                      FROM daily_plan_items existing WHERE existing.daily_plan_id = :sort_daily_plan_id),
-                    NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP' . ($carryover !== null ? ', :carryover_source, :carryover_note' : '') . '
                  )'
             );
-            $stmt->execute([
+            $params = [
                 'daily_plan_id' => $dailyPlanId,
                 'sort_daily_plan_id' => $dailyPlanId,
                 'goal_id' => $goalId,
@@ -905,7 +1038,9 @@ final class CalendarRepository
                 'start_index' => $startIndex,
                 'end_index' => $endIndex,
                 'estimated_duration_minutes' => $estimatedDurationMinutes,
-            ]);
+            ];
+            if ($carryover !== null) { $params['carryover_source'] = $carryoverSourceId; $params['carryover_note'] = $carryover['followup_note']; }
+            $stmt->execute($params);
             $itemId = (int) $this->db->lastInsertId();
             if ($this->supportsDailyPlanBlocks() && $startIndex !== null && $endIndex !== null) {
                 $this->createInitialDailyPlanBlock($itemId, $startIndex, $endIndex);

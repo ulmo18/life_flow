@@ -6,11 +6,6 @@
 .todo-heading p { margin: var(--space-1) 0 0; }
 .todo-group { display: grid; gap: 7px; }
 .todo-group[hidden] { display: none; }
-.todo-list-tabs { display: flex; gap: 4px; padding: 4px; border-radius: var(--radius-md); background: var(--color-surface-soft); }
-.todo-list-tabs button { flex: 1; min-width: 0; min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-muted); font: inherit; cursor: pointer; }
-.todo-list-tabs button[aria-selected='true'] { background: var(--color-surface); color: var(--color-text); font-weight: 800; }
-.todo-list-tabs button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
-.todo-list-tabs span { font-size: 12px; }
 .todo-plan-list { margin: 0; padding: 0; list-style: none; }
 .todo-plan-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .todo-plan-row:last-child { border-bottom: 0; }
@@ -23,17 +18,10 @@
 .todo-sort button { min-height:44px; padding:0 10px; border:1px solid var(--border); border-radius:999px; background:var(--color-surface); color:var(--color-text-muted); font:inherit; font-size:12px; cursor:pointer; }
 .todo-sort button[aria-pressed='true'] { border-color:var(--color-primary); color:var(--color-primary-text); font-weight:700; }
 .todo-sort button:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; }
-.todo-table-wrap { overflow: visible; border: 1px solid var(--border); border-radius: 15px; background: var(--color-surface); }
-.todo-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.todo-table-wrap { overflow: visible; }
+.todo-table { table-layout: fixed; }
 .todo-table th { padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--color-text-muted); font-size: 12px; text-align: left; }
-.todo-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-.todo-table tr:last-child td { border-bottom: 0; }
 .todo-table .todo-status-cell { width: 54px; padding-right: 2px; padding-left: 2px; text-align: center; }
-.todo-group-empty { margin: 0; padding: 16px; color: var(--color-text-muted); font-size: 12px; font-weight: 400; text-align: center; }
-.todo-create-tabs { display: flex; gap: 4px; padding: 4px; margin-top: var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-soft); }
-.todo-create-tabs button { flex: 1; min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-muted); font: inherit; font-size: 14px; cursor: pointer; }
-.todo-create-tabs button[aria-selected='true'] { background: var(--color-surface); color: var(--color-text); font-weight: 800; }
-.todo-create-tabs button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: -3px; }
 .todo-create-form[hidden], .todo-template-picker[hidden], .todo-template-row[hidden], .todo-template-empty[hidden] { display: none; }
 [data-todo-recurring-form] [data-recurring-enabled][hidden],
 [data-todo-recurring-form] [data-recurring-delete][hidden] { display: none; }
@@ -88,17 +76,23 @@
 .todo-block-status:disabled { cursor: default; opacity: .6; }
 .todo-block-status:focus-visible, .todo-status-options button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .todo-status-block-title { margin: var(--space-3) 0; color: var(--color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
-.todo-status-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.todo-status-options button { min-width: 0; min-height: 44px; padding: 8px 4px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--color-surface-soft); color: var(--color-text); font: inherit; font-size: 14px; cursor: pointer; }
-.todo-status-options button[aria-pressed='true'] { border-color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface)); color: var(--color-primary-text); box-shadow: inset 0 0 0 1px var(--color-primary); font-weight: 800; }
-.todo-status-options button:disabled { opacity: .45; cursor: default; }
+.todo-status-options { margin:0; }
+.todo-carryovers { margin-bottom:var(--space-4); }
+.todo-carryovers > summary { display:flex; align-items:center; gap:var(--space-2); min-height:48px; padding:var(--space-3); border:1px solid var(--border); border-radius:var(--radius-md); cursor:pointer; font-size:var(--font-size-sm); }
+.todo-carryovers > .form-hint { margin:var(--space-2) 0; }
+.todo-carryover-list form { margin-top:var(--space-2); }
+.todo-carryovers h3 { margin:0; font-size:var(--font-size-sm); }
+.todo-carryover-list { list-style:none; margin:0; padding:0; border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; }
+.todo-carryover-list li { padding:var(--space-3); }
+.todo-carryover-list li + li { border-top:1px solid var(--border); }
+.todo-carryover-list a { display:flex; align-items:center; gap:var(--space-2); min-height:44px; color:var(--color-text); text-decoration:none; }
+.todo-carryover-list a strong { flex:1; overflow-wrap:anywhere; }
+.todo-carryover-list small { color:var(--color-text-muted); font-size:12px; }
+.todo-carryover-list p { margin:var(--space-2) 0 0; font-size:var(--font-size-sm); white-space:pre-wrap; overflow-wrap:anywhere; }
 .todo-status-note { margin: var(--space-3) 0 0; color: var(--color-text-muted); font-size: 12px; }
 .todo-status-note[hidden], [data-todo-block-actual][hidden] { display: none; }
 .todo-edit-actions { display: flex; gap: 8px; }
 .todo-edit-actions > button { flex: 1; min-width: 0; }
-.todo-delay-button { position: relative; overflow: hidden; isolation: isolate; touch-action: pan-y; user-select: none; -webkit-touch-callout: none; }
-.todo-delay-button::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--color-primary); opacity: .28; transform: scaleX(0); transform-origin: left center; pointer-events: none; }
-.todo-delay-button.is-holding::before { transform: scaleX(1); transition: transform 1.5s linear; }
 .todo-time-link { min-height: 28px; border: 1px solid var(--color-control-line); border-radius:999px; background: transparent; padding: 0 8px; color: var(--color-primary-text); font: inherit; font-size: 11px; font-weight: 900; cursor: pointer; }
 .todo-time-link:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .todo-item.is-completed .todo-item-copy { opacity: .62; }

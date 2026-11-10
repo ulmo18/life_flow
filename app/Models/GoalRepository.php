@@ -268,6 +268,57 @@ final class GoalRepository
         return $counts;
     }
 
+    /** @param int[] $goalIds @return array<int, array<int, array<string, mixed>>> */
+    public function listLinkedTodoItemsByGoalIds(int $userId, array $goalIds): array
+    {
+        if ($goalIds === []) return [];
+        $params = [];
+        $placeholders = $this->buildInPlaceholders('goal_id', $goalIds, $params);
+        $status = (new CalendarRepository())->supportsTodoStatus() ? 'dpi.todo_status' : "'pending'";
+        $stmt = $this->db->prepare('SELECT dpi.goal_id, dpi.id, dpi.title, dpi.importance, ' . $status . ' AS todo_status, cd.calendar_date
+            FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+            INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id AND cd.user_id = dp.user_id
+            WHERE dp.user_id = :user_id AND dpi.deleted_at IS NULL AND dpi.source_block_template_id IS NULL
+              AND dpi.goal_id IN (' . $placeholders . ')
+            ORDER BY dpi.goal_id, cd.calendar_date DESC, dpi.id DESC');
+        $params['user_id'] = $userId;
+        $stmt->execute($params);
+        $items = [];
+        foreach ($stmt->fetchAll() as $row) $items[(int) $row['goal_id']][] = $row;
+        return $items;
+    }
+
+    /** @param int[] $goalIds @return array<int, array<int, array<string, mixed>>> */
+    public function listLinkedScheduledPlansByGoalIds(int $userId, array $goalIds): array
+    {
+        if ($goalIds === []) return [];
+        $params = [];
+        $placeholders = $this->buildInPlaceholders('goal_id', $goalIds, $params);
+        if ((new CalendarRepository())->supportsDailyPlanBlocks()) {
+            $goal = 'CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END';
+            $sql = 'SELECT ' . $goal . ' AS goal_id, COALESCE(dpb.title_snapshot, dpi.title) AS title, dpb.start_index, dpb.end_index, cd.calendar_date
+                FROM daily_plan_blocks dpb INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
+                INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id AND cd.user_id = dp.user_id
+                WHERE dp.user_id = :user_id AND ' . $goal . ' IN (' . $placeholders . ')
+                ORDER BY goal_id, cd.calendar_date DESC, dpb.start_index, dpb.id';
+        } else {
+            $sql = 'SELECT dpi.goal_id, dpi.title, dpi.start_index, dpi.end_index, cd.calendar_date
+                FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id AND cd.user_id = dp.user_id
+                WHERE dp.user_id = :user_id AND dpi.deleted_at IS NULL AND dpi.start_index IS NOT NULL AND dpi.end_index IS NOT NULL
+                  AND dpi.goal_id IN (' . $placeholders . ')
+                ORDER BY dpi.goal_id, cd.calendar_date DESC, dpi.start_index, dpi.id';
+        }
+        $params['user_id'] = $userId;
+        $stmt = $this->db->prepare($sql);
+        foreach ($params as $name => $value) $stmt->bindValue(':' . $name, (int) $value, \PDO::PARAM_INT);
+        $stmt->execute();
+        $items = [];
+        foreach ($stmt->fetchAll() as $row) $items[(int) $row['goal_id']][] = $row;
+        return $items;
+    }
+
     /** @return array<string, mixed>|null */
     public function findActive(int $userId, int $goalId): ?array
     {
@@ -598,12 +649,11 @@ final class GoalRepository
                    AND ((:parent_is_null = 1 AND parent_goal_id IS NULL) OR parent_goal_id = :parent_goal_id)
                  ORDER BY sort_order ASC, id ASC'
             );
-            $stmt->execute([
-                'user_id' => $userId,
-                'goal_id' => $goalId,
-                'parent_is_null' => $parentGoalId === null ? 1 : 0,
-                'parent_goal_id' => $parentGoalId,
-            ]);
+            $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+            $stmt->bindValue(':goal_id', $goalId, PDO::PARAM_INT);
+            $stmt->bindValue(':parent_is_null', $parentGoalId === null ? 1 : 0, PDO::PARAM_INT);
+            $stmt->bindValue(':parent_goal_id', $parentGoalId, $parentGoalId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+            $stmt->execute();
             $orderedIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
             $insertAt = $beforeGoalId === null ? count($orderedIds) : array_search($beforeGoalId, $orderedIds, true);
             if ($insertAt === false) {
@@ -646,11 +696,10 @@ final class GoalRepository
                     AND deleted_at IS NULL';
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            'user_id' => $userId,
-            'parent_is_null' => $parentGoalId === null ? 1 : 0,
-            'parent_goal_id' => $parentGoalId,
-        ]);
+        $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        $stmt->bindValue(':parent_is_null', $parentGoalId === null ? 1 : 0, PDO::PARAM_INT);
+        $stmt->bindValue(':parent_goal_id', $parentGoalId, $parentGoalId === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
+        $stmt->execute();
 
         return (int) $stmt->fetchColumn();
     }

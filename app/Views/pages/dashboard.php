@@ -11,10 +11,7 @@
             <p class="muted">날짜별 계획과 실제 기록을 일정에서 함께 확인할 수 있습니다.</p>
         </div>
         <div class="action-row">
-            <a class="btn btn-secondary dashboard-action" href="/prototype/day-flow/">하루흐름 통합 시제품으로 이동</a>
             <a class="btn btn-primary dashboard-action" href="/calendar">일정 열기</a>
-            <a class="btn btn-secondary dashboard-action" href="/prototype/timeblock-planner/">타임블로킹 시제품</a>
-            <a class="btn btn-secondary dashboard-action" href="/prototype/actual-timeblock-planner/">실제 일정 기록 시제품</a>
         </div>
     </section>
 

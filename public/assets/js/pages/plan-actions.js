@@ -9,6 +9,7 @@
   const blockGoal = document.querySelector('[data-plan-block-goal]');
   const blockSheetTitle = document.querySelector('[data-plan-block-sheet-title]');
   const blockSubmit = document.querySelector('[data-plan-block-submit]');
+  let blockTrigger = null;
 
   function setBlockImportance(value) {
     if (!(blockForm instanceof HTMLFormElement)) return;
@@ -18,8 +19,9 @@
     });
   }
 
-  function openBlockSheet(mode, data = {}) {
+  function openBlockSheet(mode, data = {}, opener = document.activeElement) {
     if (!(blockLayer instanceof HTMLElement) || !(blockForm instanceof HTMLFormElement)) return;
+    if (blockLayer.hidden) blockTrigger = opener;
 
     const isEdit = mode === 'edit';
     blockForm.reset();
@@ -48,9 +50,11 @@
     if (!(blockLayer instanceof HTMLElement)) return;
     blockLayer.hidden = true;
     document.body.classList.remove('is-ui-open');
+    blockTrigger?.focus({ preventScroll: true });
+    blockTrigger = null;
   }
 
-  document.querySelector('[data-plan-block-create]')?.addEventListener('click', () => openBlockSheet('create'));
+  document.querySelector('[data-plan-block-create]')?.addEventListener('click', event => openBlockSheet('create', {}, event.currentTarget));
   document.querySelectorAll('[data-plan-block-edit]').forEach(button => {
     button.addEventListener('click', () => openBlockSheet('edit', {
       id: button.dataset.templateId,
@@ -58,7 +62,7 @@
       duration: button.dataset.templateDuration,
       importance: button.dataset.templateImportance,
       goal: button.dataset.templateGoal,
-    }));
+    }, button));
   });
   document.querySelectorAll('[data-plan-block-close]').forEach(button => {
     button.addEventListener('click', closeBlockSheet);
@@ -72,6 +76,23 @@
       goal: blockLayer.dataset.reopenGoal,
     });
   }
+
+  document.querySelectorAll('[data-plan-delay-delete]').forEach(button => {
+    let hold = null;
+    function cancel() { if (!hold) return; clearTimeout(hold.timer); hold = null; button.classList.remove('is-holding'); }
+    function complete() { if (!hold) return; const form = button.closest('form'); cancel(); button.disabled = true; if (form) form.requestSubmit(); }
+    function start(kind, id) { if (hold || button.disabled) return; hold = {kind, id, started:performance.now(), timer:setTimeout(complete, 1500)}; button.classList.add('is-holding'); }
+    function finish(kind, id) { if (!hold || hold.kind !== kind || hold.id !== id) return; if (performance.now() - hold.started >= 1500) { complete(); return; } cancel(); window.LifeFlowToast?.show('삭제하려면 1.5초 이상 눌러서 삭제하세요.'); }
+    button.addEventListener('pointerdown', event => { if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return; start('pointer', event.pointerId); try { button.setPointerCapture(event.pointerId); } catch (_) {} });
+    button.addEventListener('pointermove', event => { if (!hold || hold.kind !== 'pointer' || hold.id !== event.pointerId) return; const r=button.getBoundingClientRect(); if (event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom) cancel(); });
+    button.addEventListener('pointerup', event => finish('pointer',event.pointerId));
+    ['pointercancel','lostpointercapture','blur'].forEach(type => button.addEventListener(type,cancel));
+    button.addEventListener('keydown', event => { if (event.key !== ' ' && event.key !== 'Enter') return; event.preventDefault(); if (!event.repeat) start('key',event.key); });
+    button.addEventListener('keyup', event => { if (event.key !== ' ' && event.key !== 'Enter') return; event.preventDefault(); finish('key',event.key); });
+    button.addEventListener('contextmenu', event => { if (hold) event.preventDefault(); });
+    button.addEventListener('click', event => { event.preventDefault(); if (event.detail === 0 && !button.disabled) window.LifeFlowToast?.show('삭제하려면 1.5초 이상 눌러서 삭제하세요.'); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
+  });
 
   document.querySelectorAll('form[data-confirm]').forEach(form => {
     let allowSubmit = false;
@@ -98,8 +119,18 @@
   });
 
   document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
     if (event.key === 'Escape' && blockLayer instanceof HTMLElement && !blockLayer.hidden) {
       closeBlockSheet(event);
     }
+    if (event.key !== 'Tab' || !(blockLayer instanceof HTMLElement) || blockLayer.hidden) return;
+    const panel = blockLayer.querySelector('[role="dialog"]');
+    if (!panel) return;
+    const controls = Array.from(panel.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), a[href]'))
+      .filter(control => control.getClientRects().length > 0);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (!first) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 })();

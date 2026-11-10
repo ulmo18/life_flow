@@ -248,8 +248,26 @@ final class RetrospectService
         };
         $feedbackIsSchedule = in_array($feedbackRule, ['linked_a_records', 'linked_b_records', 'linked_c_records', 'linked_d_records', 'linked_plan_duration', 'actual_records'], true);
 
+        $editorialLines = [
+            '오늘의 기록은 내일을 위한 작은 이정표가 됩니다.',
+            '지나온 하루를 돌아보는 일도 앞으로 나아가는 한 걸음입니다.',
+            '작은 순간을 살피면 나에게 소중한 방향이 보입니다.',
+            '오늘을 적어 두면 다음 걸음을 고르는 힘이 됩니다.',
+        ];
+        $editorialLine = $editorialLines[((int) (new DateTimeImmutable($date))->format('z')) % count($editorialLines)];
+
+        $completedGoalIds = [];
+        foreach ($this->buildMilestoneItems($userId, $date) as $item) {
+            if ($item['type'] === 'goal') $completedGoalIds[(int) $item['id']] = true;
+        }
+        $goalReviews = $completedGoalIds === [] ? [] : array_values(array_filter(
+            $this->getGoalReviewData($userId)['goals'],
+            static fn(array $goal): bool => isset($completedGoalIds[$goal['id']])
+        ));
+
         return [
             'date' => $date,
+            'editorialLine' => $editorialLine,
             'dateTitle' => $this->formatDateTitle($date),
             'dateSubTitle' => $this->formatDateSubTitle($date),
             'submittedAt' => $this->formatSubmittedAt((string) ($report['submitted_at'] ?? '')),
@@ -267,6 +285,7 @@ final class RetrospectService
             'feedback' => $feedback,
             'feedbackPrompt' => $feedbackPrompt,
             'feedbackIsSchedule' => $feedbackIsSchedule,
+            'goalReviews' => $goalReviews,
             'milestones' => $this->retrospectRepository->listMilestoneItems((int) $report['id']),
             'adjacent' => $this->retrospectRepository->findAdjacentPublishedDates($userId, $date),
         ];
@@ -275,6 +294,36 @@ final class RetrospectService
     /** @return array<string, mixed> */
     public function getGoalReviewData(int $userId): array
     {
+        $historyRows = $this->retrospectRepository->listCompletedGoalActivityHistory($userId);
+        $goalHistory = [];
+        $statusLabels = ['pending' => '미정', 'in_progress' => '진행 중', 'completed' => '완료', 'cancelled' => '취소', 'postponed' => '연기', 'external' => '위임'];
+        foreach ($historyRows['plans'] as $row) {
+            $id = (int) $row['goal_id'];
+            $minutes = ((int) $row['end_index'] - (int) $row['start_index']) * 10;
+            $goalHistory[$id]['plans'][] = $minutes;
+            $goalHistory[$id]['timeline'][] = ['kind' => '계획', 'date' => (string) $row['calendar_date'], 'order' => (int) $row['start_index'], 'title' => (string) $row['title'], 'time' => $this->formatTimeRange((int) $row['start_index'], (int) $row['end_index']), 'detail' => '현재 상태: ' . ($statusLabels[(string) $row['current_status']] ?? '미정')];
+        }
+        foreach ($historyRows['actuals'] as $row) {
+            $id = (int) $row['goal_id'];
+            $timed = $row['start_index'] !== null && $row['end_index'] !== null;
+            $minutes = $timed ? ((int) $row['end_index'] - (int) $row['start_index']) * 10 : 0;
+            $goalHistory[$id]['actuals'][] = $minutes;
+            if ($row['block_id'] !== null) $goalHistory[$id]['blockActualCount'] = ($goalHistory[$id]['blockActualCount'] ?? 0) + 1;
+            $goalHistory[$id]['timeline'][] = ['kind' => '실제', 'date' => (string) $row['calendar_date'], 'order' => $timed ? (int) $row['start_index'] : 145, 'title' => (string) $row['title'], 'time' => $timed ? $this->formatTimeRange((int) $row['start_index'], (int) $row['end_index']) : '시간 미정', 'detail' => $row['block_id'] !== null ? '계획 연결: ' . (string) $row['plan_title'] : '할 일 연결 · 계획 블록 미지정'];
+        }
+        foreach ($historyRows['routines'] as $row) {
+            $id = (int) $row['goal_id'];
+            $goalHistory[$id]['routines'][(int) $row['routine_id']] = (string) $row['name'];
+            if ($row['log_date'] === null) continue;
+            $done = (int) $row['is_done'] === 1;
+            if ($done) $goalHistory[$id]['routineDone'] = ($goalHistory[$id]['routineDone'] ?? 0) + 1;
+            $goalHistory[$id]['timeline'][] = ['kind' => '루틴', 'date' => (string) $row['log_date'], 'order' => 144, 'title' => (string) $row['name'], 'time' => '', 'detail' => $done ? '완료' : '미완료'];
+        }
+        foreach ($goalHistory as &$history) {
+            if (!isset($history['timeline'])) continue;
+            usort($history['timeline'], static fn(array $a, array $b): int => strcmp($a['date'], $b['date']) ?: ($a['order'] <=> $b['order']) ?: strcmp($a['kind'], $b['kind']) ?: strcmp($a['title'], $b['title']));
+        }
+        unset($history);
         $planMap = [];
         foreach ($this->retrospectRepository->listGoalPlanProgress($userId) as $row) {
             $planMap[(int) $row['goal_id']] = $row;
@@ -339,63 +388,19 @@ final class RetrospectService
                 'routineCount' => $routineCount,
                 'routineDoneDayCount' => $doneDayCount,
                 'feedback' => $feedback,
+                'history' => $goalHistory[$goalId]['timeline'] ?? [],
+                'historyPlanCount' => count($goalHistory[$goalId]['plans'] ?? []),
+                'historyPlanMinutes' => array_sum($goalHistory[$goalId]['plans'] ?? []),
+                'historyActualCount' => count($goalHistory[$goalId]['actuals'] ?? []),
+                'historyBlockActualCount' => (int) ($goalHistory[$goalId]['blockActualCount'] ?? 0),
+                'historyActualMinutes' => array_sum($goalHistory[$goalId]['actuals'] ?? []),
+                'historyRoutineCount' => count($goalHistory[$goalId]['routines'] ?? []),
+                'historyRoutineDone' => (int) ($goalHistory[$goalId]['routineDone'] ?? 0),
+                'historyRoutineNames' => array_values($goalHistory[$goalId]['routines'] ?? []),
             ];
         }
 
-        $routineHistory = [];
-        foreach ($this->retrospectRepository->listCompletedRoutineHistory($userId, date('Y-m-d')) as $routine) {
-            $durationDays = max(1, (int) $routine['duration_days']);
-            $plannedEndDate = (new DateTimeImmutable((string) $routine['start_date']))
-                ->modify('+' . ($durationDays - 1) . ' days')
-                ->format('Y-m-d');
-            $status = (string) ($routine['status'] ?? 'active');
-            $effectiveEndDate = $routine['ended_at'] === null ? $plannedEndDate : (string) $routine['ended_at'];
-            $statusLabel = $status === 'stopped'
-                ? '중단'
-                : ($effectiveEndDate < $plannedEndDate ? '조기 완료' : '기간 완료');
-            $stateMap = $this->retrospectRepository->listRoutineLogStates(
-                $userId,
-                (int) $routine['id'],
-                (string) $routine['start_date'],
-                $effectiveEndDate
-            );
-            $periodGroups = [];
-            for (
-                $logDate = new DateTimeImmutable((string) $routine['start_date']);
-                $logDate <= new DateTimeImmutable($effectiveEndDate);
-                $logDate = $logDate->modify('+1 day')
-            ) {
-                $dateKey = $logDate->format('Y-m-d');
-                $state = $stateMap[$dateKey] ?? null;
-                $monthKey = $logDate->format('Y-m');
-                if (!isset($periodGroups[$monthKey])) {
-                    $periodGroups[$monthKey] = [
-                        'key' => $monthKey,
-                        'label' => $logDate->format('Y년 n월'),
-                        'cells' => [],
-                    ];
-                }
-                $periodGroups[$monthKey]['cells'][] = [
-                    'date' => $dateKey,
-                    'day' => $logDate->format('j'),
-                    'state' => $state === 1 ? 'O' : ($state === 0 ? 'X' : ''),
-                ];
-            }
-
-            $routineHistory[] = [
-                'id' => (int) $routine['id'],
-                'name' => (string) $routine['name'],
-                'startDate' => (string) $routine['start_date'],
-                'endDate' => $effectiveEndDate,
-                'durationDays' => $durationDays,
-                'doneCount' => (int) $routine['done_count'],
-                'achievementRate' => $this->percentage((int) $routine['done_count'], $durationDays),
-                'statusLabel' => $statusLabel,
-                'periodGroups' => array_values($periodGroups),
-            ];
-        }
-
-        return ['goals' => $goals, 'routineHistory' => $routineHistory];
+        return ['goals' => $goals];
     }
 
     /** @return array<string, mixed>|null */

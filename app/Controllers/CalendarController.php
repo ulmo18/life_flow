@@ -38,11 +38,13 @@ final class CalendarController
             'calendarMode' => $calendarMode,
             'headerGuidance' => $calendar['headerGuidance'] ?? null,
             'csrfToken' => Csrf::token(),
+            'reminderMinuteOptions' => NotificationService::PLAN_LEAD_MINUTES,
+            'notificationSettings' => $notificationSettings,
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($userId, $calendar),
             'pageStyles' => [
-                '/assets/css/components/routine-state.css',
+                $this->versionedAsset('/assets/css/components/routine-state.css'),
                 $this->versionedAsset('/assets/css/components/todo-sheet.css'),
                 $this->versionedAsset('/assets/css/pages/retrospect-report.css'),
                 $this->versionedAsset('/assets/css/pages/calendar.css'),
@@ -51,6 +53,9 @@ final class CalendarController
                 '/assets/js/components/time-grid-selection.js',
                 '/assets/js/components/routine-state.js',
                 $this->versionedAsset('/assets/js/components/calendar-energy-input.js'),
+                $this->versionedAsset('/assets/js/components/plan-reminder.js'),
+                $this->versionedAsset('/assets/js/components/todo-followup.js'),
+                $this->versionedAsset('/assets/js/components/calendar-resize-hold.js'),
                 $this->versionedAsset('/assets/js/pages/calendar.js'),
             ],
         ]);
@@ -90,7 +95,7 @@ final class CalendarController
             (string) ($validation['data']['date'] ?? ''),
             (array) ($validation['data']['energySetting'] ?? [])
         );
-        $_SESSION['flash_success'] = '일정이 저장되었습니다.' . ($feedback === null ? '' : ' ' . $feedback);
+        $_SESSION['flash_success'] = '일정이 저장되었습니다.' . (trim((string) ($validation['data']['memo'] ?? '')) !== '' ? ' 메모도 저장했어요.' : '') . ($feedback === null ? '' : ' ' . $feedback);
         $this->redirect($this->calendarPath($validation['data']['date'] ?? null));
     }
 
@@ -131,7 +136,7 @@ final class CalendarController
             (string) ($validation['data']['date'] ?? ''),
             (array) ($validation['data']['energySetting'] ?? [])
         );
-        $_SESSION['flash_success'] = '일정이 수정되었습니다.' . ($feedback === null ? '' : ' ' . $feedback);
+        $_SESSION['flash_success'] = '일정이 수정되었습니다.' . (trim((string) ($validation['data']['memo'] ?? '')) !== '' ? ' 메모도 저장했어요.' : '') . ($feedback === null ? '' : ' ' . $feedback);
         $this->redirect($this->calendarPath($validation['data']['date'] ?? null));
     }
 
@@ -365,13 +370,46 @@ final class CalendarController
         }
         $blockId = filter_var($_POST['daily_plan_block_id'] ?? null, FILTER_VALIDATE_INT);
         $date = $_POST['date'] ?? null;
+        $reminder = $blockId !== false && $blockId > 0 ? $this->calendarService->getPlanReminder($this->userId(), (int) $blockId) : null;
         if ($blockId === false || $blockId <= 0 || !$this->calendarService->deleteDailyPlanBlock($this->userId(), (int) $blockId)) {
             if ($this->isJsonRequest()) $this->respondJson(['ok' => false, 'message' => '계획 블록을 삭제하지 못했습니다.'], 422);
             $this->redirectWithErrors($this->calendarPath($date, 'plan'), ['general' => '계획 블록을 삭제하지 못했습니다.']);
         }
-        if ($this->isJsonRequest()) $this->respondJson(['ok' => true, 'message' => '계획 블록을 삭제했습니다. 연결된 실제 일정은 유지됩니다.']);
+        if ($this->isJsonRequest()) {
+            $result = ['ok' => true, 'message' => '계획 블록을 삭제했습니다. 연결된 실제 일정은 유지됩니다.'];
+            if ($reminder !== null) {
+                $calendar = $this->calendarService->getDayViewData($this->userId(), $reminder['calendar_date']);
+                $result['notificationSyncPayload'] = $this->notificationService->buildCalendarSyncPayload($this->userId(), $calendar);
+            }
+            $this->respondJson($result);
+        }
         $_SESSION['flash_success'] = '계획 블록을 삭제했습니다. 연결된 실제 일정은 유지됩니다.';
         $this->redirect($this->calendarPath($date, 'plan'));
+    }
+
+    public function updatePlanBlockReminder(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) $this->respondJson(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해 주세요.'], 419);
+        $result = $this->calendarService->updatePlanReminder($this->userId(), $_POST);
+        if (!$result['ok']) $this->respondJson($result, (int) $result['status']);
+        $settings = $this->notificationService->settings($this->userId());
+        $calendar = $this->calendarService->getDayViewData($this->userId(), $result['date'], $settings);
+        foreach ($calendar['planSegments'] as $segment) {
+            if ((int) $segment['blockId'] === $result['reminder']['blockId']) { $result['reminder']['timing'] = $segment['reminderTiming']; break; }
+        }
+        $this->respondJson(['ok' => true, 'reminder' => $result['reminder'], 'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($this->userId(), $calendar)]);
+    }
+
+    public function showPlanBlockReminder(): void
+    {
+        $id = filter_var($_GET['daily_plan_block_id'] ?? null, FILTER_VALIDATE_INT);
+        $block = $id !== false && $id > 0 ? $this->calendarService->getPlanReminder($this->userId(), (int) $id) : null;
+        if ($block === null) $this->respondJson(['ok' => false, 'message' => '계획 블록을 찾을 수 없습니다.'], 404);
+        $this->respondJson(['ok' => true, 'reminder' => [
+            'blockId' => (int) $block['id'], 'enabled' => (int) $block['reminder_enabled'] === 1,
+            'minutesBefore' => (int) $block['reminder_minutes_before'], 'supported' => true,
+            'timing' => $this->notificationService->planReminderTiming($block['calendar_date'], (int) $block['start_index'], $this->notificationService->settings($this->userId())),
+        ]]);
     }
 
     public function updatePlanBlockDetails(): void

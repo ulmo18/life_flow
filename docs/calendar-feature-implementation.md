@@ -1,12 +1,43 @@
 # Calendar Feature Implementation
 
-Plans backed by a To-do display that To-do's state and importance, including its last values after the source is deleted. The block detail sheet displays the importance badge and status symbol with labels on one read-only line. On mobile in the 50:50 view the timetable hides Plan importance/state icons and Actual tag dots; single-timetable views retain them. Actual tag background colors remain visible. State and importance are changed on the To-do; an Actual link does not change them and completion does not require a link. Template-only blocks without a To-do retain their existing independent block state and importance.
+## Actual time/tag layout and lightweight records
+
+Create and edit reuse `_actual-time-range.php` with the existing select IDs/names and 10-minute values. Two equal-width labeled controls retain native selection and add non-interactive clock SVGs. The `data-actual-duration` output updates through `syncActualFormSummary()` on initialization, range changes and editor population; it shows elapsed grid minutes or `시간 확인` for invalid ranges. End index 144 remains 24:00.
+
+Each tag legend owns the `+ 새 태그` action; `_quick-tag.php` now supplies only its inline editor. Toggle lookup uses the owning tag group, and new tag insertion anchors on the direct-child editor rather than the nested legend action. Existing validation, selection, palette exhaustion and cross-form updates remain intact.
+
+함께 기록하기 is a set of transparent disclosure/selection rows with horizontal separators. Life Record, Memo, Routine and Execution Energy behavior and summary values remain. Linked Plan retains a soft relationship surface. Actual deletion sits after the records section, inside the scrolling body, with its existing 1.5-second protection. Only save remains in the fixed action area. Shared colors, shell, close control and chevrons remain; no decorative drag handle was added.
+
+## Plan block reminder editing
+
+### Plan editor layout
+
+Current refinements: Plan details show the viewed date and full start/end clock range. Reminder summaries and expanded settings show server-calculated trigger date/time alongside the selected lead, including the previous date across midnight. Lazy clock lookup covers newly created/moved blocks; resize/move invalidates stale timing metadata. User IANA timezone arithmetic matches notification scheduling, without parsing wall-clock labels in the device timezone.
+
+Both Plan and To-do state sheets now use one six-option row. A linked To-do's progress/postponed selection keeps the editor open for its optional reason/next-action note. Management's Actual-detach action is a muted, transparent secondary hold action, while deletion retains the standard ghost hold button; both still require 1.5 seconds.
+
+The current shell/control contract is `docs/design-system-contract.md`: Calendar Plan/Actual create/edit use the To-do Add shell; reminder save is full width; reminder choices reuse state-button styling; management uses standard ghost hold buttons; disclosures share the Actual memo/life-record border chevron. Older row-button descriptions below are superseded by this contract. Fixed Actual actions and 1.5-second protection remain unchanged.
+
+The Plan-edit sheet retains shared surface colors, primary selection colors, type tokens and close controls. Its order is header, prominent Plan title, inline importance plus Actual count/duration, single-row six-option state choices, reminder disclosure, then management disclosure. States are ordered pending / in progress / completed, postponed / delegated / cancelled; their existing symbols remain unchanged. The immediate-save note sits beside the state heading instead of below the choices. State is shown by the selected button rather than repeated in the metadata.
+
+Reminder and management rows use restrained icon tiles and trailing chevrons. Reminder state is right-aligned. Both disclosures reset closed when a block opens. Management holds independent-template importance choices where applicable, Actual detachment only when linked, and Plan deletion as a standard ghost hold button. Existing 1.5-second hold protections remain; collapsing management cancels a hold. There is no decorative drag handle or persistent focus border. The design changes neither persistence nor endpoints.
+
+Plan details include the shared `components/plan-reminder-fields.php` editor and `components/plan-reminder.js`. Each block owns an opt-in flag (default off) and a 0/5/10/15/30/60-minute lead (default 5). `POST /calendar/plan-block/reminder` validates ownership, CSRF and choices through service/repository flow. Save/delete replaces only the stored date's reminders; move/resize retains the setting and recalculates fireAt. Source To-do linkage does not disable this editor. See `notification-feature-implementation.md` and `database-migrations.md`.
+
+Plans backed by a To-do display its state and importance, including its last values after source deletion. The sheet retains an importance/Actual summary and exposes immediate-save state choices through the existing `/todo/status` endpoint. Completion needs no Actual link; all sibling blocks and the placement source refresh together. Deleted sources retain their final state with disabled choices. Importance remains edited in To-do. On mobile the 50:50 timetable hides Plan importance/state icons and Actual tag dots; single-timetable views retain them. Template-only blocks retain independent state/importance and their existing Actual-link requirement for completion.
 
 The state choices and timetable indicators display `V 완료`, `X 취소`, `→ 연기`, `· 진행 중`, and `○ 위임`. The existing `postponed` and `external` values are retained and displayed as 연기 and 위임, including previously saved records; the unspecific initial state remains 미정.
 
 For template-only blocks, the Plan block editor retains the six immediate-save state choices and independent importance. Completion requires a linked Actual under the existing block rules.
 
-The Plan block editor has no general save button. To-do-backed blocks expose only Actual-link detachment and deletion in the editor; block movement and resize remain available on the timetable. The `실제 일정 연결 해제` button appears only for linked blocks and detaches all of them without changing the To-do's state or importance. Successful detachment or deletion closes the editor without a reload. Failures leave the editor open. Deletion and detachment preserve Actual records while removing their Plan links.
+The Plan editor has no general save button. State changes save immediately; reminders have their own save action. Movement/resize remains on the timetable. The `실제 일정 연결 해제` button appears only for linked blocks and detaches all without changing To-do state/importance. Detachment/deletion closes on success and keeps Actual records. Failures retain the editor.
+
+## Compact reminder and gesture update (2026-11-10)
+
+- Reminder settings start collapsed as a summary toggle with the current state. When master or Plan notifications are off, expansion shows their separate states and `/settings#notificationSettings`. When both are on, expansion shows pressed-state buttons for off/start/5/10/15/30/60 minutes and the save button. Schedule and To-do share this editor; hidden To-do templates refresh when opened.
+- Both Plan and Actual resize handles use `calendar-resize-hold.js`: a stationary 450 ms touch or primary mouse hold activates resize. Movement of 8 px before activation, native scrolling, release, cancellation, multiple touches, focus loss or page hiding cancels the pending hold. Touch keeps `pan-y`; only an activated resize prevents touchmove. A hold without a range change makes no save request. Existing overlap/ownership/CSRF checks remain.
+- Timed Plan creation preserves the current timetable split and work mode, appends the source/block without automatic source selection and displays `계획과 할 일이 추가되었습니다.`. Untimed creation displays `할 일이 추가되었습니다.`. Explicit placement/painting buttons still select their workspaces.
+- Plan-placement and tag-paint drawer titles use exactly the corresponding work-button SVGs, replacing decorative pseudo-icons.
 
 Plan block deletion, Actual-link detachment and Actual-event deletion use delay buttons: each action starts only after a continuous 1.5-second hold, with a red progress fill. Early release shows the relevant instruction and makes no request. Pointer cancellation, movement outside, focus loss, closing the sheet or hiding the page cancels the hold; keyboard users can hold Space or Enter. A successful request retains each action's existing server behavior: Plan deletion and detachment preserve linked Actual records, while Actual-event deletion keeps its existing redirect.
 
@@ -383,3 +414,9 @@ Retrospect persistence is handled by the Retrospect feature. Calendar remains th
 - Enter Today from another menu at the top of the document and confirm the current-time row settles slightly above center. Scroll away and wait for an update; confirm the page does not recenter. Repeat with a past date and browser Back/Forward restoration and confirm no automatic focus occurs.
 - Enter Calendar after several Plan blocks have already passed and confirm no notification is displayed immediately. Verify only the remaining blocks are reserved for five minutes before their start times.
 - On today's Calendar, verify the shared header stays one line and shows only the highest-priority applicable action. Test enabled morning/evening Retrospect times, a current Plan, a next Plan, no Plan, and no timed Actual record; confirm each action opens the expected date or prefilled form. Confirm the contextual action is absent on another date.
+
+Actual-event memo presence is marked by a small dot on the first segment, including compact blocks. Tapping the block opens the existing editor, where the memo can be expanded; a successful event save with a memo confirms it in the toast.
+
+The memo indicator uses a 7px contrasting dot on the first actual-event segment. Standalone quick memos are separate records and are not attached to events automatically.
+
+- A quick memo from Calendar is appended to the single owned Actual event containing the current user-local time, so its memo indicator appears. When no event matches, multiple events match, or the combined text would exceed the event memo 500-character limit, it is saved as a standalone memo with a corresponding message. Attached quick memos are stored only in the event, not duplicated as standalone notes; earlier standalone memos are not retroactively linked.

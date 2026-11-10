@@ -34,7 +34,7 @@ assert.equal(opened.length, 0); assert.deepEqual(bridgeCalls, [false, true, fals
 conflict = true; begin(42); timer(); finish(42); assert.equal(opened.length, 0);
 context.calendarWorkMode = 'tag-paint'; begin(42); finish(42); assert.equal(opened.length, 0);
 context.calendarWorkMode = 'normal'; conflict = false;
-const pointerEnd = source.indexOf("  actualLayer.addEventListener('pointerdown'", end);
+const pointerEnd = source.indexOf('  window.LifeFlowCalendarResizeHold(actualLayer', end);
 assert.ok(pointerEnd > end);
 vm.runInNewContext('let actualSelection = null;\n' + source.slice(end, pointerEnd), context);
 function pointer(type, x){return {pointerType:type, pointerId:2, isPrimary:true, button:0, clientX:x, clientY:0, target:{closest(){return null;}}, preventDefault(){}};}

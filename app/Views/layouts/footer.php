@@ -17,7 +17,7 @@
                 <span class="sr-only"><?= e(t('nav.execution_energy')) ?></span>
             </a>
             <nav class="bottom-navigator" data-daily-date-session="<?= e(substr(hash('sha256', session_id()), 0, 24)) ?>" aria-label="<?= e(t('nav.primary')) ?>">
-                <a class="bottom-nav-item" href="/retrospect" <?= ($currentPath ?? '') === '/retrospect' ? 'aria-current="page"' : '' ?>>
+                <a class="bottom-nav-item" href="/retrospect" <?= !empty($isRetrospectActive) ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">▥</span>
                     <span><?= e(t('nav.retrospect')) ?></span>
                 </a>

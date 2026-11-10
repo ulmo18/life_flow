@@ -66,7 +66,9 @@ final class TodoService
             }
         }
         $blocksSupported = $this->calendarRepository->supportsDailyPlanBlocks();
-        $items = array_map(function (array $item) use ($blocksByItem, $actualByItem, $date, $blocksSupported): array {
+        $reminders = new NotificationService();
+        $reminderSettings = $reminders->settings($userId);
+        $items = array_map(function (array $item) use ($blocksByItem, $actualByItem, $date, $blocksSupported, $reminders, $reminderSettings): array {
             $itemId = (int) $item['daily_plan_item_id'];
             $blocks = $blocksByItem[$itemId] ?? [];
             $actuals = $actualByItem[$itemId] ?? [];
@@ -122,7 +124,7 @@ final class TodoService
                     'timeRange' => $this->formatTime((int) $actual['start_index']) . '–' . $this->formatTime((int) $actual['end_index']),
                     'minutes' => ((int) $actual['end_index'] - (int) $actual['start_index']) * 10,
                 ], array_filter($actuals, static fn(array $actual): bool => empty($actual['daily_plan_block_id']) && $actual['start_index'] !== null && $actual['end_index'] !== null))),
-                'planBlocks' => array_map(function (array $block) use ($actuals, $date): array {
+                'planBlocks' => array_map(function (array $block) use ($actuals, $date, $reminders, $reminderSettings): array {
                     $linked = [];
                     $minutes = ((int) $block['end_index'] - (int) $block['start_index']) * 10;
                     foreach ($actuals as $actual) {
@@ -140,6 +142,9 @@ final class TodoService
                         'id' => (int) $block['daily_plan_block_id'],
                         'title' => (string) $block['title'],
                         'timeRange' => $this->formatTime((int) $block['start_index']) . '–' . $this->formatTime((int) $block['end_index']),
+                        'reminderEnabled' => (int) ($block['reminder_enabled'] ?? 0) === 1,
+                        'reminderMinutesBefore' => (int) ($block['reminder_minutes_before'] ?? 5),
+                        'reminderTiming' => $reminders->planReminderTiming($date, (int) $block['start_index'], $reminderSettings),
                         'minutes' => $minutes,
                         'actuals' => $linked,
                         'actualMinutes' => array_sum(array_column($linked, 'minutes')),
@@ -240,6 +245,9 @@ final class TodoService
         return [
             'date' => $date,
             'todoStatusSupported' => $this->calendarRepository->supportsTodoStatus(),
+            'planRemindersSupported' => $this->calendarRepository->supportsPlanBlockReminders(),
+            'carryovers' => $this->calendarRepository->listTodoCarryovers($userId, $date),
+            'carryoverSupported' => $this->calendarRepository->supportsTodoCarryover(),
             'planItems' => $planItems,
             'activityItems' => $items,
             'items' => $items,
@@ -256,6 +264,43 @@ final class TodoService
     public function updateStatus(int $userId, int $itemId, string $status): bool
     {
         return $this->calendarRepository->updateTodoStatus($userId, $itemId, $status);
+    }
+
+    public function getFollowup(int $userId, int $itemId): array
+    {
+        $item = $this->calendarRepository->getTodoFollowup($userId, $itemId);
+        if ($item === null) return ['ok' => false, 'status' => 404, 'message' => '할 일을 찾을 수 없습니다.'];
+        return ['ok' => true, 'itemId' => $itemId, 'note' => (string) ($item['followup_note'] ?? ''), 'sourceId' => $item['source_carryover_item_id'],
+            'supported' => $this->calendarRepository->supportsTodoFollowup()];
+    }
+
+    public function saveFollowup(int $userId, array $input): array
+    {
+        $id = filter_var($input['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $note = is_string($input['note'] ?? null) ? trim($input['note']) : null;
+        $length = $note === null ? false : preg_match_all('/./us', $note);
+        if ($id === false || $id <= 0 || $length === false || $length > 500) {
+            return ['ok' => false, 'status' => 422, 'message' => '이어가기 메모는 500자 이내로 입력해 주세요.'];
+        }
+        $current = $this->getFollowup($userId, (int) $id);
+        if (!$current['ok']) return $current;
+        if (!$current['supported']) return ['ok' => false, 'status' => 503, 'message' => '메모 저장을 위한 데이터베이스 업데이트가 필요합니다.'];
+        if (!$this->calendarRepository->updateTodoFollowup($userId, (int) $id, $note)) return ['ok' => false, 'status' => 409, 'message' => '메모를 저장하지 못했습니다.'];
+        return ['ok' => true, 'itemId' => (int) $id, 'note' => $note, 'supported' => true];
+    }
+
+    public function registerCarryover(int $userId, array $input): array
+    {
+        $id = filter_var($input['source_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $today = date('Y-m-d');
+        if ($id === false || $id <= 0) return ['ok' => false, 'status' => 422, 'message' => '어제의 할 일을 확인해 주세요.'];
+        $source = $this->calendarRepository->getTodoFollowup($userId, (int) $id);
+        if ($source === null) return ['ok' => false, 'status' => 404, 'message' => '할 일을 찾을 수 없습니다.'];
+        if ($source['calendar_date'] !== date('Y-m-d', strtotime('-1 day')) || !in_array($source['todo_status'], ['in_progress', 'postponed'], true)) return ['ok' => false, 'status' => 422, 'message' => '어제의 진행 중·연기한 할 일만 등록할 수 있습니다.'];
+        if (!$this->calendarRepository->supportsTodoCarryover()) return ['ok' => false, 'status' => 503, 'message' => '이어 등록을 위한 데이터베이스 업데이트가 필요합니다.'];
+        $created = $this->calendarRepository->registerTodoCarryover($userId, (int) $id, $today);
+        if ($created === null) return ['ok' => false, 'status' => 409, 'message' => '오늘 할 일로 등록하지 못했습니다. 다시 확인해 주세요.'];
+        return ['ok' => true, 'itemId' => $created, 'date' => $today, 'message' => '어제 기록을 유지하고 오늘 할 일로 등록했습니다.'];
     }
 
     /** @param array<string, mixed> $input @return array<string, mixed> */

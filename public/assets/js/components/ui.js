@@ -247,9 +247,21 @@
 
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
+      if (!layer.hidden) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
       closeIfOpen(null);
       hideTooltip();
     }
+    if (event.key !== 'Tab' || layer.hidden) return;
+    const panel = activeMode === 'modal' ? modal : sheet;
+    const controls = Array.from(panel.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      .filter(control => control.getClientRects().length > 0);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (!first) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 
   if (supportsHoverTooltip) {

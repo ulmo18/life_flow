@@ -1,0 +1,4 @@
+<div class="goal-record-table-wrap ui-list-surface"><?php if ($records === []): ?><p class="goal-record-empty ui-list-empty">연결된 <?= e($label) ?>이 없어요.</p><?php else: ?>
+<table class="goal-record-table ui-list-table"><caption class="sr-only">연결된 <?= e($label) ?> 목록</caption><thead><tr><th scope="col"><?= e($label) ?></th><th scope="col"><?= $key === 'routines' ? '기간' : '날짜' ?></th></tr></thead><tbody>
+    <?php foreach ($records as $record): ?><tr><td><?= e((string) ($key === 'routines' ? $record['name'] : $record['title'])) ?><?php if ($key === 'plans'): ?><small><?= e((string) $record['timeRange']) ?></small><?php endif; ?></td><td><?= e((string) ($key === 'routines' ? $record['periodLabel'] : ($key === 'plans' ? $record['date'] : $record['calendar_date']))) ?></td></tr><?php endforeach; ?>
+</tbody></table><?php endif; ?></div>

@@ -6,9 +6,9 @@
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid rgba(216, 200, 179, 0.72);
-  border-radius: 10px;
-  background: rgba(216, 200, 179, 0.13);
+  border: 1px solid var(--color-control-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
   color: var(--color-text-muted);
   font: inherit;
   font-size: 15px;
@@ -22,16 +22,15 @@ button.routine-state-control {
 }
 
 .routine-state-control.is-done {
-  border-color: rgba(111, 154, 141, 0.72);
-  background: linear-gradient(135deg, #6f9a8d, #8ea4a2);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  border-color: var(--color-success-text);
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
 }
 
 .routine-state-control.is-failed {
-  border-color: rgba(216, 200, 179, 0.72);
-  background: rgba(216, 200, 179, 0.22);
-  color: var(--color-text-muted);
+  border-color: var(--color-danger-text);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 
 .routine-state-control.is-today {
@@ -39,19 +38,10 @@ button.routine-state-control {
   box-shadow: 0 0 0 2px rgba(255, 94, 91, 0.14);
 }
 
-body[data-theme='dark'] .routine-state-control {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.035);
-}
-
-body[data-theme='dark'] .routine-state-control.is-done {
-  border-color: rgba(151, 202, 188, 0.72);
-  background: linear-gradient(135deg, #628c80, #829b99);
-  color: #fff;
-}
-
-body[data-theme='dark'] .routine-state-control.is-today {
-  border-color: var(--color-primary);
+button.routine-state-control:focus-visible,
+button.routine-period-cell:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
 }
 
 .routine-period-tracker,

@@ -83,12 +83,16 @@
     });
   });
 
-  function openSheet(name) {
+  let sheetTrigger = null;
+  function openSheet(name, opener = document.activeElement) {
+    if (layer.hidden) sheetTrigger = opener;
     layer.hidden = false;
     sheets.forEach(sheet => {
       sheet.hidden = sheet.dataset.routineSheet !== name;
     });
     document.body.classList.add('is-ui-open');
+    const sheet = sheets.find(item => !item.hidden);
+    sheet?.querySelector(name.startsWith('detail-') ? '[data-routine-close]' : 'input[name="name"]')?.focus();
   }
 
   function closeSheets(event) {
@@ -102,6 +106,8 @@
       sheet.hidden = true;
     });
     document.body.classList.remove('is-ui-open');
+    sheetTrigger?.focus({ preventScroll: true });
+    sheetTrigger = null;
   }
 
   function applyButtonState(button, state) {
@@ -221,7 +227,7 @@
   }
 
   document.querySelectorAll('[data-routine-open]').forEach(button => {
-    button.addEventListener('click', () => openSheet(button.dataset.routineOpen || 'create'));
+    button.addEventListener('click', () => openSheet(button.dataset.routineOpen || 'create', button));
   });
 
   document.querySelectorAll('[data-routine-close]').forEach(button => {
@@ -264,8 +270,18 @@
   });
 
   document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
     if (event.key === 'Escape' && !layer.hidden) {
       closeSheets(event);
     }
+    if (event.key !== 'Tab' || layer.hidden) return;
+    const sheet = sheets.find(item => !item.hidden);
+    if (!sheet) return;
+    const controls = Array.from(sheet.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href]'))
+      .filter(control => control.getClientRects().length > 0);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (!first) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 })();

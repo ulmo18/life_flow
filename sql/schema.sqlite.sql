@@ -281,6 +281,8 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
   title TEXT NOT NULL,
   importance TEXT NOT NULL DEFAULT 'D',
   todo_status TEXT NOT NULL DEFAULT 'pending',
+  followup_note TEXT NULL,
+  source_carryover_item_id INTEGER NULL REFERENCES daily_plan_items(id) ON DELETE SET NULL,
   start_index INTEGER NULL,
   end_index INTEGER NULL,
   estimated_duration_minutes INTEGER NULL,
@@ -303,11 +305,14 @@ CREATE TABLE IF NOT EXISTS daily_plan_items (
 CREATE INDEX IF NOT EXISTS idx_daily_plan_items_plan_order ON daily_plan_items(daily_plan_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_daily_plan_items_goal ON daily_plan_items(goal_id);
 CREATE INDEX IF NOT EXISTS idx_daily_plan_items_source_template ON daily_plan_items(source_plan_template_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_daily_plan_items_carryover ON daily_plan_items(daily_plan_id, source_carryover_item_id);
 
 CREATE TABLE IF NOT EXISTS daily_plan_blocks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   daily_plan_item_id INTEGER NOT NULL,
   manual_status TEXT NOT NULL DEFAULT 'pending',
+  reminder_enabled INTEGER NOT NULL DEFAULT 0,
+  reminder_minutes_before INTEGER NOT NULL DEFAULT 5,
   title_snapshot TEXT NULL,
   importance_snapshot TEXT NULL,
   goal_id_snapshot INTEGER NULL,

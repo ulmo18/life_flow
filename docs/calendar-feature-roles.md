@@ -1,11 +1,17 @@
 # Calendar Feature Roles
 
+## Placed Plan reminders
+
+Reminder ownership belongs to a timed `daily_plan_blocks` row, independently of source To-do state/importance. Schedule and To-do details share one editor and authenticated CSRF-protected endpoint. `planBlockReminders` is the notification-only source; original `planReminderItems`/`planActivityItems` retain placement responsibilities. Save/delete uses the stored date for scoped replacement. See `notification-feature-implementation.md`.
+
 ## Purpose
 This document defines the ownership boundaries for the dashboard calendar entry point, the calendar feature page, shared toast UI, actual-event persistence, routine check entry points, and Retrospect preview UI.
 
 Read this file before changing calendar, toast, dashboard entry, or calendar data-source behavior.
 
 ## Mobile workspace continuity
+
+- Calendar modal sheets and the separate Plan-create sheet keep Tab/Shift+Tab inside visible controls. Shared confirmation/native date dialogs retain keyboard priority. Closing restores the visible source control, or the quick-menu toggle if the original action is now hidden. Escape closes separate Plan creation; the existing drag cancellation and internal selection-view back behavior remain unchanged.
 
 - Calendar's published-retrospect preview reuses the same newspaper body as the full report. Plan and Actual records appear in one combined section; Try-to-Actual linking is disabled and is not shown in either presentation.
 - The shared report body presents inline KPT labels, duration beside each schedule time, A–D importance badges, and a left tag-color accent for each tagged Actual record.
@@ -18,8 +24,9 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Direct energy entry is vertically centered and displays its 5-unit, 5–100 guidance before input; the guidance row keeps its space in slider mode.
 - Returning to the energy slider cancels an invalid direct-entry draft and restores the value from before direct entry. Valid values between slider ticks remain unchanged until the user selects a tick.
 
-- Actual-event create and edit sheets group title and time in a subtle borderless surface, retain ungrouped tag chips, and keep their save actions fixed. 생활 기록, 메모 and 실행력 use compact disclosure cards. 실행력 displays its selected value in the summary and opens the direction and slider/direct-input controls.
-- Actual-sheet memo fields stay within their disclosure card. New Actual events initially display −25; choosing a direction without a value prevents saving. Slider values are 0, 25, 50, 75, 100, with 0 meaning keep; there is no separate keep button. Increase is green and decrease is red. The direct-entry control sits to the left of the direction controls, and direct input visually integrates its sign and field. Direct entry accepts 5-unit increments up to 100; an unchanged legacy value above 100 is preserved. A saved event without an energy setting loads as keep. Existing Plan-to-Actual copy retains its −25 default.
+- Actual create/edit share two equal-width time controls with visible start/end labels, clock icons and an automatically updated duration badge. Existing 10-minute selects and the 24:00 end boundary remain. Tag chips wrap below a heading with `+ 새 태그` at its right; inline creation still selects the new tag and updates both forms.
+- 생활 기록, 메모, 루틴 and 실행력 under 함께 기록하기 use transparent rows separated by horizontal rules, without individual card fills/radii. Expanded fields stay inside the body's width. Actual edit keeps Delete and Save fixed together in a 1:4 footer and retains the 1.5-second deletion hold. The linked-Plan selector keeps a soft surface to distinguish the selected relationship.
+- Actual-sheet memo fields stay within their disclosure row. New Actual events initially display −25; choosing a direction without a value prevents saving. Slider values are 0, 25, 50, 75, 100, with 0 meaning keep; there is no separate keep button. Increase is green and decrease is red. The direct-entry control sits to the left of the direction controls, and direct input visually integrates its sign and field. Direct entry accepts 5-unit increments up to 100; an unchanged legacy value above 100 is preserved. A saved event without an energy setting loads as keep. Existing Plan-to-Actual copy retains its −25 default.
 
 - In normal mode, an empty Plan or Actual cell requires a stationary long press to select a 10-minute entry; continuing to drag selects a range. Short taps do not open an entry sheet. Moving before activation remains a normal page scroll, while movement after activation is reserved for selecting the range. Mouse and pen behavior remains unchanged.
 
@@ -34,17 +41,17 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - On mobile the centered, abbreviated 계획 and 실제 labels remain in the sticky date header and follow the active workspace. The tag-paint drawer wraps its tag buttons into rows and scrolls vertically when needed; its header links to 일정 태그 관리.
 - Enabled reusable Plan block templates are available as placement sources. Placing one atomically creates a dated To-do and a linked time block; the original template is replaced in that date's source list by the To-do. A later placement of the same template on that date reuses that To-do, while another date gets its own. The library's stored default duration is not applied. Existing template-only records are not converted automatically.
 - The To-do recurring tab and Calendar share this date-specific usage record: using a template from either screen hides the original in Calendar's placement sources and shows an added check mark on the To-do tab.
-- Placed blocks retain their title and goal snapshots. Blocks backed by a To-do display its current state and importance, or the source's last values if deleted; they cannot change those values from Calendar.
+- Placed blocks retain title/goal snapshots. To-do-backed blocks display current state/importance. Calendar can update the connected To-do state through `/todo/status`, including completion without an Actual; sibling blocks and placement sources refresh together. Importance remains in To-do. Deleted sources show their final values with state choices disabled.
 - To-do state is 미정, · 진행 중, V 완료, → 연기, X 취소 or ○ 위임; linking or detaching Actuals does not change it. For template-only blocks, the existing independent state rules continue to apply.
 - The Plan block sheet shows the number and combined duration of its linked Actual records. Status icons are hidden on short blocks in the narrow split view, while accessible labels retain the state.
-- The Plan block editor shows inherited To-do importance and state with icons and labels on one read-only line. Template-only blocks retain their immediate-save controls and existing completion requirement.
+- Plan details show title, inline importance and Actual count/duration, single-row six-option immediate-save state choices, reminder disclosure and management disclosure. Reminder state is right-aligned; management contains linked-Actual detachment and deletion, with existing hold protections. Both disclosures start closed and use shared palette/typography. Independent-template importance editing is inside management. Template-only completion rules remain unchanged.
 - Actual-link detachment and deletion close the editor on success. The `실제 일정 연결 해제` button is hidden when no Actual is linked. Failed changes keep the editor open; detaching preserves Actual records and never resets To-do state.
 - The reusable delay buttons for Plan deletion, Actual-link detachment and Actual-event deletion start their actions only after a 1.5-second hold. A red progress fill runs during the hold; releasing early shows an action-specific toast and makes no request. Pointer cancellation, moving outside, closing the sheet, or leaving the page cancels the hold. Space and Enter also support holding these buttons. Actual-event deletion retains its existing server submission and redirect behavior.
 - Actual-event Plan links show all time ranges of the selected daily Plan's placed blocks, in chronological order; plans with no block fall back to their item time or 시간 미정. Copying a Plan block into Actual saves one default 25-point consumption with the event in the same transaction. Earlier Actual events are not backfilled.
 - Deleting a Plan block preserves every linked Actual event and clears its block, daily-item and legacy template links, leaving it as an unplanned Actual record.
 - The placement drawer offers a daily template when the selected date has no active Plan items. Actual events do not prevent application; the server repeats the empty-Plan check before copying.
-- `계획 추가` submits to the existing `/todo` owner as JSON when JavaScript is available. The created source card is appended, selected, and ready for placement without reloading or leaving the open work mode. Non-JavaScript submission retains the normal redirect.
-- A stationary long press on an empty Plan grid opens the Plan-add sheet for that 10-minute cell upon release; continuing to drag selects a longer range. Short taps do nothing, movement before activation remains page scrolling, and a selected placement source retains its existing drag behavior. Saving atomically creates an independent untimed source and its timed block; on success the Plan placement drawer opens at full width with the new source selected. An overlapping range or failed save leaves the editor open and creates neither record.
+- `계획 추가` submits to the existing owner as JSON. Its source is appended without automatic selection or a workspace/view change. Toast reports an added To-do, or an added Plan and To-do for timed creation. Non-JavaScript submission retains its redirect.
+- A stationary long press on an empty Plan grid opens Plan add for that cell on release; dragging selects a longer range. Short taps do nothing and movement before activation remains scrolling. Saving atomically creates the untimed source and timed block, preserves the current view (including 50:50) and reports both additions by Toast. Failure retains the editor and creates neither record.
 - `태그 칠하기` opens the same mobile bottom-sheet container as 계획 배치. It presents tag choices in that sheet and applies the selected tag, or tag clear, immediately to a touched Actual block.
 - Opening the inline Tag add editor clears the previously selected painting choice, including Tag clear. An in-flight paint request retains the tag that was selected when it was sent.
 - Plan, the central time axis, and Actual share the same mobile title and hourly-row geometry variables; the central axis must not calculate an independent row height.
@@ -206,3 +213,21 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - Keep schema changes in both `sql/schema.mysql.sql` and `sql/schema.sqlite.sql`.
 - Use prepared statements for every persisted calendar operation.
 - Do not concatenate user input into SQL.
+
+- On mobile, a quick horizontal swipe starting in empty timetable space switches one step through Plan-only, split and Actual-only. Block drags, long-press range selection, vertical scrolling and active work drawers keep their existing behavior. Plan-only places the hour labels on the right and aligns the Plan event layer with the grid. Quick-menu actions have labelled icons.
+
+- In the mobile Plan-only view, the right-hand hour column and Plan event-layer inset use rules with equal or greater specificity than both normal and placement mode rules, so the six time cells keep the remaining width.
+
+- Actual events with a memo show a small noninteractive dot on the first segment, including short blocks. The editor shows the memo in a collapsed disclosure and a successful save mentions the memo.
+
+- A 7px contrast-ring memo indicator marks Actual events whose own memo is nonempty. Calendar quick memos attach to the single Actual event containing the save-time instant; if no event matches, the memo remains standalone.
+
+- A quick memo from Calendar is appended to the single owned Actual event containing the current user-local time, so its memo indicator appears. When no event matches, multiple events match, or the combined text would exceed the event memo 500-character limit, it is saved as a standalone memo with a corresponding message. Attached quick memos are stored only in the event, not duplicated as standalone notes; earlier standalone memos are not retroactively linked.
+
+- Standalone memos appear at their local creation time on the Actual grid when that ten-minute slot has no Actual block. Multiple memos in one slot share one labelled marker and open a read-only list in a sheet with a link to Memo management. Deleted memos are omitted; an Actual later covering the slot hides the marker while the standalone memo remains in Memo management. Markers are not events and do not affect totals or Execution Energy.
+
+- Each standalone-memo marker and its touch area stay within its own ten-minute cell, including the first and last cells. Its visible icon shrinks when the cell is narrow so it does not cover adjacent schedule cells.
+
+- The time-grid memo viewer reuses the structured Calendar sheet: a fixed header and close control, an internally scrolling memo list, and a safe-area-aware fixed Memo management action.
+
+- If today’s Retrospect is not submitted, Calendar shows a sticky link to today’s review from 22:00 until midnight in the user’s time zone, regardless of the viewed Calendar date. The ten-minute clock update reveals it if the page stays open. There is currently no sleep-time detection; submission is checked when Calendar loads.

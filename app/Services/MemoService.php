@@ -62,6 +62,12 @@ final class MemoService
         return $this->memoRepository->create($userId, $content);
     }
 
+    /** @return array{status: string, id: int|null} */
+    public function createCalendarQuickMemo(int $userId, string $content): array
+    {
+        return $this->memoRepository->createCalendarQuickMemo($userId, $content, new DateTimeImmutable('now', new DateTimeZone(date_default_timezone_get())));
+    }
+
     public function update(int $userId, int $memoId, string $content): bool
     {
         return $this->memoRepository->update($userId, $memoId, $content);

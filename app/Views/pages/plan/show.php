@@ -1,28 +1,19 @@
 <?php require __DIR__ . '/../../layouts/header.php'; ?>
 
 <main class="calendar-page plan-detail-page">
-    <section class="calendar-header">
-        <div>
-            <p class="eyebrow">Plan</p>
-            <h1 class="calendar-date"><?= e((string) $plan['name']) ?></h1>
-            <p class="calendar-subtitle"><?= count($plan['blocks']) ?>개 블록</p>
-        </div>
-        <a class="calendar-icon-button" href="/plan?view=days" aria-label="하루 템플릿 목록으로 이동">←</a>
-    </section>
+    <a class="btn btn-secondary plan-back-button" href="/plan?view=days">← 뒤로가기</a>
+    <h1 class="sr-only"><?= e((string) $plan['name']) ?></h1>
 
     <div class="plan-detail-actions">
-        <a class="btn btn-secondary" href="/plan/edit?id=<?= e((string) $plan['id']) ?>">계획 수정</a>
         <form
             method="post"
             action="/plan/delete"
-            data-confirm-title="하루 템플릿 삭제"
-            data-confirm="‘<?= e((string) $plan['name']) ?>’ 하루 템플릿을 삭제할까요? 캘린더와 회고 기록에는 영향을 주지 않습니다."
-            data-confirm-text="삭제"
         >
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="plan_group_id" value="<?= e((string) $plan['id']) ?>">
-            <button type="submit" class="btn btn-ghost">계획 삭제</button>
+            <button type="button" class="btn btn-ghost plan-delay-delete" data-plan-delay-delete aria-describedby="planDeleteHelp"><span>템플릿 삭제</span></button><span class="sr-only" id="planDeleteHelp">1.5초 이상 눌러 삭제하세요.</span>
         </form>
+        <a class="btn btn-secondary" href="/plan/edit?id=<?= e((string) $plan['id']) ?>">템플릿 수정</a>
     </div>
 
     <section class="daygrid-wrap" aria-label="계획 상세 그리드">

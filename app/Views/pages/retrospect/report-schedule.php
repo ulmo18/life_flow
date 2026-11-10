@@ -1,5 +1,5 @@
-<section id="report-schedule" class="report-section report-schedule" aria-label="일정">
-    <h2>일정</h2>
+<details id="report-schedule" class="report-section report-fold report-schedule" aria-label="일정" open>
+    <summary><h2>일정</h2></summary>
     <p>계획 <?= e((string) ($summary['plannedTimeLabel'] ?? '0분')) ?> · 실제 <?= e((string) ($summary['actualTimeLabel'] ?? '0분')) ?> · 계획 외 <?= e((string) ($summary['unplannedActualTimeLabel'] ?? '0분')) ?></p>
     <?php if (empty($report['scheduleItems'])): ?><p class="report-empty">기록된 일정이 없습니다.</p><?php else: ?>
         <ol class="report-schedule-unified">
@@ -30,4 +30,4 @@
         <?php endforeach; ?>
         </ol>
     <?php endif; ?>
-</section>
+</details>

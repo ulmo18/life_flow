@@ -26,6 +26,7 @@
   const editInput = document.getElementById('memoEditContent');
   const editId = document.getElementById('memoEditId');
   const autoGrowInputs = Array.from(layer.querySelectorAll('[data-memo-autogrow]'));
+  let sheetTrigger = null;
 
   function resizeTextarea(input) {
     if (!input || input.hidden) return;
@@ -47,7 +48,8 @@
     requestAnimationFrame(() => input.scrollIntoView({ block: 'nearest' }));
   }
 
-  function openSheet(sheet, input) {
+  function openSheet(sheet, input, opener = document.activeElement) {
+    sheetTrigger = opener;
     layer.hidden = false;
     addSheet.hidden = sheet !== addSheet;
     editSheet.hidden = sheet !== editSheet;
@@ -64,14 +66,16 @@
     addSheet.hidden = true;
     editSheet.hidden = true;
     document.body.classList.remove('is-ui-open');
+    sheetTrigger?.focus({ preventScroll: true });
+    sheetTrigger = null;
   }
 
-  document.querySelector('[data-memo-add-open]')?.addEventListener('click', () => openSheet(addSheet, addInput));
+  document.querySelector('[data-memo-add-open]')?.addEventListener('click', event => openSheet(addSheet, addInput, event.currentTarget));
   document.querySelectorAll('[data-memo-edit-open]').forEach(button => {
     button.addEventListener('click', () => {
       editId.value = button.dataset.memoId || '';
       editInput.value = button.closest('.memo-card')?.querySelector('[data-memo-content-value]')?.value || '';
-      openSheet(editSheet, editInput);
+      openSheet(editSheet, editInput, button);
     });
   });
   document.querySelectorAll('[data-memo-close]').forEach(button => button.addEventListener('click', closeSheets));
@@ -97,7 +101,16 @@
   });
 
   document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
     if (event.key === 'Escape' && !layer.hidden) closeSheets();
+    if (event.key !== 'Tab' || layer.hidden) return;
+    const sheet = addSheet.hidden ? editSheet : addSheet;
+    const controls = Array.from(sheet.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), a[href]'))
+      .filter(control => control.getClientRects().length > 0);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (!first) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 
   const resizeOpenTextarea = () => {

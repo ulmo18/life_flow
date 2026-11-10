@@ -6,6 +6,9 @@
   const createLayer = document.querySelector('[data-goal-create-layer]');
   const collapsedKey = `lifeflow.goal-map.collapsed.v2.${page?.dataset.mode || 'focus'}`;
   let draggedGoalId = null;
+  let goalDeleteHold = null;
+  let panelTrigger = null;
+  let createTrigger = null;
 
   if (!page || !layer) return;
 
@@ -13,23 +16,132 @@
     window.LifeFlowToast?.show?.(message, { type });
   }
 
-  function openPanel(name) {
+  function openPanel(name, opener = document.activeElement) {
+    if (layer.hidden) panelTrigger = opener;
     layer.hidden = false;
     panels.forEach(panel => { panel.hidden = panel.dataset.goalSheet !== name; });
     document.body.classList.add('is-ui-open');
+    const panel = panels.find(item => !item.hidden);
+    panel?.querySelector?.(name.startsWith('edit-') ? 'input[name="title"]' : '[data-goal-close]')?.focus();
   }
 
   function closePanels(event) {
     event?.preventDefault();
+    cancelGoalDeleteHold();
     layer.hidden = true;
     panels.forEach(panel => { panel.hidden = true; });
     document.body.classList.remove('is-ui-open');
+    panelTrigger?.focus?.({ preventScroll: true });
+    panelTrigger = null;
   }
 
   document.querySelectorAll('[data-goal-open]').forEach(button => {
-    button.addEventListener('click', () => openPanel(button.dataset.goalOpen || ''));
+    button.addEventListener('click', () => openPanel(button.dataset.goalOpen || '', button));
   });
   document.querySelectorAll('[data-goal-close]').forEach(button => button.addEventListener('click', closePanels));
+
+  document.querySelectorAll('[data-goal-date]').forEach(input => input.addEventListener('click', event => {
+    if (window.LifeFlowDatePicker?.open(input, input)) event.preventDefault();
+  }));
+
+  function cancelGoalDeleteHold() {
+    if (!goalDeleteHold) return;
+    window.clearTimeout(goalDeleteHold.timer);
+    goalDeleteHold.button.classList.remove('is-holding');
+    goalDeleteHold = null;
+  }
+  function goalDeleteHint() {
+    const message = '삭제하려면 1.5초 이상 눌러서 삭제하세요.';
+    if (window.LifeFlowToast?.show) window.LifeFlowToast.show(message);
+    else window.alert(message);
+  }
+  function completeGoalDeleteHold(hold) {
+    if (goalDeleteHold !== hold) return;
+    const button = hold.button;
+    const form = document.getElementById(button.dataset.goalDelete);
+    cancelGoalDeleteHold();
+    if (layer.hidden || !form) return;
+    button.disabled = true;
+    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.submit();
+  }
+  document.querySelectorAll('[data-goal-delete]').forEach(button => {
+    let ignoreClick = false;
+    function start(kind, key) {
+      if (button.disabled || layer.hidden || goalDeleteHold) return;
+      const hold = {button, kind, key, startedAt:window.performance.now(), timer:null};
+      goalDeleteHold = hold;
+      button.classList.add('is-holding');
+      hold.timer = window.setTimeout(() => completeGoalDeleteHold(hold), 1500);
+    }
+    function finish(kind, key) {
+      const hold = goalDeleteHold;
+      if (!hold || hold.button !== button || hold.kind !== kind || hold.key !== key) return;
+      if (window.performance.now() - hold.startedAt >= 1500) { completeGoalDeleteHold(hold); return; }
+      cancelGoalDeleteHold();
+      ignoreClick = true;
+      window.setTimeout(() => { ignoreClick = false; }, 0);
+      goalDeleteHint();
+    }
+    button.addEventListener('pointerdown', event => {
+      if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      start('pointer', event.pointerId);
+      if (goalDeleteHold?.button === button) { try { button.setPointerCapture(event.pointerId); } catch (_) {} }
+    });
+    button.addEventListener('pointermove', event => {
+      if (goalDeleteHold?.button !== button || goalDeleteHold.kind !== 'pointer' || goalDeleteHold.key !== event.pointerId) return;
+      const bounds = button.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) cancelGoalDeleteHold();
+    });
+    button.addEventListener('pointerup', event => finish('pointer', event.pointerId));
+    ['pointercancel', 'lostpointercapture'].forEach(type => button.addEventListener(type, event => {
+      if (goalDeleteHold?.button === button && goalDeleteHold.kind === 'pointer' && goalDeleteHold.key === event.pointerId) cancelGoalDeleteHold();
+    }));
+    button.addEventListener('keydown', event => {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      event.preventDefault();
+      if (!event.repeat) start('keyboard', event.key);
+    });
+    button.addEventListener('keyup', event => {
+      if (event.key !== ' ' && event.key !== 'Enter') return;
+      event.preventDefault();
+      finish('keyboard', event.key);
+    });
+    button.addEventListener('blur', cancelGoalDeleteHold);
+    button.addEventListener('contextmenu', event => { if (goalDeleteHold?.button === button) event.preventDefault(); });
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      if (event.detail === 0 && !ignoreClick && !button.disabled) goalDeleteHint();
+    });
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancelGoalDeleteHold(); });
+
+  document.querySelectorAll('[data-goal-linked-records]').forEach(group => {
+    const tabs = Array.from(group.querySelectorAll('[data-goal-record-tab]'));
+    const records = Array.from(group.querySelectorAll('[data-goal-record-panel]'));
+    function selectTab(selected, focus = false) {
+      tabs.forEach(tab => {
+        const active = tab === selected;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+      });
+      records.forEach(panel => { panel.hidden = panel.dataset.goalRecordPanel !== selected.dataset.goalRecordTab; });
+      if (focus) selected.focus();
+    }
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => selectTab(tab));
+      tab.addEventListener('keydown', event => {
+        let next;
+        if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        selectTab(tabs[next], true);
+      });
+    });
+  });
 
   function collapsedIds() {
     try {
@@ -77,9 +189,8 @@
   function updateToggleAllLabel() {
     if (!toggleAll) return;
     toggleAll.hidden = collapsibleGoalNodes.length === 0;
-    toggleAll.textContent = collapsibleGoalNodes.some(item => item.classList.contains('is-collapsed'))
-      ? '전부 펼치기'
-      : '전부 접기';
+    const expanded = !collapsibleGoalNodes.some(item => item.classList.contains('is-collapsed'));
+    toggleAll.setAttribute('aria-pressed', String(expanded));
   }
 
   toggleAll?.addEventListener('click', () => {
@@ -113,15 +224,19 @@
 
   document.querySelectorAll('[data-goal-create-open]').forEach(button => button.addEventListener('click', () => {
     if (!createLayer) return;
+    createTrigger = button;
     createLayer.hidden = false;
     document.body.classList.add('is-ui-open');
     window.setTimeout(() => document.getElementById('goalQuickTitle')?.focus(), 0);
   }));
-  document.querySelectorAll('[data-goal-create-close]').forEach(button => button.addEventListener('click', () => {
+  function closeGoalCreate() {
     if (!createLayer) return;
     createLayer.hidden = true;
     document.body.classList.remove('is-ui-open');
-  }));
+    createTrigger?.focus({ preventScroll: true });
+    createTrigger = null;
+  }
+  document.querySelectorAll('[data-goal-create-close]').forEach(button => button.addEventListener('click', closeGoalCreate));
 
   document.querySelectorAll('[data-goal-quick-form]').forEach(form => {
     form.addEventListener('submit', async event => {
@@ -168,6 +283,61 @@
       toast(error.message || '목표를 이동하지 못했습니다.');
     }
   }
+
+  let touchGoalDrag = null;
+  function clearTouchGoalDrag() {
+    if (!touchGoalDrag) return;
+    touchGoalDrag.source.classList.remove('is-dragging');
+    document.querySelectorAll('.is-drop-target').forEach(target => target.classList.remove('is-drop-target'));
+    document.body.classList.remove('is-goal-dragging');
+    touchGoalDrag = null;
+    draggedGoalId = null;
+  }
+  function touchGoalTarget(element, clientY, source) {
+    const end = element?.closest('[data-goal-drop-parent]');
+    if (end && !source.contains(end)) return {highlight:end, parent:end.dataset.goalDropParent || '', before:''};
+    const row = element?.closest('.goal-node-row');
+    const item = row?.closest('[data-goal-node]');
+    if (!row || !item || source.contains(item)) return null;
+    const bounds = row.getBoundingClientRect();
+    if (clientY < bounds.top + Math.min(14, bounds.height * 0.3)) {
+      return {highlight:item.querySelector(':scope > [data-goal-drop-before]'), parent:item.dataset.parentId || '', before:item.dataset.goalId || ''};
+    }
+    return {highlight:row.querySelector('.goal-node-main'), parent:item.dataset.goalId || '', before:''};
+  }
+  document.querySelectorAll('[data-goal-drag]').forEach(handle => {
+    handle.addEventListener('pointerdown', event => {
+      if (event.pointerType === 'mouse' || event.isPrimary === false || touchGoalDrag) return;
+      const source = handle.closest('[data-goal-node]');
+      if (!source) return;
+      event.preventDefault();
+      draggedGoalId = handle.dataset.goalDrag || null;
+      if (!draggedGoalId) return;
+      touchGoalDrag = {pointerId:event.pointerId, source, target:null};
+      source.classList.add('is-dragging');
+      document.body.classList.add('is-goal-dragging');
+      try { handle.setPointerCapture(event.pointerId); } catch (_) { /* Optional. */ }
+    });
+    handle.addEventListener('pointermove', event => {
+      if (!touchGoalDrag || touchGoalDrag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      document.querySelectorAll('.is-drop-target').forEach(target => target.classList.remove('is-drop-target'));
+      touchGoalDrag.target = touchGoalTarget(document.elementFromPoint(event.clientX, event.clientY), event.clientY, touchGoalDrag.source);
+      touchGoalDrag.target?.highlight?.classList.add('is-drop-target');
+      if (event.clientY < 48) window.scrollBy(0, -12);
+      else if (event.clientY > window.innerHeight - 48) window.scrollBy(0, 12);
+    });
+    handle.addEventListener('pointerup', event => {
+      if (!touchGoalDrag || touchGoalDrag.pointerId !== event.pointerId) return;
+      const target = touchGoalDrag.target;
+      if (target) moveGoal(target.parent, target.before);
+      clearTouchGoalDrag();
+    });
+    ['pointercancel', 'lostpointercapture'].forEach(type => handle.addEventListener(type, event => {
+      if (touchGoalDrag?.pointerId === event.pointerId) clearTouchGoalDrag();
+    }));
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearTouchGoalDrag(); });
 
   document.querySelectorAll('[data-goal-drag]').forEach(handle => {
     handle.addEventListener('dragstart', event => {
@@ -229,10 +399,25 @@
   });
 
   document.addEventListener('keydown', event => {
+    if (event.defaultPrevented) return;
+    if (document.querySelector('.lf-date-dialog[open]')) return;
+    if (document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
+    if (event.key === 'Tab') {
+      const panel = createLayer && !createLayer.hidden
+        ? createLayer.querySelector('[role="dialog"]')
+        : panels.find(item => !item.hidden);
+      if (!panel) return;
+      const controls = Array.from(panel.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(control => control.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      return;
+    }
     if (event.key !== 'Escape') return;
     if (createLayer && !createLayer.hidden) {
-      createLayer.hidden = true;
-      document.body.classList.remove('is-ui-open');
+      closeGoalCreate();
       return;
     }
     const openInline = document.querySelector('.goal-inline-form:not([hidden])');

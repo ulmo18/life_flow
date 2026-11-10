@@ -625,12 +625,63 @@ final class RetrospectRepository
                 (SELECT COUNT(*) FROM plan_templates pt
                  WHERE pt.goal_id = g.id AND pt.user_id = g.user_id AND pt.deleted_at IS NULL) AS linked_plan_count
              FROM goals g
-             WHERE g.user_id = :user_id AND g.deleted_at IS NULL
+             WHERE g.user_id = :user_id AND g.deleted_at IS NULL AND g.status = :goal_status
              ORDER BY g.updated_at DESC, g.id DESC'
         );
-        $stmt->execute(['user_id' => $userId]);
+        $stmt->execute(['user_id' => $userId, 'goal_status' => 'completed']);
 
         return $stmt->fetchAll();
+    }
+
+    /** @return array{plans:array,actuals:array,routines:array} */
+    public function listCompletedGoalActivityHistory(int $userId): array
+    {
+        $hasBlocks = $this->supportsDailyPlanBlocks();
+        $todoStatus = (new CalendarRepository())->supportsTodoStatus() ? 'dpi.todo_status' : "'pending'";
+        if ($hasBlocks) {
+            $goal = 'CASE WHEN dpb.title_snapshot IS NULL THEN dpi.goal_id ELSE dpb.goal_id_snapshot END';
+            $planSql = 'SELECT ' . $goal . ' AS goal_id, dpb.id AS block_id, COALESCE(dpb.title_snapshot, dpi.title) AS title,
+                cd.calendar_date, dpb.start_index, dpb.end_index,
+                CASE WHEN dpi.source_block_template_id IS NULL THEN ' . $todoStatus . ' ELSE dpb.manual_status END AS current_status
+                FROM daily_plan_blocks dpb JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
+                JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                JOIN calendar_days cd ON cd.id = dp.calendar_day_id AND cd.user_id = dp.user_id
+                JOIN goals g ON g.id = ' . $goal . ' AND g.user_id = dp.user_id AND g.deleted_at IS NULL
+                WHERE dp.user_id = :user_id AND g.status = :goal_status';
+            $actualGoal = 'CASE WHEN dpb.id IS NOT NULL AND dpb.title_snapshot IS NOT NULL THEN dpb.goal_id_snapshot ELSE dpi.goal_id END';
+            $actualJoins = 'LEFT JOIN daily_plan_blocks dpb ON dpb.id = ce.daily_plan_block_id
+                JOIN daily_plan_items dpi ON dpi.id = COALESCE(dpb.daily_plan_item_id, ce.daily_plan_item_id)';
+            $actualBlockId = 'dpb.id';
+            $actualPlanTitle = 'COALESCE(dpb.title_snapshot, dpi.title)';
+        } else {
+            $planSql = 'SELECT dpi.goal_id, NULL AS block_id, dpi.title, cd.calendar_date, dpi.start_index, dpi.end_index, ' . $todoStatus . ' AS current_status
+                FROM daily_plan_items dpi JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                JOIN calendar_days cd ON cd.id = dp.calendar_day_id AND cd.user_id = dp.user_id
+                JOIN goals g ON g.id = dpi.goal_id AND g.user_id = dp.user_id AND g.deleted_at IS NULL
+                WHERE dp.user_id = :user_id AND dpi.deleted_at IS NULL AND dpi.start_index IS NOT NULL AND dpi.end_index IS NOT NULL AND g.status = :goal_status';
+            $actualGoal = 'dpi.goal_id';
+            $actualJoins = 'JOIN daily_plan_items dpi ON dpi.id = ce.daily_plan_item_id';
+            $actualBlockId = 'NULL';
+            $actualPlanTitle = 'dpi.title';
+        }
+        $actualSql = 'SELECT ' . $actualGoal . ' AS goal_id, ce.title, cd.calendar_date, ce.start_index, ce.end_index,
+                ' . $actualBlockId . ' AS block_id, ' . $actualPlanTitle . ' AS plan_title
+            FROM calendar_events ce JOIN calendar_days cd ON cd.id = ce.calendar_day_id AND cd.user_id = ce.user_id
+            ' . $actualJoins . '
+            JOIN daily_plans dp ON dp.id = dpi.daily_plan_id AND dp.user_id = ce.user_id
+            JOIN goals g ON g.id = ' . $actualGoal . ' AND g.user_id = ce.user_id AND g.deleted_at IS NULL
+            WHERE ce.user_id = :user_id AND ce.deleted_at IS NULL AND g.status = :goal_status';
+        $routineSql = 'SELECT r.goal_id, r.id AS routine_id, r.name, rl.log_date, rl.is_done
+            FROM routines r JOIN goals g ON g.id = r.goal_id AND g.user_id = r.user_id AND g.deleted_at IS NULL
+            LEFT JOIN routine_logs rl ON rl.routine_id = r.id AND rl.user_id = r.user_id
+            WHERE r.user_id = :user_id AND r.deleted_at IS NULL AND g.status = :goal_status';
+        $result = [];
+        foreach (['plans' => $planSql, 'actuals' => $actualSql, 'routines' => $routineSql] as $key => $sql) {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute(['user_id' => $userId, 'goal_status' => 'completed']);
+            $result[$key] = $stmt->fetchAll();
+        }
+        return $result;
     }
 
     /** @return array<int, array<string, mixed>> */

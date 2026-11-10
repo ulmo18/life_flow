@@ -87,8 +87,9 @@ final class MemoRepository
     {
         $userTimezone = new DateTimeZone(date_default_timezone_get());
         $utcTimezone = new DateTimeZone('UTC');
-        $startAt = (new DateTimeImmutable($date . ' 00:00:00', $userTimezone))->setTimezone($utcTimezone);
-        $endAt = $startAt->modify('+1 day');
+        $localStart = new DateTimeImmutable($date . ' 00:00:00', $userTimezone);
+        $startAt = $localStart->setTimezone($utcTimezone);
+        $endAt = $localStart->modify('+1 day')->setTimezone($utcTimezone);
         $stmt = $this->db->prepare(
             'SELECT id, content, created_at
              FROM notes
@@ -115,6 +116,46 @@ final class MemoRepository
         $ok = $stmt->execute(['user_id' => $userId, 'content' => $content]);
 
         return $ok ? (int) $this->db->lastInsertId() : null;
+    }
+
+    /** @return array{status: string, id: int|null} */
+    public function createCalendarQuickMemo(int $userId, string $content, DateTimeImmutable $now): array
+    {
+        try {
+            $this->db->beginTransaction();
+            $index = ((int) $now->format('G') * 6) + intdiv((int) $now->format('i'), 10);
+            $lock = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $stmt = $this->db->prepare(
+                'SELECT ce.id, ce.memo FROM calendar_events ce
+                 INNER JOIN calendar_days cd ON cd.id = ce.calendar_day_id AND cd.user_id = ce.user_id
+                 WHERE ce.user_id = :user_id AND cd.calendar_date = :calendar_date AND ce.deleted_at IS NULL
+                   AND ce.schedule_type = :schedule_type AND ce.start_index <= :start_index AND ce.end_index > :end_index
+                 ORDER BY ce.id LIMIT 2' . $lock
+            );
+            $stmt->execute(['user_id' => $userId, 'calendar_date' => $now->format('Y-m-d'), 'schedule_type' => 'timed', 'start_index' => $index, 'end_index' => $index]);
+            $events = $stmt->fetchAll();
+            $status = count($events) > 1 ? 'ambiguous' : 'standalone';
+            if (count($events) === 1) {
+                $existing = trim((string) ($events[0]['memo'] ?? ''));
+                $combined = $existing === '' ? $content : $existing . "\n\n" . $content;
+                if (mb_strlen($combined) <= 500) {
+                    $update = $this->db->prepare('UPDATE calendar_events SET memo = :memo, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL');
+                    $update->execute(['memo' => $combined, 'id' => (int) $events[0]['id'], 'user_id' => $userId]);
+                    if ($update->rowCount() !== 1) throw new \RuntimeException('Event memo update failed');
+                    $this->db->commit();
+                    return ['status' => 'linked', 'id' => (int) $events[0]['id']];
+                }
+                $status = 'too_long';
+            }
+            $id = $this->create($userId, $content);
+            if ($id === null) throw new \RuntimeException('Memo creation failed');
+            $this->db->commit();
+            return ['status' => $status, 'id' => $id];
+        } catch (\Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('[memo] calendar quick memo failed');
+            return ['status' => 'failed', 'id' => null];
+        }
     }
 
     public function update(int $userId, int $memoId, string $content): bool

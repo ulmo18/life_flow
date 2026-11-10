@@ -99,9 +99,12 @@ final class Database
             self::ensureSqliteUntimedDailyPlans($connection);
             self::ensureSqliteDailyPlanEstimatedDuration($connection);
             self::ensureSqliteTodoStatus($connection);
+            self::ensureSqliteTodoFollowup($connection);
+            self::ensureSqliteTodoCarryover($connection);
             self::ensureSqliteDailyPlanBlocks($connection);
             self::ensureSqliteCalendarBlockSnapshots($connection);
             self::ensureSqliteDailyPlanBlockStatus($connection);
+            self::ensureSqlitePlanBlockReminders($connection);
             self::ensureSqliteRetrospectEventMemo($connection);
             self::ensureSqliteRetrospectReviewColumns($connection);
             self::ensureSqliteRoutineFeedbackSnapshot($connection);
@@ -290,6 +293,35 @@ final class Database
         if (!in_array('manual_status', $columns, true)) {
             self::runSqliteMigration($connection, 'migration.daily_plan_block_status.sqlite.sql');
         }
+    }
+
+    private static function ensureSqlitePlanBlockReminders(PDO $connection): void
+    {
+        $columns = array_column($connection->query('PRAGMA table_info(daily_plan_blocks)')->fetchAll(), 'name');
+        if ($columns === []) return;
+        foreach (['reminder_enabled' => 'INTEGER NOT NULL DEFAULT 0', 'reminder_minutes_before' => 'INTEGER NOT NULL DEFAULT 5'] as $column => $definition) {
+            if (!in_array($column, $columns, true)) {
+                $connection->exec("ALTER TABLE daily_plan_blocks ADD COLUMN {$column} {$definition}");
+            }
+        }
+    }
+
+    private static function ensureSqliteTodoFollowup(PDO $connection): void
+    {
+        $columns = array_column($connection->query('PRAGMA table_info(daily_plan_items)')->fetchAll(), 'name');
+        if ($columns !== [] && !in_array('followup_note', $columns, true)) {
+            $connection->exec('ALTER TABLE daily_plan_items ADD COLUMN followup_note TEXT NULL');
+        }
+    }
+
+    private static function ensureSqliteTodoCarryover(PDO $connection): void
+    {
+        $columns = array_column($connection->query('PRAGMA table_info(daily_plan_items)')->fetchAll(), 'name');
+        if ($columns === []) return;
+        if (!in_array('source_carryover_item_id', $columns, true)) {
+            $connection->exec('ALTER TABLE daily_plan_items ADD COLUMN source_carryover_item_id INTEGER NULL REFERENCES daily_plan_items(id) ON DELETE SET NULL');
+        }
+        $connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS uq_daily_plan_items_carryover ON daily_plan_items(daily_plan_id, source_carryover_item_id)');
     }
 
     private static function ensureSqliteCalendarBlockSnapshots(PDO $connection): void

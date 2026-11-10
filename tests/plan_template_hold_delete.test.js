@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'); const vm=require('node:vm');
+const source=fs.readFileSync('public/assets/js/pages/plan-actions.js','utf8');
+const start=source.indexOf("  document.querySelectorAll('[data-plan-delay-delete]')");
+const end=source.indexOf("  document.querySelectorAll('form[data-confirm]')", start);
+assert(start>=0 && end>start);
+const handlers={}; let now=0, timer, submitted=0, notices=0;
+const form={requestSubmit(){submitted++}};
+const button={disabled:false,classList:{add(){},remove(){}},addEventListener(type,fn){handlers[type]=fn},setPointerCapture(){},closest(){return form},getBoundingClientRect(){return {left:0,right:100,top:0,bottom:50}}};
+const doc={querySelectorAll(){return [button]},addEventListener(){},hidden:false};
+const c={document:doc,window:{LifeFlowToast:{show(){notices++}}},performance:{now:()=>now},setTimeout(fn){timer=fn;return 1},clearTimeout(){timer=null}};
+vm.runInNewContext(source.slice(start,end),c);
+const ev={isPrimary:true,pointerType:'touch',pointerId:1,button:0};
+handlers.pointerdown(ev); now=500; handlers.pointerup(ev); assert.equal(submitted,0); assert.equal(notices,1); assert.equal(timer,null);
+now=0; handlers.pointerdown(ev); now=1500; timer(); assert.equal(submitted,1); assert.equal(button.disabled,true);

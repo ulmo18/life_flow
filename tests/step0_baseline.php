@@ -102,6 +102,97 @@ if (!extension_loaded('pdo_sqlite')) {
 }
 
 $tests = [];
+$tests['calendar review prompt follows today publication per account'] = static function (): void {
+    $db = Database::connection();
+    $user = seedUser($db, 'calendar-review-prompt@example.test');
+    $other = seedUser($db, 'calendar-review-prompt-other@example.test');
+    $today = date('Y-m-d');
+    $calendar = new CalendarService();
+    assertSameValue(true, $calendar->getDayViewData($user, $today)['todayReviewPending'], 'No submitted review leaves the reminder eligible.');
+    $stmt = $db->prepare('INSERT INTO retrospect_reports (user_id, report_date, status) VALUES (?, ?, ?)');
+    $stmt->execute([$other, $today, 'submitted']);
+    assertSameValue(true, $calendar->getDayViewData($user, date('Y-m-d', strtotime('-1 day')))['todayReviewPending'], 'Other users and viewed dates do not hide today’s reminder.');
+    $stmt->execute([$user, $today, 'submitted']);
+    assertSameValue(false, $calendar->getDayViewData($user, $today)['todayReviewPending'], 'A submitted review suppresses the reminder.');
+};
+
+$tests['standalone memo dates follow local daylight saving boundaries'] = static function (): void {
+    $db = Database::connection();
+    $user = seedUser($db, 'memo-local-day-boundary@example.test');
+    $stmt = $db->prepare('INSERT INTO notes (user_id, content, created_at, updated_at) VALUES (?, ?, ?, ?)');
+    $stmt->execute([$user, 'Same day', '2026-03-09 03:30:00', '2026-03-09 03:30:00']);
+    $stmt->execute([$user, 'Next day', '2026-03-09 04:30:00', '2026-03-09 04:30:00']);
+    $previousZone = date_default_timezone_get();
+    try {
+        date_default_timezone_set('America/New_York');
+        assertSameValue(['Same day'], array_column((new \App\Models\MemoRepository())->listForDate($user, '2026-03-08'), 'content'), 'Date lookup respects a 23-hour local day.');
+    } finally {
+        date_default_timezone_set($previousZone);
+    }
+};
+
+$tests['calendar groups standalone memos at local time without creating events'] = static function (): void {
+    $service = new CalendarService();
+    $method = new ReflectionMethod(CalendarService::class, 'buildStandaloneMemoGroups');
+    $notes = [
+        ['id' => 1, 'content' => 'First', 'created_at' => '2026-06-19 15:03:00'],
+        ['id' => 2, 'content' => 'Second', 'created_at' => '2026-06-19 15:08:00'],
+        ['id' => 3, 'content' => 'Occupied', 'created_at' => '2026-06-19 15:11:00'],
+    ];
+    $groups = $method->invoke($service, $notes, [['schedule_type' => 'timed', 'start_index' => 1, 'end_index' => 2]]);
+    assertSameValue(1, count($groups), 'The occupied slot does not show a marker.');
+    assertSameValue(0, $groups[0]['index'], 'UTC time is converted to the user-local day.');
+    assertSameValue(['00:03', '00:08'], array_column($groups[0]['memos'], 'time'), 'Memos in the same slot are grouped with their own times.');
+    assertSameValue(['First', 'Second'], array_column($groups[0]['memos'], 'content'), 'The saved memo text remains intact.');
+};
+
+$tests['calendar quick memo attaches only to the current owned actual'] = static function (): void {
+    $db = Database::connection();
+    $user = seedUser($db, 'quick-memo-event@example.test');
+    $other = seedUser($db, 'quick-memo-event-other@example.test');
+    $repo = new CalendarRepository();
+    $date = '2026-06-20';
+    $eventId = $repo->createActualEvent($user, $date, 'Current', 'timed', 60, 66, null, null, 'Existing');
+    $repo->createActualEvent($other, $date, 'Other user', 'timed', 60, 66, null, null, 'Other');
+    $memoRepo = new \App\Models\MemoRepository();
+    $result = $memoRepo->createCalendarQuickMemo($user, 'New note', new DateTimeImmutable($date . ' 10:20:00', new DateTimeZone('Asia/Seoul')));
+    assertSameValue('linked', $result['status'], 'A current actual event accepts the quick memo.');
+    assertSameValue($eventId, $result['id'], 'The correct owned event is updated.');
+    $day = $repo->getOrCreateDay($user, $date);
+    assertSameValue("Existing\n\nNew note", $repo->getActualEvents($user, (int) $day['id'])[0]['memo'], 'Existing event memo is retained.');
+    assertSameValue(0, (int) $db->query('SELECT COUNT(*) FROM notes WHERE user_id = ' . (int) $user)->fetchColumn(), 'An attached memo is not duplicated as a standalone note.');
+    $result = $memoRepo->createCalendarQuickMemo($user, str_repeat('a', 501), new DateTimeImmutable($date . ' 10:20:00', new DateTimeZone('Asia/Seoul')));
+    assertSameValue('too_long', $result['status'], 'An oversized memo is kept separately.');
+    assertSameValue("Existing\n\nNew note", $repo->getActualEvents($user, (int) $day['id'])[0]['memo'], 'Oversized text never overwrites the event memo.');
+    $result = $memoRepo->createCalendarQuickMemo($user, 'Later', new DateTimeImmutable($date . ' 11:00:00', new DateTimeZone('Asia/Seoul')));
+    assertSameValue('standalone', $result['status'], 'The end time is exclusive and saves separately.');
+};
+
+$tests['actual event memo reaches timetable segments'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'calendar-memo-marker@example.test');
+    $date = date('Y-m-d');
+    $repo = new CalendarRepository();
+    $eventId = $repo->createActualEvent($userId, $date, 'Memo event', 'timed', 48, 49, null, null, '기록한 메모');
+    assertTrueValue($eventId !== null, 'Actual event with a memo can be saved.');
+    $day = $repo->getOrCreateDay($userId, $date);
+    $events = $repo->getActualEvents($userId, (int) $day['id']);
+    $segments = (new ReflectionMethod(CalendarService::class, 'buildSegmentsFromEvents'))->invoke(new CalendarService(), $events);
+    assertSameValue('기록한 메모', $segments[0]['memo'], 'Saved memo is available on the timetable segment.');
+};
+
+$tests['calendar local reminder accepts future dates'] = static function (): void {
+    $service = new \App\Services\NotificationService();
+    $method = new ReflectionMethod($service, 'calendarPlanPayload');
+    $settings = ['notification_enabled' => 1, 'calendar_plan_reminder_enabled' => 1, 'timezone' => 'Asia/Seoul', 'locale' => 'ko'];
+    $date = (new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->modify('+90 days')->format('Y-m-d');
+    $items = $method->invoke($service, ['date' => $date, 'planBlockReminders' => [['title' => 'Future plan', 'startIndex' => 60, 'blockId' => 1, 'minutesBefore' => 5]]], $settings);
+    assertSameValue(1, count($items), 'A future date is eligible for a local schedule payload.');
+    assertSameValue($date . 'T09:55:00+09:00', $items[0]['fireAt'], 'The local alarm is five minutes before its start.');
+    $pastDate = (new DateTimeImmutable('now', new DateTimeZone('Asia/Seoul')))->modify('-1 day')->format('Y-m-d');
+    assertSameValue([], $method->invoke($service, ['date' => $pastDate, 'planBlockReminders' => [['title' => 'Past plan', 'startIndex' => 60, 'blockId' => 1]]], $settings), 'Past alarms are not scheduled.');
+};
+
 $tests['legacy automatic publishing setting no longer publishes on page access'] = static function (): void {
     $db = Database::connection();
     $user = seedUser($db, 'disabled-auto-publish@example.test');
@@ -1214,6 +1305,149 @@ $tests['plan block importance and actual detachment save independently'] = stati
         assertSameValue(null, $event['daily_plan_item_id'], 'Actual item link must be cleared.');
     }
     assertTrueValue(!$service->detachDailyPlanBlockActuals($userId, (int) $block), 'Repeated detachment must report no change.');
+};
+
+$tests['goal drag reorders and reparents without cycles'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'goal-touch-move@example.test');
+    $otherId = seedUser($db, 'goal-touch-move-other@example.test');
+    $insert = $db->prepare('INSERT INTO goals (user_id, goal_type, title, status, sort_order) VALUES (?, ?, ?, ?, ?)');
+    $ids = [];
+    foreach (['One', 'Two', 'Three'] as $index => $title) {
+        $insert->execute([$userId, 'bucket', $title, 'active', $index + 1]);
+        $ids[] = (int) $db->lastInsertId();
+    }
+    $insert->execute([$otherId, 'bucket', 'Other', 'active', 1]);
+    $otherGoal = (int) $db->lastInsertId();
+    $service = new \App\Services\GoalService();
+    assertTrueValue($service->moveGoal($userId, $ids[2], null, $ids[0]), 'A goal can be moved before a sibling.');
+    $ordered = $db->prepare('SELECT title FROM goals WHERE user_id = ? AND parent_goal_id IS NULL ORDER BY sort_order, id');
+    $ordered->execute([$userId]);
+    assertSameValue(['Three', 'One', 'Two'], $ordered->fetchAll(PDO::FETCH_COLUMN), 'Sibling order is persisted.');
+    assertTrueValue($service->moveGoal($userId, $ids[2], $ids[1], null), 'A goal can be nested under another goal.');
+    assertTrueValue(!$service->moveGoal($userId, $ids[1], $ids[2], null), 'Cycles are rejected.');
+    assertTrueValue(!$service->moveGoal($userId, $ids[0], $otherGoal, null), 'Another user’s goal cannot be selected as parent.');
+};
+
+$tests['completed goal review displays linked activity chronology'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'goal-review-history@example.test');
+    $otherUser = seedUser($db, 'goal-review-history-other@example.test');
+    $stmt = $db->prepare('INSERT INTO goals (user_id, goal_type, title, status) VALUES (?, ?, ?, ?)');
+    $stmt->execute([$userId, 'bucket', 'Review goal', 'active']);
+    $goalId = (int) $db->lastInsertId();
+    $stmt->execute([$otherUser, 'bucket', 'Other goal', 'completed']);
+    $repository = new CalendarRepository();
+    $date = date('Y-m-d');
+    $previous = date('Y-m-d', strtotime('-1 day'));
+    $item = $repository->createDailyPlanItem($userId, $date, 'Goal plan', 'B', $goalId, null, null, null);
+    $block = $repository->createDailyPlanBlock($userId, (int) $item, 36, 42);
+    assertTrueValue($block !== null, 'Plan block must exist.');
+    assertTrueValue($repository->createActualEvent($userId, $date, 'Item actual', 'timed', 44, 45, (int) $item, null, '', null) !== null, 'Actual can link only to a To-do.');
+    assertTrueValue($repository->createActualEvent($userId, $date, 'Block actual', 'timed', 38, 40, (int) $item, null, '', (int) $block) !== null, 'Actual can link to a block.');
+    assertTrueValue($repository->createActualEvent($userId, $date, 'Second block actual', 'timed', 40, 42, (int) $item, null, '', (int) $block) !== null, 'Multiple actuals can link to one block.');
+    $routine = $db->prepare('INSERT INTO routines (user_id, goal_id, name, start_date, duration_days) VALUES (?, ?, ?, ?, ?)');
+    $routine->execute([$userId, $goalId, 'Goal routine', $previous, 7]);
+    $routineId = (int) $db->lastInsertId();
+    $log = $db->prepare('INSERT INTO routine_logs (routine_id, user_id, log_date, is_done) VALUES (?, ?, ?, ?)');
+    $log->execute([$routineId, $userId, $previous, 1]);
+    $log->execute([$routineId, $userId, $date, 0]);
+    $db->prepare("UPDATE goals SET status = 'completed', completed_at = ?, behavior_how = ? WHERE id = ?")->execute([$date . ' 12:00:00', 'Keep going', $goalId]);
+    $review = (new RetrospectService())->getGoalReviewData($userId)['goals'];
+    assertSameValue(1, count($review), 'Only the owner’s completed goal appears.');
+    $goal = $review[0];
+    assertSameValue(1, $goal['historyPlanCount'], 'One plan block is counted.');
+    assertSameValue(60, $goal['historyPlanMinutes'], 'Plan duration comes from the block.');
+    assertSameValue(3, $goal['historyActualCount'], 'All actual events are counted once.');
+    assertSameValue(2, $goal['historyBlockActualCount'], 'Only explicit block links are counted as such.');
+    assertSameValue(50, $goal['historyActualMinutes'], 'Actual durations are summed.');
+    assertSameValue(1, $goal['historyRoutineDone'], 'Only completed routine logs count as completed.');
+    assertSameValue(['루틴', '계획', '실제', '실제', '실제', '루틴'], array_column($goal['history'], 'kind'), 'History is ordered by date and time.');
+    assertSameValue('계획 연결: Goal plan', $goal['history'][2]['detail'], 'Explicit block relation is shown.');
+    assertSameValue('계획 연결: Goal plan', $goal['history'][3]['detail'], 'The second actual retains its block relation.');
+    assertSameValue('할 일 연결 · 계획 블록 미지정', $goal['history'][4]['detail'], 'Item-only links do not imply a block.');
+    $service = new RetrospectService();
+    $texts = ['today_review' => 'Keep', 'today_thoughts' => 'Problem', 'tomorrow_plan' => 'Try'];
+    assertTrueValue($service->publish($userId, $date, $texts), 'Today’s report can be published.');
+    assertTrueValue($service->publish($userId, $previous, $texts), 'Previous day report can be published.');
+    $published = $service->getPublishedReportData($userId, $date);
+    assertSameValue([$goalId], array_column($published['goalReviews'], 'id'), 'Report includes goals completed on its date.');
+    assertSameValue(1, $published['goalReviews'][0]['historyPlanCount'], 'Published report uses the completed Goal review plan count.');
+    assertSameValue(3, $published['goalReviews'][0]['historyActualCount'], 'Published report uses the completed Goal review actual count.');
+    assertSameValue(['Goal routine'], $published['goalReviews'][0]['historyRoutineNames'], 'Published report uses the completed Goal review routines.');
+    $report = $published; $embeddedReport = false;
+    ob_start(); require $GLOBALS['root'] . '/app/Views/pages/retrospect/report-content.php'; $html = (string) ob_get_clean();
+    assertTrueValue(str_contains($html, '연결 관계') && str_contains($html, '활동 합계') && str_contains($html, '시간순 활동 기록') && str_contains($html, 'Goal plan') && str_contains($html, 'Goal routine'), 'Report renders the completed Goal review content.');
+    assertTrueValue(str_contains($html, 'class="report-routine-state"'), 'Published routine state uses the square marker.');
+    assertTrueValue(str_contains($html, 'report-editorial') && str_contains($html, $published['editorialLine']), 'Published report shows its editorial line.');
+    assertSameValue($published['editorialLine'], $service->getPublishedReportData($userId, $date)['editorialLine'], 'Editorial text remains stable for the report date.');
+    foreach (['오늘의 회고', '목표 회고', '일정', '루틴', '메모'] as $sectionName) {
+        assertTrueValue(str_contains($html, '<summary><h2>' . $sectionName . '</h2></summary>'), 'Report section is independently collapsible: ' . $sectionName);
+    }
+    assertTrueValue(!str_contains($html, '>회고 수정</a>'), 'Published report no longer shows the edit button.');
+    assertTrueValue(!str_contains($html, '목표에 연결된 활동은 현재 저장된 기록을 기준으로 보여줍니다.'), 'The requested explanatory sentence is removed.');
+    assertSameValue([], $service->getPublishedReportData($userId, $previous)['goalReviews'], 'Other dates do not include this goal.');
+};
+
+$tests['goal detail linked records and completed-only review'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'goal-detail-records@example.test');
+    $otherUser = seedUser($db, 'goal-detail-records-other@example.test');
+    $insert = $db->prepare('INSERT INTO goals (user_id, goal_type, title, status) VALUES (?, ?, ?, ?)');
+    $insert->execute([$userId, 'bucket', 'Active goal', 'active']);
+    $goalId = (int) $db->lastInsertId();
+    $insert->execute([$userId, 'bucket', 'Finished goal', 'completed']);
+    $completedId = (int) $db->lastInsertId();
+    $insert->execute([$otherUser, 'bucket', 'Other goal', 'completed']);
+    $repository = new CalendarRepository();
+    $date = date('Y-m-d');
+    $itemId = $repository->createDailyPlanItem($userId, $date, 'Linked todo', 'B', $goalId, null, null, null);
+    assertTrueValue($itemId !== null, 'Linked To-do must be created.');
+    assertTrueValue($repository->createDailyPlanBlock($userId, (int) $itemId, 36, 42) !== null, 'Linked plan must be placed.');
+    $routine = $db->prepare('INSERT INTO routines (user_id, goal_id, name, start_date, duration_days) VALUES (?, ?, ?, ?, ?)');
+    $routine->execute([$userId, $goalId, 'Linked routine', $date, 7]);
+    $goals = (new \App\Services\GoalService())->getGoalList($userId, null);
+    $goal = array_values(array_filter($goals, static fn(array $entry): bool => $entry['id'] === $goalId))[0];
+    assertSameValue(['Linked todo'], array_column($goal['linkedTodos'], 'title'), 'The To-do tab lists the linked To-do.');
+    assertSameValue(['Linked todo'], array_column($goal['linkedScheduledPlans'], 'title'), 'The plan tab lists the placed block.');
+    assertSameValue('06:00 ~ 07:00', $goal['linkedScheduledPlans'][0]['timeRange'], 'The plan tab displays its saved range.');
+    assertSameValue(['Linked routine'], array_column($goal['linkedRoutines'], 'name'), 'The routine tab lists linked routines.');
+    $otherGoals = (new \App\Services\GoalService())->getGoalList($otherUser, null);
+    assertSameValue([], $otherGoals[0]['linkedScheduledPlans'], 'Another user cannot see the linked plan.');
+    assertSameValue([], $otherGoals[0]['linkedTodos'], 'Another user cannot see the linked To-do.');
+    $validation = (new \App\Services\GoalService())->validateInput(['title' => 'Updated', 'status' => 'completed', 'goal_type' => 'monthly', 'period_start_date' => '2026-11-01', 'period_end_date' => '2026-11-30'], $userId, $goalId);
+    assertTrueValue($validation['ok'], 'Edit sheet radio choices and date pair remain valid inputs.');
+    $goalService = new \App\Services\GoalService();
+    assertSameValue('invalid', $goalService->setFocused($userId, $completedId, true), 'Completed goals cannot be focused.');
+    assertSameValue('updated', $goalService->setFocused($userId, $goalId, true), 'An active goal can be focused.');
+    assertSameValue(true, $goalService->getFocusedGoalList($userId)[0]['isFocused'], 'Focus is persisted for the star.');
+    assertSameValue('updated', $goalService->setFocused($userId, $goalId, false), 'The star can remove focus.');
+    $goalController = new \App\Controllers\GoalController();
+    $mapReturnPath = new ReflectionMethod($goalController, 'mapReturnPath');
+    assertSameValue('/goal?mode=all', $mapReturnPath->invoke($goalController, 'all'), 'All-goals edits keep the all tab.');
+    assertSameValue('/goal', $mapReturnPath->invoke($goalController, 'focus'), 'Focus edits keep the focus tab.');
+    $review = (new RetrospectService())->getGoalReviewData($userId);
+    assertSameValue([$completedId], array_column($review['goals'], 'id'), 'Only this user’s completed goals appear in goal review.');
+    assertTrueValue(!array_key_exists('routineHistory', $review), 'Completed routine history is not loaded for goal review.');
+    assertTrueValue($repository->deleteDailyPlanItem($userId, (int) $itemId), 'Source To-do can be deleted.');
+    $goals = (new \App\Services\GoalService())->getGoalList($userId, null);
+    $goal = array_values(array_filter($goals, static fn(array $entry): bool => $entry['id'] === $goalId))[0];
+    assertSameValue([], $goal['linkedTodos'], 'Deleted To-do disappears from the To-do tab.');
+    assertSameValue(['Linked todo'], array_column($goal['linkedScheduledPlans'], 'title'), 'Placed plan snapshot remains visible.');
+};
+
+$tests['todo creation stores and returns to the selected date'] = static function (): void {
+    $db = Database::connection();
+    $userId = seedUser($db, 'todo-selected-date-create@example.test');
+    $service = new TodoService();
+    $date = date('Y-m-d', strtotime('+2 days'));
+    $result = $service->create($userId, ['date' => $date, 'title' => 'Future task', 'importance' => 'B']);
+    assertTrueValue($result['ok'], 'A To-do can be created for the selected date.');
+    assertSameValue(['Future task'], array_column($service->getDateData($userId, $date)['activityItems'], 'title'), 'The item appears on the selected date.');
+    assertSameValue([], $service->getTodayData($userId)['activityItems'], 'It is not created on today.');
+    $controller = new \App\Controllers\TodoController();
+    $returnPath = new ReflectionMethod($controller, 'returnPath');
+    assertSameValue('/todo?date=' . $date, $returnPath->invoke($controller, null, $date), 'Submission returns to the selected date.');
 };
 
 $tests['todo defaults to importance order regardless of completion'] = static function (): void {

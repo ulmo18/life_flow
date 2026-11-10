@@ -29,6 +29,7 @@
   let editTrigger = null;
   let todoDeleteHold = null;
   let todoDeletePending = false;
+  let createTrigger = null;
   if (!page || !layer || !timeForm || !itemIdInput || !startInput || !endInput) return;
 
   const listTabs = Array.from(page.querySelectorAll('[data-todo-list-tab]'));
@@ -205,16 +206,20 @@
   });
   document.querySelectorAll('[data-todo-create-open]').forEach(button => button.addEventListener('click', () => {
     if (!createLayer) return;
+    createTrigger = button;
     selectCreateTab('direct');
     createLayer.hidden = false;
     document.body.classList.add('is-menu-open');
     window.setTimeout(() => document.getElementById('todoCreateTitle')?.focus(), 0);
   }));
-  document.querySelectorAll('[data-todo-create-close]').forEach(button => button.addEventListener('click', () => {
+  function closeCreate() {
     if (!createLayer) return;
     createLayer.hidden = true;
     document.body.classList.remove('is-menu-open');
-  }));
+    createTrigger?.focus({ preventScroll: true });
+    createTrigger = null;
+  }
+  document.querySelectorAll('[data-todo-create-close]').forEach(button => button.addEventListener('click', closeCreate));
   function closeRecurring() {
     if (!recurringLayer || recurringSaving) return;
     cancelRecurringHold();
@@ -427,6 +432,9 @@
   document.querySelectorAll('[data-todo-block-status]').forEach(button => button.addEventListener('click', () => {
     if (!statusLayer || !button.dataset.itemId) return;
     statusTrigger = button;
+    window.LifeFlowTodoFollowup?.open(statusLayer.querySelector('[data-todo-followup]'), {
+      itemId:Number(button.dataset.itemId), status:button.dataset.savedStatus, editable:button.dataset.statusEditable !== '0',
+    });
     if (statusTitle) statusTitle.textContent = button.dataset.blockTitle || '';
     const template = button.parentElement?.querySelector('[data-todo-record-template]');
     if (statusRecord) {
@@ -472,7 +480,9 @@
       });
       sortTodoRows();
       statusSaving = false;
-      closeStatus();
+      if (['in_progress', 'postponed'].includes(status)) {
+        window.LifeFlowTodoFollowup?.setStatus(statusLayer.querySelector('[data-todo-followup]'), status);
+      } else closeStatus();
     } catch (error) {
       statusSaving = false;
       updateStatusOptions();
@@ -542,14 +552,48 @@
 
   document.querySelectorAll('[data-todo-close]').forEach(button => button.addEventListener('click', close));
   document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
+    if (event.key === 'Tab') {
+      const activeLayer = [statusLayer, recurringLayer, editLayer, createLayer, layer].find(item => item && !item.hidden);
+      const panel = activeLayer?.querySelector('[role="dialog"]');
+      if (!panel) return;
+      const controls = Array.from(panel.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(control => control.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) return;
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      return;
+    }
     if (event.key !== 'Escape') return;
     if (statusLayer && !statusLayer.hidden) { closeStatus(); return; }
     if (recurringLayer && !recurringLayer.hidden) { closeRecurring(); return; }
     if (!layer.hidden) close();
     if (createLayer && !createLayer.hidden) {
-      createLayer.hidden = true;
-      document.body.classList.remove('is-menu-open');
+      closeCreate();
     }
     if (editLayer && !editLayer.hidden) closeEdit();
   });
+  const linkedItem = window.location?.search ? new URLSearchParams(window.location.search).get('item_id') : null;
+  document.querySelectorAll('[data-todo-carryover-form]').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (form.dataset.saving === '1') return;
+    const button = form.querySelector('button[type="submit"]');
+    if (button.disabled) return;
+    form.dataset.saving = '1'; button.disabled = true;
+    try {
+      const response = await fetch(form.action, {method:'POST', body:new FormData(form), headers:{Accept:'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || '오늘 할 일로 등록하지 못했습니다.');
+      window.location.href = '/todo?date=' + encodeURIComponent(result.date);
+    } catch (error) {
+      const message = error.message || '오늘 할 일로 등록하지 못했습니다.';
+      if (window.LifeFlowToast?.show) window.LifeFlowToast.show(message);
+      else window.alert(message);
+      form.dataset.saving = '0'; button.disabled = false;
+    }
+  }));
+  if (linkedItem && /^\d+$/.test(linkedItem)) {
+    Array.from(document.querySelectorAll('[data-todo-block-status]')).find(button => button.dataset.itemId === linkedItem)?.click();
+  }
 })();

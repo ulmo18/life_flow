@@ -28,7 +28,7 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
     <?php endif; ?>
 
     <?php if (!$isTrash): ?>
-        <nav class="memo-type-tabs" aria-label="메모 길이 필터">
+        <nav class="ui-segmented-tabs memo-type-tabs" aria-label="메모 길이 필터">
             <a href="/memo?type=short" <?= $selectedType === 'short' ? 'aria-current="page"' : '' ?>>짧은 메모 (<?= e((string) ($counts['short'] ?? 0)) ?>)</a>
             <a href="/memo?type=long" <?= $selectedType === 'long' ? 'aria-current="page"' : '' ?>>긴 메모 (<?= e((string) ($counts['long'] ?? 0)) ?>)</a>
         </nav>
@@ -58,7 +58,7 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
     <?php endif; ?>
 
     <?php if (empty($memoData['items'])): ?>
-        <section class="empty-state">
+        <section class="ui-list-surface ui-empty-state">
             <h2>
                 <?php if ($isTrash): ?>
                     휴지통이 비어 있습니다.
@@ -126,20 +126,22 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
 <?php if (!$isTrash): ?>
 <div class="memo-local-layer" data-memo-layer hidden>
     <div class="memo-overlay" data-memo-close></div>
-    <section class="memo-sheet ui-form-sheet" data-memo-add-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoAddTitle">
+    <section class="memo-sheet ui-form-sheet ui-standard-sheet" data-memo-add-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoAddTitle">
         <form method="post" action="/memo">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <div class="memo-sheet-header ui-form-sheet-header">
                 <strong id="memoAddTitle">메모 작성</strong>
                 <button type="button" class="ui-close-button" data-memo-close aria-label="닫기">×</button>
             </div>
-            <label class="form-label" for="memoAddContent">메모</label>
-            <textarea class="input" id="memoAddContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow><?= e((string) ($old['content'] ?? '')) ?></textarea>
-            <?php if (!empty($errors['content'])): ?><p class="field-error"><?= e((string) $errors['content']) ?></p><?php endif; ?>
+            <div class="form-group">
+                <label class="form-label" for="memoAddContent">메모</label>
+                <textarea class="input" id="memoAddContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow <?= !empty($errors['content']) ? 'aria-invalid="true" aria-describedby="memoAddError"' : '' ?>><?= e((string) ($old['content'] ?? '')) ?></textarea>
+                <?php if (!empty($errors['content'])): ?><p class="field-error" id="memoAddError"><?= e((string) $errors['content']) ?></p><?php endif; ?>
+            </div>
             <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary">저장</button></div>
         </form>
     </section>
-    <section class="memo-sheet ui-form-sheet" data-memo-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoEditTitle">
+    <section class="memo-sheet ui-form-sheet ui-standard-sheet" data-memo-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="memoEditTitle">
         <form method="post" action="/memo/update">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="memo_id" id="memoEditId">
@@ -148,8 +150,10 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
                 <strong id="memoEditTitle">메모 수정</strong>
                 <button type="button" class="ui-close-button" data-memo-close aria-label="닫기">×</button>
             </div>
-            <label class="form-label" for="memoEditContent">메모</label>
-            <textarea class="input" id="memoEditContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow></textarea>
+            <div class="form-group">
+                <label class="form-label" for="memoEditContent">메모</label>
+                <textarea class="input" id="memoEditContent" name="content" maxlength="10000" rows="5" required data-memo-autogrow></textarea>
+            </div>
             <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary">수정 저장</button></div>
         </form>
     </section>

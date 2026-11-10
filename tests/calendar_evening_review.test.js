@@ -1,0 +1,12 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync('public/assets/js/pages/calendar.js','utf8');
+const start = source.indexOf('  function isEveningReviewVisible(');
+const end = source.indexOf('  function updateCurrentTimeCell()', start);
+assert(start >= 0 && end > start);
+const context = {}; vm.runInNewContext(source.slice(start,end) + '\nglobalThis.check = isEveningReviewVisible;', context);
+assert.equal(context.check({date:'2026-11-06',index:131},'2026-11-06'),false);
+assert.equal(context.check({date:'2026-11-06',index:132},'2026-11-06'),true);
+assert.equal(context.check({date:'2026-11-06',index:143},'2026-11-06'),true);
+assert.equal(context.check({date:'2026-11-07',index:0},'2026-11-06'),false);

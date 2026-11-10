@@ -13,6 +13,7 @@ use DateTimeZone;
 
 final class NotificationService
 {
+    public const PLAN_LEAD_MINUTES = [0, 5, 10, 15, 30, 60];
     private UserPreferenceRepository $preferences;
     private RoutineRepository $routineRepository;
     private GoalRepository $goalRepository;
@@ -28,6 +29,18 @@ final class NotificationService
     public function settings(int $userId): array
     {
         return $this->normalizeSettings($this->preferences->get($userId));
+    }
+
+    /** Local wall-clock labels use the same time-zone arithmetic as scheduling. */
+    public function planReminderTiming(string $date, int $startIndex, array $settings): array
+    {
+        $start = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $date . ' ' . $this->indexToTime($startIndex), $this->timezone($settings));
+        if (!$start instanceof DateTimeImmutable) return [];
+        $choices = [];
+        foreach (self::PLAN_LEAD_MINUTES as $minutes) {
+            $choices[$minutes] = $start->modify('-' . $minutes . ' minutes')->format('m/d H:i');
+        }
+        return ['startLabel' => $start->format('m/d H:i'), 'choices' => $choices];
     }
 
     /** @return array{ok: bool, errors: array<string, string>, data: array<string, mixed>} */
@@ -217,9 +230,11 @@ final class NotificationService
         $timezone = $this->timezone($settings);
         $now = new DateTimeImmutable('now', $timezone);
         $items = [];
-        foreach (($calendar['planReminderItems'] ?? []) as $item) {
+        foreach (($calendar['planBlockReminders'] ?? []) as $item) {
             $title = (string) ($item['title'] ?? '');
-            if ($title === '' || !isset($item['startIndex'])) {
+            $blockId = (int) ($item['blockId'] ?? 0);
+            $minutesBefore = (int) ($item['minutesBefore'] ?? 5);
+            if ($title === '' || $blockId <= 0 || !isset($item['startIndex']) || !in_array($minutesBefore, self::PLAN_LEAD_MINUTES, true)) {
                 continue;
             }
 
@@ -229,19 +244,20 @@ final class NotificationService
                 continue;
             }
 
-            $fireAt = $startsAt->modify('-5 minutes');
+            $fireAt = $startsAt->modify('-' . $minutesBefore . ' minutes');
             if ($fireAt <= $now) {
                 continue;
             }
 
             $items[] = [
-                'key' => 'calendar_plan_' . $date . '_' . (string) ($item['templateId'] ?? md5($title . $time)),
+                'key' => 'calendar_plan_' . $date . '_block_' . $blockId,
                 'type' => 'calendar_plan',
-                'templateId' => (int) ($item['templateId'] ?? 0),
+                'blockId' => $blockId,
+                'minutesBefore' => $minutesBefore,
                 'fireAt' => $fireAt->format(DATE_ATOM),
                 'startsAt' => $startsAt->format(DATE_ATOM),
                 'title' => $this->message('notification.plan_title', $settings),
-                'message' => $this->message('notification.plan', $settings, ['title' => $title]),
+                'message' => $this->message($minutesBefore === 0 ? 'notification.plan_now' : 'notification.plan_before', $settings, ['title' => $title, 'minutes' => $minutesBefore]),
             ];
         }
 
