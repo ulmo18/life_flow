@@ -130,6 +130,8 @@ $router->post('/calendar/plan-block', [$calendarController, 'storePlanBlock'], [
 $router->post('/calendar/retrospect-prompt', [$calendarController, 'claimRetrospectPrompt'], ['auth']);
 $router->post('/calendar/plan-block/update', [$calendarController, 'updatePlanBlock'], ['auth']);
 $router->post('/calendar/plan-block/details', [$calendarController, 'updatePlanBlockDetails'], ['auth']);
+$router->post('/calendar/plan-block/reminder', [$calendarController, 'updatePlanBlockReminder'], ['auth']);
+$router->get('/calendar/plan-block/reminder', [$calendarController, 'showPlanBlockReminder'], ['auth']);
 $router->post('/calendar/plan-block/status', [$calendarController, 'updatePlanBlockStatus'], ['auth']);
 $router->post('/calendar/plan-block/detach', [$calendarController, 'detachPlanBlockActuals'], ['auth']);
 $router->post('/calendar/plan-block/delete', [$calendarController, 'deletePlanBlock'], ['auth']);
@@ -153,6 +155,9 @@ $router->post('/todo/update', [$todoController, 'update'], ['auth']);
 $router->post('/todo/delete', [$todoController, 'delete'], ['auth']);
 $router->post('/todo/recurring', [$todoController, 'storeRecurring'], ['auth']);
 $router->post('/todo/status', [$todoController, 'updateStatus'], ['auth']);
+$router->get('/todo/followup', [$todoController, 'showFollowup'], ['auth']);
+$router->post('/todo/followup', [$todoController, 'saveFollowup'], ['auth']);
+$router->post('/todo/carryover', [$todoController, 'registerCarryover'], ['auth']);
 $router->post('/todo/complete', [$todoController, 'complete'], ['auth']);
 $router->get('/goal', [$goalController, 'index'], ['auth']);
 $router->get('/goal/review', [$retrospectController, 'goalReview'], ['auth']);

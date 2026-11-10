@@ -1,0 +1,20 @@
+// Run with Node.js: node tests/goal_review_sheet.test.js
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync('public/assets/js/pages/goal-review.js', 'utf8');
+const button = id => ({dataset:{goalReviewOpen:id}, handlers:{}, addEventListener(type,fn){this.handlers[type]=fn;}, focus(){this.focused=true;}});
+const close = {handlers:{},addEventListener(type,fn){this.handlers[type]=fn;},focus(){this.focused=true;}};
+const sheets = ['1','2'].map(id=>({dataset:{goalReviewSheet:id},hidden:true,scrollTop:50,querySelector(){return close;},querySelectorAll(){return [close];}}));
+const layer = {hidden:true,querySelectorAll(selector){return selector.includes('sheet')?sheets:[close];}};
+const openers = [button('1'),button('2')], handlers = {};
+const document={body:{classList:{add(){},remove(){}}},querySelector(){return layer;},querySelectorAll(){return openers;},addEventListener(type,fn){handlers[type]=fn;}};
+vm.runInNewContext(source,{document});
+openers[1].handlers.click();
+assert.equal(layer.hidden,false); assert.equal(sheets[0].hidden,true); assert.equal(sheets[1].hidden,false);
+assert.equal(sheets[1].scrollTop,0); assert.equal(close.focused,true);
+document.activeElement=close; let trapped=false;
+handlers.keydown({key:'Tab',shiftKey:false,preventDefault(){trapped=true;}}); assert.equal(trapped,true);
+handlers.keydown({key:'Escape'});
+assert.equal(layer.hidden,true); assert.ok(sheets.every(sheet=>sheet.hidden)); assert.equal(openers[1].focused,true);
+console.log('PASS goal review selection, close and focus restoration');

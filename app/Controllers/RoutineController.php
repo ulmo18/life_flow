@@ -46,7 +46,7 @@ final class RoutineController
                 ? $this->notificationService->buildRoutineSyncPayload($this->userId())
                 : [],
             'pageStyles' => [
-                '/assets/css/components/routine-state.css',
+                $this->versionedAsset('/assets/css/components/routine-state.css'),
                 $this->versionedAsset('/assets/css/pages/routine-today.css'),
             ],
             'pageScripts' => [
@@ -81,7 +81,7 @@ final class RoutineController
                 ? $this->notificationService->buildRoutineSyncPayload($this->userId())
                 : [],
             'pageStyles' => [
-                '/assets/css/components/routine-state.css',
+                $this->versionedAsset('/assets/css/components/routine-state.css'),
                 $this->versionedAsset('/assets/css/pages/routine.css'),
             ],
             'pageScripts' => [

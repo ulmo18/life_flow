@@ -31,3 +31,25 @@ assert.equal(result.links[3].href, '/calendar?focus=current&date=2026-10-30');
 result = run(null, null, 'new-session');
 assert.equal(result.links[0].href, 'http://localhost/retrospect');
 process.stdout.write('PASS daily date navigation session and explicit date precedence\n');
+
+// Opening a published report must not replace the daily navigation date.
+{
+  const data = { 'lifeflow.daily-date.session-a':'2026-10-27' };
+  const input = { dataset:{today:'2026-11-06'}, value:'2026-11-06', setAttribute() {} };
+  const value = { textContent:'', classList:{toggle() {}} };
+  const weekday = { textContent:'' };
+  const swipe = { dataset:{} };
+  const today = {hidden:true};
+  const arrows = [{href:'http://localhost/retrospect?view=history'}, {href:'http://localhost/retrospect?view=history'}];
+  const reportLink = {href:'http://localhost/retrospect?view=history'};
+  const preserved = { querySelector(selector) { return ({'[data-daily-date-picker]':input, '.daily-date-value':value, '.daily-date-weekday':weekday, '[data-daily-date-swipe]':swipe, '.daily-today-link':today})[selector] || null; }, querySelectorAll() { return arrows; } };
+  const nav = {dataset:{dailyDateSession:'session-a'}, querySelectorAll() { return []; }};
+  const doc = {querySelector(selector) { return selector === '[data-daily-date-session]' ? nav : selector === '[data-daily-context-preserve]' ? preserved : null; }, querySelectorAll() { return [reportLink]; }};
+  const store = {getItem(key) { return data[key]; }, setItem(key,value) { data[key]=value; }};
+  vm.runInNewContext(block, { document:doc, sessionStorage:store, window:{location:{href:'http://localhost/retrospect/report?date=2025-01-01'}}, URL, Date });
+  assert.equal(input.value,'2026-10-27');
+  assert.equal(value.textContent,'10.27');
+  assert.equal(swipe.dataset.prevDate,'2026-10-26');
+  assert.equal(data['lifeflow.daily-date.session-a'],'2026-10-27');
+  assert.match(reportLink.href, /date=2026-10-27/);
+}

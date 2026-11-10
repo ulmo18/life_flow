@@ -5,6 +5,8 @@
 - `user_preferences.locale` stores `ko`, `en`, or `ja` and defaults to `ko`.
 - `user_preferences.timezone` stores an IANA time-zone identifier and defaults to `Asia/Seoul`.
 - Language and time zone are changed together on the Settings form but remain independent values.
+- Settings groups each language and time-zone label, control and validation message using shared form spacing. The time-zone help and any validation errors are associated with their controls for assistive technology.
+- Theme and notification choices use shared 14px label typography and theme-aware surfaces. Theme selection adds a selected background and keyboard focus indicator while retaining native radio behavior. Long translated notification labels wrap within their grid column.
 - Login and Remember Me restore both values into the session. The request bootstrap applies the saved time zone before controllers and services calculate Today.
 
 ## Translation Rules

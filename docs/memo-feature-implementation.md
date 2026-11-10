@@ -69,6 +69,9 @@ All POST routes require CSRF verification.
 - Calendar's `+` menu orders quick Memo, untimed schedule creation, and Routine actions above a divider; baseline Plan settings are below it.
 - Quick memo opens a keyboard-ready textarea and saves without asking for a title.
 - The Memo page opens its editor from a centered `메모 추가` floating action matching the daily Retrospect action.
+- Memo add and edit use the shared bottom-aligned sheet surface also used by To-do and Routine quick creation, with the existing 80% viewport cap and automatic textarea sizing.
+- Memo sheets contain Tab/Shift+Tab navigation, retain their initial textarea focus and restore the add/edit opener when dismissed. A shared confirmation or date dialog takes keyboard priority; closing it does not dismiss the editor.
+- Memo cards use shared surface/border colors, 16px radius and padding. Trash and card actions have at least 44px touch height; action groups wrap on narrow screens, and the trash link exposes visible keyboard focus.
 - Add and edit textareas grow from their compact minimum height using their rendered `scrollHeight`. The sheet is capped at 80% of the dynamic viewport, and the textarea scrolls internally after its available height is filled.
 - Memo cards use the first lines of content as their preview. Short cards show fewer lines than long cards.
 - The trash icon is contextual management UI, not a persistent notification badge.

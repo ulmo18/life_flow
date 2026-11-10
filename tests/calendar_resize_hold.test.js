@@ -1,0 +1,33 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const listeners = () => ({handlers:{}, addEventListener(type, fn){(this.handlers[type] ||= []).push(fn);}, emit(type, event={}){for(const fn of this.handlers[type] || [])fn(event);}});
+const document = listeners(), window = listeners(), layer = listeners();
+let clock=0, timerId=0, timers=new Map(), began=0, moved=0, finished=0, cancelled=0, prevented=0, allowed=true;
+window.setTimeout=(fn,delay)=>{timers.set(++timerId,{fn,at:clock+delay});return timerId;};
+window.clearTimeout=id=>timers.delete(id);
+layer.setPointerCapture=()=>{}; layer.releasePointerCapture=()=>{};
+vm.runInNewContext(fs.readFileSync('public/assets/js/components/calendar-resize-hold.js','utf8'), {window,document});
+window.LifeFlowCalendarResizeHold(layer,{selector:'handle', blockSelector:'block', allowed:()=>allowed,
+  begin(){began++;},move(){moved++;},finish(){finished++;},cancel(){cancelled++;}});
+const handle={closest:()=>({})}, target={closest:()=>handle};
+const point=(x=0,y=0)=>({identifier:1,clientX:x,clientY:y});
+const event=(x=0,y=0)=>({target, touches:[point(x,y)],changedTouches:[point(x,y)],cancelable:true,preventDefault(){prevented++;}});
+function advance(ms){clock+=ms;for(const [id,t]of timers)if(t.at<=clock){timers.delete(id);t.fn();}}
+layer.emit('touchstart',event());advance(449);document.emit('touchend',event());advance(1);
+assert.equal(began,0,'Short touch does not resize');assert.equal(prevented,0,'Short touch preserves native behavior');
+layer.emit('touchstart',event());document.emit('touchmove',event(0,12));advance(450);document.emit('touchend',event());
+assert.equal(began,0,'Scroll movement cancels the pending hold');assert.equal(prevented,0,'Scrolling is not prevented');
+layer.emit('touchstart',event());advance(450);assert.equal(began,1);
+document.emit('touchmove',event(15,0));document.emit('touchend',event());
+assert.equal(moved,1);assert.equal(finished,1);assert.equal(prevented,2,'Active resize owns the gesture');
+layer.emit('touchstart',event());advance(450);document.emit('touchcancel',event());assert.equal(cancelled,1);
+layer.emit('touchstart',event());document.emit('touchstart',{touches:[point(),point()]});advance(450);assert.equal(began,2,'Multiple touches cancel pending resize');
+const mouse=(x=0)=>({...event(x),pointerType:'mouse',pointerId:2,isPrimary:true,button:0,clientX:x,clientY:0});
+layer.emit('pointerdown',mouse());advance(200);document.emit('pointerup',mouse());advance(250);assert.equal(began,2,'Short mouse click does not resize');
+layer.emit('pointerdown',mouse());advance(450);document.emit('pointermove',mouse(12));document.emit('pointerup',mouse(12));
+assert.equal(finished,2,'Mouse hold and drag resizes');
+layer.emit('pointerdown',mouse());window.emit('scroll');advance(450);assert.equal(began,3,'Scrolling cancels pending mouse hold');
+layer.emit('pointerdown',mouse());advance(450);window.emit('blur');assert.equal(cancelled,2,'Focus loss cancels active resize');
+allowed=false;layer.emit('touchstart',event());advance(450);assert.equal(began,4,'Work modes and pending saves gate resize');
+console.log('PASS resize short touch, scroll, long touch, mouse hold, cancellation and mode gating');

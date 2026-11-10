@@ -20,25 +20,26 @@
         <h2>태그 추가</h2>
         <form class="tag-form" method="post" action="/tags">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-            <label class="form-label" for="tagName">태그명</label>
-            <input class="input" id="tagName" name="name" type="text" maxlength="24" value="<?= e((string) ($old['name'] ?? '')) ?>" required>
+            <div class="form-group"><label class="form-label" for="tagName">태그명</label>
+            <input class="input" id="tagName" name="name" type="text" maxlength="24" value="<?= e((string) ($old['name'] ?? '')) ?>" <?= !empty($errors['name']) ? 'aria-invalid="true" aria-describedby="tagNameError"' : '' ?> required>
             <?php if (!empty($errors['name'])): ?>
-                <p class="field-error"><?= e((string) $errors['name']) ?></p>
+                <p class="field-error" id="tagNameError"><?= e((string) $errors['name']) ?></p>
             <?php endif; ?>
+            </div>
 
-            <fieldset class="tag-palette-grid">
+            <fieldset class="tag-palette-grid" <?= !empty($errors['palette']) ? 'aria-describedby="tagPaletteError"' : '' ?>>
                 <legend>색상</legend>
                 <?php foreach (($tagData['palettes'] ?? []) as $palette): ?>
                     <?php if (!empty($palette['isSystemUsed'])) continue; ?>
                     <?php $disabled = !empty($palette['isUsed']); ?>
                     <label class="tag-palette-option <?= $disabled ? 'is-disabled' : '' ?>" style="--tag-color: <?= e((string) $palette['color_hex']) ?>;">
-                        <input type="radio" name="palette_id" value="<?= e((string) $palette['id']) ?>" <?= $disabled ? 'disabled' : '' ?> required>
+                        <input type="radio" name="palette_id" value="<?= e((string) $palette['id']) ?>" aria-label="색상 <?= e((string) $palette['color_hex']) ?>" <?= $disabled ? 'disabled' : '' ?> required>
                         <span aria-hidden="true"></span>
                     </label>
                 <?php endforeach; ?>
             </fieldset>
             <?php if (!empty($errors['palette'])): ?>
-                <p class="field-error"><?= e((string) $errors['palette']) ?></p>
+                <p class="field-error" id="tagPaletteError"><?= e((string) $errors['palette']) ?></p>
             <?php endif; ?>
 
             <button type="submit" class="btn btn-primary">태그 추가</button>
@@ -78,8 +79,8 @@
                         <form class="tag-form compact" method="post" action="/tags/update">
                             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
                             <input type="hidden" name="tag_id" value="<?= e((string) $tag['id']) ?>">
-                            <label class="form-label" for="tagName<?= e((string) $tag['id']) ?>">태그명</label>
-                            <input class="input" id="tagName<?= e((string) $tag['id']) ?>" name="name" type="text" maxlength="24" value="<?= e((string) $tag['name']) ?>" required>
+                            <div class="form-group"><label class="form-label" for="tagName<?= e((string) $tag['id']) ?>">태그명</label>
+                            <input class="input" id="tagName<?= e((string) $tag['id']) ?>" name="name" type="text" maxlength="24" value="<?= e((string) $tag['name']) ?>" required></div>
 
                             <fieldset class="tag-palette-grid">
                                 <legend>색상</legend>
@@ -94,6 +95,7 @@
                                             type="radio"
                                             name="palette_id"
                                             value="<?= e((string) $palette['id']) ?>"
+                                            aria-label="색상 <?= e((string) $palette['color_hex']) ?>"
                                             <?= $isCurrent ? 'checked' : '' ?>
                                             <?= $disabled ? 'disabled' : '' ?>
                                             required

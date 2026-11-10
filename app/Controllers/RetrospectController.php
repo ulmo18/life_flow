@@ -33,20 +33,21 @@ final class RetrospectController
         $page = max(1, (int) ($_GET['page'] ?? 1));
 
         $retrospect = $this->retrospectService->getPageData($this->userId(), $date, $sort, ($_GET['edit'] ?? '') === '1');
-        $historyMonth = array_key_exists('month', $_GET)
-            ? (is_string($_GET['month']) ? $_GET['month'] : '')
-            : substr((string) $retrospect['todayDate'], 0, 7);
+        $historyMonth = is_string($_GET['month'] ?? null) ? $_GET['month'] : '';
+        if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/D', $historyMonth) || substr($historyMonth, 0, 4) === '0000') {
+            $historyMonth = substr((string) ($date !== null && $date !== '' ? $retrospect['date'] : $retrospect['todayDate']), 0, 7);
+        }
         $this->render('pages/retrospect/index', [
             'title' => t('nav.retrospect'),
             'retrospect' => $retrospect,
-            'dailyDateClass' => $view === 'daily' ? (new DailyDateAppearanceService())->getClass((string) $retrospect['date']) : '',
+            'dailyDateClass' => (new DailyDateAppearanceService())->getClass((string) $retrospect['date']),
             'executionEnergy' => $view === 'daily' ? $this->executionEnergyService->getDayData($this->userId(), $date) : [],
             'selectedView' => $view,
             'history' => $view === 'history' ? $this->retrospectService->getHistoryData($this->userId(), $page, $historyMonth) : ['items' => []],
             'csrfToken' => Csrf::token(),
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'pageStyles' => ['/assets/css/components/routine-state.css', $this->versionedAsset('/assets/css/pages/retrospect.css')],
+            'pageStyles' => [$this->versionedAsset('/assets/css/components/routine-state.css'), $this->versionedAsset('/assets/css/pages/retrospect.css')],
             'pageScripts' => ['/assets/js/components/routine-state.js', $this->versionedAsset('/assets/js/pages/retrospect.js')],
         ]);
 
@@ -59,6 +60,7 @@ final class RetrospectController
             'title' => '목표 회고',
             'goalReview' => $this->retrospectService->getGoalReviewData($this->userId()),
             'pageStyles' => [$this->versionedAsset('/assets/css/pages/goal.css'), $this->versionedAsset('/assets/css/pages/retrospect.css')],
+            'pageScripts' => [$this->versionedAsset('/assets/js/pages/goal-review.js')],
         ]);
     }
 
@@ -107,8 +109,9 @@ final class RetrospectController
         $this->render('pages/retrospect/report', [
             'title' => '발행 회고',
             'publishedReport' => $report,
+            'dailyDateClass' => (new DailyDateAppearanceService())->getClass((string) $report['date']),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'pageStyles' => [$this->versionedAsset('/assets/css/pages/retrospect-report.css')],
+            'pageStyles' => [$this->versionedAsset('/assets/css/pages/retrospect.css'), $this->versionedAsset('/assets/css/pages/retrospect-report.css')],
         ]);
         unset($_SESSION['flash_success']);
     }

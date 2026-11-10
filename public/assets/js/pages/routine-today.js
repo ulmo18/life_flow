@@ -2,6 +2,7 @@
   const state = window.LifeFlowRoutineState;
   const quickLayer = document.querySelector('[data-routine-quick-layer]');
   const quickInput = document.getElementById('routineQuickName');
+  let quickTrigger = null;
 
   function refreshGroups() {
     const groups = Array.from(document.querySelectorAll('[data-routine-group]'));
@@ -18,17 +19,30 @@
     if (!quickLayer) return;
     quickLayer.hidden = true;
     document.body.classList.remove('is-menu-open');
+    quickTrigger?.focus({ preventScroll: true });
+    quickTrigger = null;
   }
 
   document.querySelectorAll('[data-routine-quick-open]').forEach(button => button.addEventListener('click', () => {
     if (!quickLayer) return;
+    quickTrigger = button;
     quickLayer.hidden = false;
     document.body.classList.add('is-menu-open');
     window.setTimeout(() => quickInput?.focus(), 0);
   }));
   document.querySelectorAll('[data-routine-quick-close]').forEach(button => button.addEventListener('click', closeQuickCreate));
   document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
     if (event.key === 'Escape' && quickLayer && !quickLayer.hidden) closeQuickCreate();
+    if (event.key !== 'Tab' || !quickLayer || quickLayer.hidden) return;
+    const sheet = quickLayer.querySelector('[role="dialog"]');
+    if (!sheet) return;
+    const controls = Array.from(sheet.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled])'))
+      .filter(control => control.getClientRects().length > 0);
+    const first = controls[0], last = controls[controls.length - 1];
+    if (!first) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 
   document.querySelectorAll('[data-routine-today-toggle]').forEach(form => {

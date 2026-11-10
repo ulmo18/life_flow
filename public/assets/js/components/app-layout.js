@@ -86,13 +86,35 @@
   const dailyNavigator = document.querySelector('[data-daily-date-session]');
   if (dailyNavigator) {
     const key = `lifeflow.daily-date.${dailyNavigator.dataset.dailyDateSession}`;
-    const current = document.querySelector('[data-daily-context-date]')?.dataset.dailyContextDate
+    const preservedContext = document.querySelector('[data-daily-context-preserve]');
+    const current = (preservedContext ? '' : document.querySelector('[data-daily-context-date]')?.dataset.dailyContextDate)
       || document.querySelector('[data-calendar-date]')?.dataset.calendarDate;
     let selected = /^\d{4}-\d{2}-\d{2}$/.test(current || '') ? current : '';
     try {
       if (selected) sessionStorage.setItem(key, selected);
       else selected = sessionStorage.getItem(key) || '';
     } catch (error) { /* Navigation retains its default URLs when storage is unavailable. */ }
+    if (preservedContext) {
+      const input = preservedContext.querySelector('[data-daily-date-picker]');
+      selected = /^\d{4}-\d{2}-\d{2}$/.test(selected) ? selected : (input?.dataset.today || '');
+      if (input && /^\d{4}-\d{2}-\d{2}$/.test(selected)) {
+        const [year, month, day] = selected.split('-').map(Number);
+        const date = new Date(year, month - 1, day, 12);
+        const shift = amount => { const next = new Date(year, month - 1, day + amount, 12); return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`; };
+        input.value = selected;
+        input.setAttribute('aria-label', `${year}년 ${month}월 ${day}일 날짜 선택`);
+        const value = preservedContext.querySelector('.daily-date-value');
+        if (value) { value.textContent = `${month}.${day}`; value.classList.toggle('is-saturday', date.getDay() === 6); value.classList.toggle('is-holiday', date.getDay() === 0); }
+        const weekday = preservedContext.querySelector('.daily-date-weekday');
+        if (weekday) weekday.textContent = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
+        const swipe = preservedContext.querySelector('[data-daily-date-swipe]');
+        if (swipe) { swipe.dataset.prevDate = shift(-1); swipe.dataset.nextDate = shift(1); }
+        preservedContext.querySelectorAll('.daily-date-arrow').forEach((link, index) => { const url = new URL(link.href); url.searchParams.set('date', shift(index === 0 ? -1 : 1)); link.href = url.href; });
+        const todayLink = preservedContext.querySelector('.daily-today-link');
+        if (todayLink) todayLink.hidden = selected === input.dataset.today;
+        document.querySelectorAll('[data-report-context-link]').forEach(link => { const url = new URL(link.href); url.searchParams.set('date', selected); link.href = url.href; });
+      }
+    }
     if (/^\d{4}-\d{2}-\d{2}$/.test(selected)) dailyNavigator.querySelectorAll('a.bottom-nav-item').forEach(link => {
       const url = new URL(link.href, window.location.href);
       if (!['/calendar', '/todo', '/routine', '/retrospect'].includes(url.pathname) || url.searchParams.has('date')) return;

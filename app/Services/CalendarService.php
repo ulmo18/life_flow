@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\CalendarRepository;
+use App\Models\MemoRepository;
+use App\Models\RetrospectRepository;
 use App\Models\UserPreferenceRepository;
 use DateTimeImmutable;
 
@@ -49,6 +51,8 @@ final class CalendarService
         $tagData = $this->calendarTagService->getTagPageData($userId);
         $planReminderItems = $this->buildPlanReminderItems($planItems, $usedPlanItemIds);
         $planSegments = $this->buildSegmentsFromBlocks($planBlocks, 'plan');
+        $reminders = new NotificationService();
+        if ($notificationSettings === []) $notificationSettings = $reminders->settings($userId);
         $actualTotals = [];
         foreach ($this->calendarRepository->getTodoLinkedActualEvents($userId, (int) $day['id']) as $event) {
             $blockId = (int) ($event['daily_plan_block_id'] ?? 0);
@@ -63,15 +67,18 @@ final class CalendarService
             $total = $actualTotals[(int) ($segment['blockId'] ?? 0)] ?? ['count' => 0, 'minutes' => 0];
             $segment['actualCount'] = $total['count'];
             $segment['actualMinutes'] = $total['minutes'];
+            $segment['reminderTiming'] = $reminders->planReminderTiming($date, (int) $segment['startIndex'], $notificationSettings);
         }
         unset($segment);
         $actualSegments = $this->buildSegmentsFromEvents($actualEvents);
 
         $executionEnergy = $this->executionEnergyService->getDayData($userId, $date);
+        $todayReport = (new RetrospectRepository())->findReport($userId, date('Y-m-d'));
 
         return [
             'date' => $date,
             'todayDate' => date('Y-m-d'),
+            'todayReviewPending' => ($todayReport['status'] ?? '') !== 'submitted',
             'canEditRoutines' => $date === date('Y-m-d'),
             'dateTitle' => $this->formatDateTitle($date),
             'dateSubTitle' => $this->formatDateSubTitle($date, $dateMeta),
@@ -91,12 +98,20 @@ final class CalendarService
             'blockTemplates' => $this->planService->getBlockTemplates($userId),
             'usedRecurringTemplateIds' => $this->calendarRepository->getUsedRecurringTemplateIds($userId, (int) $day['id']),
             'planReminderItems' => $planReminderItems,
+            'planRemindersSupported' => $this->calendarRepository->supportsPlanBlockReminders(),
+            'planBlockReminders' => array_values(array_map(static fn(array $block): array => [
+                'blockId' => (int) $block['daily_plan_block_id'],
+                'title' => (string) $block['title'],
+                'startIndex' => (int) $block['start_index'],
+                'minutesBefore' => (int) $block['reminder_minutes_before'],
+            ], array_filter($planBlocks, static fn(array $block): bool => (int) ($block['reminder_enabled'] ?? 0) === 1 && $block['start_index'] !== null && $block['end_index'] !== null))),
             // The placement source list must contain every date-specific activity,
             // independently from Actual links or the optional block schema.
             'planActivityItems' => $this->buildPlanReminderItems($planItems, []),
             'planOptions' => $this->buildPlanOptions($planBlocksEnabled ? $this->calendarRepository->getDailyPlanItems($userId, (int) $day['id'], true) : $planItems, $usedPlanItemIds, $planBlocksEnabled ? $planBlocks : []),
             'planSegments' => $planSegments,
             'actualSegments' => $actualSegments,
+            'standaloneMemoGroups' => $this->buildStandaloneMemoGroups((new MemoRepository())->listForDate($userId, $date), $actualEvents),
             'unscheduledEvents' => $this->buildUnscheduledEvents($actualEvents),
             'hasLinkedActualEvents' => $this->hasLinkedActualEvents($actualEvents),
             'routines' => $this->routineService->getCalendarRoutines($userId, $date),
@@ -110,6 +125,31 @@ final class CalendarService
             'executionEnergy' => $executionEnergy,
             'wellnessTypes' => $this->wellnessService->types(),
         ];
+    }
+
+    /** @param array<int, array<string, mixed>> $memos @param array<int, array<string, mixed>> $events @return array<int, array<string, mixed>> */
+    private function buildStandaloneMemoGroups(array $memos, array $events): array
+    {
+        $groups = [];
+        $zone = new \DateTimeZone(date_default_timezone_get());
+        foreach ($memos as $memo) {
+            try {
+                $time = (new DateTimeImmutable((string) $memo['created_at'], new \DateTimeZone('UTC')))->setTimezone($zone);
+            } catch (\Exception $exception) {
+                continue;
+            }
+            $index = (int) $time->format('G') * 6 + intdiv((int) $time->format('i'), 10);
+            $occupied = false;
+            foreach ($events as $event) {
+                if (($event['schedule_type'] ?? 'timed') === 'timed' && $event['start_index'] !== null && $event['end_index'] !== null
+                    && (int) $event['start_index'] <= $index && (int) $event['end_index'] > $index) { $occupied = true; break; }
+            }
+            if ($occupied) continue;
+            if (!isset($groups[$index])) $groups[$index] = ['index' => $index, 'row' => intdiv($index, 6), 'col' => $index % 6, 'memos' => []];
+            $groups[$index]['memos'][] = ['id' => (int) $memo['id'], 'time' => $time->format('H:i'), 'content' => (string) $memo['content']];
+        }
+        ksort($groups);
+        return array_values($groups);
     }
 
     public function claimRetrospectPrompt(int $userId, string $requestedDate): bool
@@ -612,6 +652,37 @@ final class CalendarService
         return $this->calendarRepository->updateDailyPlanBlockDetails($userId, $blockId, $this->normalizeImportance($importance), $detachActuals, $manualStatus);
     }
 
+    /** @return array<string, mixed>|null */
+    public function getPlanReminder(int $userId, int $blockId): ?array
+    {
+        return $this->calendarRepository->getPlanBlockReminder($userId, $blockId);
+    }
+
+    /** @param array<string, mixed> $input @return array<string, mixed> */
+    public function updatePlanReminder(int $userId, array $input): array
+    {
+        $id = filter_var($input['daily_plan_block_id'] ?? null, FILTER_VALIDATE_INT);
+        $enabled = $input['reminder_enabled'] ?? null;
+        $minutes = filter_var($input['reminder_minutes_before'] ?? null, FILTER_VALIDATE_INT);
+        if ($id === false || $id <= 0 || !in_array($enabled, ['0', '1'], true) || $minutes === false || !in_array($minutes, NotificationService::PLAN_LEAD_MINUTES, true)) {
+            return ['ok' => false, 'status' => 422, 'message' => '알림 여부와 시간을 확인해 주세요.'];
+        }
+        if (!$this->calendarRepository->supportsPlanBlockReminders()) {
+            return ['ok' => false, 'status' => 503, 'message' => '계획 알림을 사용하려면 데이터베이스 업데이트가 필요합니다.'];
+        }
+        $block = $this->calendarRepository->getPlanBlockReminder($userId, (int) $id);
+        if ($block === null) return ['ok' => false, 'status' => 404, 'message' => '계획 블록을 찾을 수 없습니다.'];
+        if ($block['start_index'] === null || $block['end_index'] === null || (int) $block['start_index'] >= (int) $block['end_index']) {
+            return ['ok' => false, 'status' => 422, 'message' => '시간이 설정된 계획 블록에만 알림을 지정할 수 있습니다.'];
+        }
+        $saved = $this->calendarRepository->updatePlanBlockReminder($userId, (int) $id, $enabled === '1', (int) $minutes);
+        if ($saved === null) return ['ok' => false, 'status' => 409, 'message' => '알림 설정을 저장하지 못했습니다. 다시 시도해 주세요.'];
+        return ['ok' => true, 'date' => (string) $saved['calendar_date'], 'reminder' => [
+            'blockId' => (int) $saved['id'], 'enabled' => (int) $saved['reminder_enabled'] === 1,
+            'minutesBefore' => (int) $saved['reminder_minutes_before'], 'supported' => true,
+        ]];
+    }
+
     public function updateDailyPlanBlockStatus(int $userId, int $blockId, string $status): bool
     {
         return $this->calendarRepository->updateDailyPlanBlockStatus($userId, $blockId, $status);
@@ -931,6 +1002,9 @@ final class CalendarService
                     'importanceBadge' => $importance,
                     'manualStatus' => (string) ($followsTodo ? $block['source_todo_status'] : ($block['manual_status'] ?? 'pending')),
                     'followsTodo' => $followsTodo,
+                    'todoStatusEditable' => $followsTodo && $block['source_deleted_at'] === null,
+                    'reminderEnabled' => (int) ($block['reminder_enabled'] ?? 0) === 1,
+                    'reminderMinutesBefore' => (int) ($block['reminder_minutes_before'] ?? 5),
                 ]);
             }
         }

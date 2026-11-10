@@ -25,6 +25,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
 ?>
 
 <main
+    data-plan-reminders-supported="<?= !empty($calendar['planRemindersSupported']) ? '1' : '0' ?>"
     class="page calendar-page <?= e((string) ($calendar['dateClass'] ?? '')) ?>"
     data-calendar-date="<?= e((string) $calendar['date']) ?>"
     data-timezone="<?= e(date_default_timezone_get()) ?>"
@@ -37,6 +38,9 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
     <div class="calendar-context-sticky">
     <?php $dailyDateContext = ['title' => '일정', 'path' => '/calendar', 'date' => $calendar['date'], 'prevDate' => $calendar['prevDate'], 'nextDate' => $calendar['nextDate'], 'todayDate' => $calendar['todayDate'], 'isToday' => $calendar['isToday'], 'inputId' => 'calendarContextDate', 'mode' => $calendarMode]; require __DIR__ . '/../../components/daily-date-navigation.php'; ?>
     <div class="calendar-sticky-timetable-titles"><button type="button" data-calendar-view="plan" aria-pressed="false" aria-label="계획 시간표 보기 전환">계획</button><span class="calendar-work-status" data-calendar-work-status role="status" aria-live="polite"></span><button type="button" data-calendar-view="actual" aria-pressed="false" aria-label="실제 시간표 보기 전환">실제</button></div>
+    <?php if (!empty($calendar['todayReviewPending'])): ?>
+    <a class="calendar-evening-review" data-calendar-evening-review data-today="<?= e((string) $calendar['todayDate']) ?>" href="/retrospect?date=<?= e((string) $calendar['todayDate']) ?>" <?= (int) date('G') < 22 ? 'hidden' : '' ?>><span>오늘의 흐름을 가볍게 돌아볼까요?</span><strong>회고하기 ›</strong></a>
+    <?php endif; ?>
     </div>
 
     <div class="calendar-work-mode-controls" aria-label="일정 작업 모드">
@@ -79,7 +83,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
     <aside class="calendar-activity-panel" aria-label="계획 배치와 태그 칠하기">
         <button type="button" class="calendar-work-mode-close" data-calendar-work-mode="normal" aria-label="작업 모드 닫기">×</button>
         <section class="calendar-plan-sources" data-calendar-plan-sources>
-            <div class="calendar-plan-sources-heading"><div><strong class="calendar-plan-sources-title">계획 배치</strong><small>계획을 선택한 뒤 시간표에서 시간을 지정하세요.</small></div><a class="calendar-plan-template-link" href="/plan?view=blocks">계획 템플릿 관리 <span aria-hidden="true">↗</span></a></div>
+            <div class="calendar-plan-sources-heading"><div><strong class="calendar-plan-sources-title"><svg class="calendar-work-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>계획 배치</strong><small>계획을 선택한 뒤 시간표에서 시간을 지정하세요.</small></div><a class="calendar-plan-template-link" href="/plan?view=blocks">계획 템플릿 관리 <span aria-hidden="true">↗</span></a></div>
             <div class="calendar-plan-source-list">
                 <?php foreach ($planActivityItems as $item): ?>
                     <div class="calendar-plan-source" data-plan-block-source
@@ -123,7 +127,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
             <?php endif; ?>
         </section>
         <section class="calendar-tag-paint-palette" data-calendar-tag-paint-palette hidden aria-label="적용할 태그">
-            <div class="calendar-tag-paint-heading"><strong>태그 칠하기</strong><small>태그를 고른 뒤 실제 일정 블록을 누르면 바로 적용됩니다.</small><a class="calendar-plan-template-link calendar-tag-management-link" href="/tags">일정 태그 관리 <span aria-hidden="true">↗</span></a></div>
+            <div class="calendar-tag-paint-heading"><strong><svg class="calendar-work-icon is-tag" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h9l9 9-8 8-9-9L3 4Z"></path><circle cx="8" cy="8" r="1"></circle></svg>태그 칠하기</strong><small>태그를 고른 뒤 실제 일정 블록을 누르면 바로 적용됩니다.</small><a class="calendar-plan-template-link calendar-tag-management-link" href="/tags">일정 태그 관리 <span aria-hidden="true">↗</span></a></div>
             <div class="calendar-tag-paint-actions"><button type="button" data-calendar-tag-paint-mode aria-pressed="false">태그 칠하기 시작</button></div>
             <div class="calendar-tag-paint-list">
                 <button type="button" data-calendar-tag-paint="" aria-pressed="false">태그 지우기</button>
@@ -205,6 +209,11 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                         data-plan-block-actual-minutes="<?= e((string) ($segment['actualMinutes'] ?? 0)) ?>"
                         data-plan-manual-status="<?= e((string) ($segment['manualStatus'] ?? 'pending')) ?>"
                         data-plan-follows-todo="<?= !empty($segment['followsTodo']) ? '1' : '0' ?>"
+                        data-plan-todo-status-editable="<?= !empty($segment['todoStatusEditable']) ? '1' : '0' ?>"
+                        data-plan-reminder-enabled="<?= !empty($segment['reminderEnabled']) ? '1' : '0' ?>"
+                        data-plan-reminder-timing="<?= e(json_encode($segment['reminderTiming'] ?? [], JSON_UNESCAPED_UNICODE)) ?>"
+                        data-plan-reminder-minutes="<?= e((string) ($segment['reminderMinutesBefore'] ?? 5)) ?>"
+                        data-plan-reminders-supported="<?= !empty($calendar['planRemindersSupported']) ? '1' : '0' ?>"
                     >
                         <span class="calendar-importance-badge is-neutral"><?= e((string) ($segment['importanceBadge'] ?? 'D')) ?></span>
                         <span class="event-title"><?= e((string) $segment['title']) ?></span>
@@ -267,7 +276,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                             data-event-open
                             data-event-id="<?= e((string) $segment['id']) ?>"
                             data-event-title="<?= e((string) $segment['title']) ?>"
-                            aria-label="<?= e((string) $segment['title']) ?>"
+                            aria-label="<?= e((string) $segment['title'] . (trim((string) ($segment['memo'] ?? '')) !== '' ? ' · 메모 있음' : '')) ?>"
                             data-event-daily-plan-item-id="<?= $segment['dailyPlanItemId'] === null ? '' : e((string) $segment['dailyPlanItemId']) ?>"
                             data-event-daily-plan-block-id="<?= $segment['blockId'] === null ? '' : e((string) $segment['blockId']) ?>"
                             data-event-tag-id="<?= $segment['tagId'] === null ? '' : e((string) $segment['tagId']) ?>"
@@ -288,6 +297,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                                 <span class="calendar-tag-dot" aria-hidden="true"></span>
                             <?php endif; ?>
                             <span class="event-title"><?= e((string) $segment['title']) ?></span>
+                            <?php if ($isFirstActualSegment && trim((string) ($segment['memo'] ?? '')) !== ''): ?><span class="calendar-event-memo-dot" aria-hidden="true"></span><?php endif; ?>
                             <?php if ($isFirstActualSegment): ?>
                                 <span class="actual-block-resize-handle is-start" data-actual-block-resize="start" aria-hidden="true"></span>
                             <?php endif; ?>
@@ -296,6 +306,11 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                             <?php endif; ?>
                         </button>
                     </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="event-layer calendar-memo-layer" aria-label="시간별 메모">
+                <?php foreach (($calendar['standaloneMemoGroups'] ?? []) as $memoGroup): ?>
+                <button type="button" class="calendar-memo-marker" style="--row:<?= (int) $memoGroup['row'] ?>;--col:<?= (int) $memoGroup['col'] ?>" data-calendar-memo-open="<?= (int) $memoGroup['index'] ?>" aria-label="<?= e((string) $memoGroup['memos'][0]['time']) ?> 메모 <?= count($memoGroup['memos']) ?>개 보기"><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg><?php if (count($memoGroup['memos']) > 1): ?><b><?= count($memoGroup['memos']) ?></b><?php endif; ?></span></button>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -308,44 +323,52 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
 
     <div class="todo-layer calendar-todo-create-layer" data-calendar-todo-create-layer hidden>
         <button type="button" class="todo-overlay" data-calendar-todo-create-close aria-label="닫기"></button>
-        <section class="todo-sheet ui-form-sheet" role="dialog" aria-modal="true" aria-labelledby="calendarTodoCreateTitle">
+        <section class="todo-sheet ui-form-sheet ui-standard-sheet" role="dialog" aria-modal="true" aria-labelledby="calendarTodoCreateTitle">
             <div class="todo-sheet-header ui-form-sheet-header"><strong id="calendarTodoCreateTitle">계획 추가</strong><button type="button" class="ui-close-button" data-calendar-todo-create-close aria-label="닫기">×</button></div>
             <form class="todo-create-form" method="post" action="/todo" data-calendar-plan-create-form><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="return_to" value="calendar"><input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>"><p class="muted" data-calendar-create-range hidden></p><?php $activityFieldPrefix = 'calendarTodoCreateInput'; $activityGoalOptions = $calendar['goalOptions'] ?? []; require __DIR__ . '/../../components/activity-create-fields.php'; ?><div class="ui-form-sheet-actions"><button class="btn btn-primary" type="submit">계획 추가</button></div></form>
         </section>
     </div>
 
-    <section class="calendar-sheet" data-plan-block-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planBlockEditSheetTitle">
+    <section class="calendar-sheet ui-standard-sheet ui-form-sheet" data-plan-block-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planBlockEditSheetTitle">
         <form method="post" action="/calendar/plan-block/details" id="calendarPlanBlockEditForm">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>">
             <input type="hidden" name="daily_plan_item_id" id="calendarPlanBlockItemId">
             <input type="hidden" name="daily_plan_block_id" id="calendarPlanBlockId">
-            <div class="calendar-sheet-header"><strong id="planBlockEditSheetTitle">계획 수정</strong><button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button></div>
-            <p class="calendar-sheet-time" data-plan-block-title></p>
-            <div class="calendar-plan-inherited" data-plan-block-inherited hidden>
-                <span class="calendar-plan-inherited-item"><span class="calendar-importance-badge is-neutral" data-plan-inherited-importance aria-hidden="true"></span><span data-plan-inherited-importance-label></span></span>
-                <span class="calendar-plan-inherited-item"><span class="calendar-plan-inherited-status-icon" data-plan-inherited-status-icon aria-hidden="true"></span><span data-plan-inherited-status-label></span></span>
+            <div class="calendar-sheet-header ui-form-sheet-header"><strong id="planBlockEditSheetTitle">계획 수정</strong><button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button></div>
+            <div class="calendar-plan-block-overview">
+                <h2 class="calendar-plan-block-title" data-plan-block-title></h2>
+                <p class="calendar-sheet-time" data-plan-block-time></p>
+                <div class="calendar-plan-block-meta">
+                    <span class="calendar-plan-inherited" data-plan-block-inherited><span data-plan-inherited-importance-label>중요도</span><span class="calendar-importance-badge is-neutral" data-plan-inherited-importance aria-hidden="true"></span></span>
+                    <span class="calendar-plan-actual-summary" data-plan-block-actual-summary></span>
+                </div>
             </div>
             <div class="calendar-block-status-container" data-plan-block-status-container>
-                <fieldset class="importance-choice-group calendar-block-status-choice" id="calendarPlanBlockStatus">
-                    <legend>상태</legend>
-                    <?php foreach (['pending' => ['—', '미정'], 'completed' => ['V', '완료'], 'cancelled' => ['X', '취소'], 'postponed' => ['→', '연기'], 'in_progress' => ['·', '진행 중'], 'external' => ['○', '위임']] as $status => [$symbol, $label]): ?>
-                        <label><input type="radio" name="plan_block_status_ui" value="<?= e($status) ?>"><span><strong aria-hidden="true"><?= e($symbol) ?></strong><small><?= e($label) ?></small></span></label>
+                <div class="calendar-block-status-heading"><strong>상태</strong><p data-plan-block-status-note aria-live="polite"></p></div>
+                <fieldset class="importance-choice-group calendar-block-status-choice ui-status-row" id="calendarPlanBlockStatus">
+                    <legend class="sr-only">상태</legend>
+                    <?php foreach (['pending' => ['—', '미정'], 'in_progress' => ['·', '진행 중'], 'completed' => ['V', '완료'], 'postponed' => ['→', '연기'], 'external' => ['○', '위임'], 'cancelled' => ['X', '취소']] as $status => [$symbol, $label]): ?>
+                        <label><input type="radio" name="plan_block_status_ui" value="<?= e($status) ?>"><span class="ui-choice-button"><strong aria-hidden="true"><?= e($symbol) ?></strong><small><?= e($label) ?></small></span></label>
                     <?php endforeach; ?>
                 </fieldset>
-                <p class="calendar-sheet-time" data-plan-block-status-note aria-live="polite"></p>
             </div>
-            <fieldset class="importance-choice-group" data-plan-block-importance><legend>중요도</legend><?php foreach (['A', 'B', 'C', 'D'] as $importance): ?><label><input type="radio" name="importance" value="<?= e($importance) ?>"><span><strong><?= e($importance) ?></strong></span></label><?php endforeach; ?></fieldset>
-            <div data-plan-block-actual-link-controls hidden>
-                <p class="calendar-sheet-time" data-plan-block-link-count></p>
-                <button type="button" class="btn btn-ghost calendar-delay-button calendar-block-detach-button" data-plan-block-detach aria-describedby="calendarPlanDetachHoldHelp"><span>실제 일정 연결 해제</span></button>
-                <span class="sr-only" id="calendarPlanDetachHoldHelp">연결을 해제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요.</span>
-            </div>
+            <?php $followupPrefix = 'calendarFollowup'; require __DIR__ . '/../../components/todo-followup-fields.php'; ?>
+            <?php $reminderWithIcon = true; $reminderClockDisplay = 'time'; $planReminder = ['supported' => false]; require __DIR__ . '/../../components/plan-reminder-fields.php'; ?>
+            <details class="calendar-plan-management ui-disclosure" data-plan-block-management>
+                <summary class="calendar-plan-management-summary"><span class="calendar-plan-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16M8 3v6M16 9v6M10 15v6"/></svg></span><span>계획 관리</span></summary>
+                <fieldset class="importance-choice-group" data-plan-block-importance><legend>중요도</legend><?php foreach (['A', 'B', 'C', 'D'] as $importance): ?><label><input type="radio" name="importance" value="<?= e($importance) ?>"><span><strong><?= e($importance) ?></strong></span></label><?php endforeach; ?></fieldset>
+                <div data-plan-block-actual-link-controls hidden>
+                    <button type="button" class="btn btn-ghost calendar-delay-button ui-delay-button calendar-block-detach-button calendar-plan-management-action" data-plan-block-detach aria-describedby="calendarPlanDetachHoldHelp"><span>실제 일정 연결 해제</span></button>
+                    <span class="sr-only" id="calendarPlanDetachHoldHelp">연결을 해제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요. 실제 기록은 유지됩니다.</span>
+                </div>
+                <button type="button" class="btn btn-ghost calendar-delay-button ui-delay-button calendar-plan-management-action" data-plan-block-delete aria-describedby="calendarPlanDeleteHoldHelp"><span>계획 삭제</span></button>
+                <span class="sr-only" id="calendarPlanDeleteHoldHelp">삭제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요.</span>
+            </details>
             <div class="calendar-time-fields" hidden>
                 <label for="calendarPlanBlockStart"><span>시작 시간</span><select class="input" name="start_index" id="calendarPlanBlockStart"><?php for ($index = 0; $index < 144; $index++): ?><option value="<?= $index ?>"><?= sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
                 <label for="calendarPlanBlockEnd"><span>종료 시간</span><select class="input" name="end_index" id="calendarPlanBlockEnd"><?php for ($index = 1; $index <= 144; $index++): ?><option value="<?= $index ?>"><?= $index === 144 ? '24:00' : sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
             </div>
-            <div class="calendar-sheet-actions"><button type="button" class="btn btn-ghost calendar-delay-button" data-plan-block-delete aria-describedby="calendarPlanDeleteHoldHelp"><span>계획 삭제</span></button><span class="sr-only" id="calendarPlanDeleteHoldHelp">삭제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요.</span></div>
         </form>
         <form method="post" action="/calendar/plan-block/delete" id="calendarPlanBlockDeleteForm" hidden><input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>"><input type="hidden" name="date" value="<?= e((string) $calendar['date']) ?>"><input type="hidden" name="daily_plan_block_id" id="calendarPlanBlockDeleteId"></form>
     </section>
@@ -353,12 +376,12 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
     <div class="calendar-fab <?= !empty($calendar['isToday']) && empty($calendar['actualSegments']) && empty($calendar['unscheduledEvents']) ? 'is-waiting' : '' ?>" data-calendar-fab>
         <div class="calendar-fab-actions" data-calendar-fab-actions hidden>
             <div class="calendar-fab-quick-actions">
-                <?php if (!empty($calendar['isToday'])): ?><button type="button" data-condition-open>오늘의 컨디션</button><?php endif; ?>
+                <?php if (!empty($calendar['isToday'])): ?><button type="button" data-condition-open><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 10h.01M16 10h.01M8 15c2.2 2 5.8 2 8 0"/></svg>오늘의 컨디션</button><?php endif; ?>
                 <?php if (!empty($calendar['planGroups'])): ?>
-                    <button type="button" data-plan-settings-open>계획 템플릿 연결</button>
+                    <button type="button" data-plan-settings-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>계획 템플릿 연결</button>
                 <?php endif; ?>
-                <button type="button" data-quick-memo-open>메모 작성</button>
-                <button type="button" data-retrospect-preview-open>발행 회고 보기</button>
+                <button type="button" data-quick-memo-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>메모 작성</button>
+                <button type="button" data-retrospect-preview-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M7 8h10M7 11h4v5H7zM14 11h3M14 14h3M14 17h3"/></svg>발행 회고 보기</button>
             </div>
         </div>
         <button type="button" class="calendar-fab-toggle" data-calendar-fab-toggle aria-label="빠른 메뉴 열기" aria-expanded="false">+</button>
@@ -368,7 +391,21 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
 <div class="calendar-local-layer" data-calendar-layer hidden>
     <div class="calendar-local-overlay" data-calendar-close></div>
 
-    <section class="calendar-sheet ui-form-sheet is-structured" data-event-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventSheetTitle">
+    <section class="calendar-sheet calendar-memo-sheet ui-form-sheet is-structured" data-calendar-memo-sheet hidden aria-modal="true" role="dialog" aria-labelledby="calendarMemoSheetTitle">
+        <div class="ui-form-sheet-view">
+            <div class="calendar-sheet-header ui-form-sheet-header"><strong id="calendarMemoSheetTitle">시간별 메모</strong><button type="button" class="ui-close-button" data-calendar-close aria-label="닫기">×</button></div>
+            <div class="ui-form-sheet-body calendar-memo-sheet-body">
+                <?php foreach (($calendar['standaloneMemoGroups'] ?? []) as $memoGroup): ?>
+                <div class="calendar-memo-group" data-calendar-memo-group="<?= (int) $memoGroup['index'] ?>" hidden>
+                    <?php foreach ($memoGroup['memos'] as $memo): ?><article><time><?= e($memo['time']) ?></time><p><?= nl2br(e($memo['content'])) ?></p></article><?php endforeach; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="ui-form-sheet-actions calendar-memo-sheet-actions"><a class="btn btn-secondary" href="/memo">메모 관리</a></div>
+        </div>
+    </section>
+
+    <section class="calendar-sheet ui-form-sheet is-structured ui-standard-sheet" data-event-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventSheetTitle">
         <form class="calendar-actual-form ui-form-sheet-layout" method="post" action="/calendar/event" id="calendarEventForm" data-actual-form>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
@@ -387,26 +424,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                     <input class="input calendar-actual-title-input" id="calendarEventTitle" name="title" type="text" maxlength="80" autocomplete="off" placeholder="무엇을 했나요?" required>
                     </div>
 
-                    <fieldset class="calendar-time-fields calendar-actual-time-range" data-calendar-time-fields>
-                <legend>시간</legend>
-                <label for="calendarStartIndex">
-                    <span class="sr-only">시작시간</span>
-                    <select class="input" name="start_index" id="calendarStartIndex" required>
-                        <?php for ($index = 0; $index < 144; $index++): ?>
-                            <option value="<?= $index ?>"><?= sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option>
-                        <?php endfor; ?>
-                    </select>
-                </label>
-                <span class="calendar-time-arrow" aria-hidden="true">→</span>
-                <label for="calendarEndIndex">
-                    <span class="sr-only">종료시간</span>
-                    <select class="input" name="end_index" id="calendarEndIndex" required>
-                        <?php for ($index = 1; $index <= 144; $index++): ?>
-                            <option value="<?= $index ?>"><?= $index === 144 ? '24:00' : sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option>
-                        <?php endfor; ?>
-                    </select>
-                </label>
-                    </fieldset>
+                    <?php $actualTimePrefix = 'calendar'; require __DIR__ . '/_actual-time-range.php'; ?>
                     </div>
 
             <?php if (!empty($calendar['unscheduledEvents'])): ?>
@@ -441,8 +459,9 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                 </div>
             <?php endif; ?>
 
+            <?php $quickTagPrefix = 'create'; ?>
             <fieldset class="calendar-tag-links" data-calendar-tag-group>
-                <legend>태그</legend>
+                <legend><span>태그</span><?php if (!empty($availableTagPalettes)): ?><button type="button" class="calendar-tag-add-toggle" data-quick-tag-toggle aria-expanded="false" aria-controls="calendarQuickTagCreatecreate">+ 새 태그</button><?php endif; ?></legend>
                 <label class="calendar-tag-link is-empty">
                     <input type="radio" name="calendar_tag_id" value="" checked>
                     <span>없음</span>
@@ -458,7 +477,6 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                         <span><?= e((string) $tag['name']) ?></span>
                     </label>
                 <?php endforeach; ?>
-                <?php $quickTagPrefix = 'create'; ?>
                 <?php require __DIR__ . '/_quick-tag.php'; ?>
             </fieldset>
 
@@ -490,16 +508,16 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                 <?php if (!empty($calendar['routines']) && !empty($calendar['canEditRoutines'])): ?>
                     <button type="button" class="calendar-selection-row" data-actual-view-open="routine"><span>루틴</span><strong data-actual-summary="routine">연결 없음</strong><b>선택하기 ›</b></button>
                 <?php endif; ?>
-                <details class="calendar-actual-disclosure ui-progressive-disclosure" data-actual-disclosure="wellness">
+                <details class="calendar-actual-disclosure ui-disclosure ui-progressive-disclosure" data-actual-disclosure="wellness">
                     <summary><span>생활 기록</span><strong data-actual-summary="wellness">기록 안 함</strong></summary>
                     <?php $wellnessFieldPrefix = 'calendarCreateWellness'; require __DIR__ . '/_wellness-fields.php'; ?>
                 </details>
-                <details class="calendar-actual-disclosure ui-progressive-disclosure" data-actual-disclosure="memo">
+                <details class="calendar-actual-disclosure ui-disclosure ui-progressive-disclosure" data-actual-disclosure="memo">
                     <summary><span>메모</span><strong data-actual-summary="memo">메모 없음</strong></summary>
                     <label class="sr-only" for="calendarEventMemo">메모</label>
                     <textarea class="input calendar-memo-input" id="calendarEventMemo" name="memo" maxlength="500" rows="3" placeholder="메모를 입력하세요..."></textarea>
                 </details>
-            <details class="calendar-actual-disclosure calendar-energy-disclosure" data-actual-disclosure="energy">
+            <details class="calendar-actual-disclosure ui-disclosure calendar-energy-disclosure" data-actual-disclosure="energy">
                 <summary><span>실행력</span><span class="calendar-energy-summary"><strong data-energy-summary-main>−25</strong></span></summary>
                 <?php $energyFieldPrefix = 'calendarCreateEnergy'; $energyDefaultType = 'consume'; require __DIR__ . '/_execution-energy-fields.php'; ?>
             </details>
@@ -559,7 +577,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
         </form>
     </section>
 
-    <section class="calendar-sheet ui-form-sheet is-structured" data-event-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventEditSheetTitle">
+    <section class="calendar-sheet ui-form-sheet is-structured ui-standard-sheet" data-event-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="eventEditSheetTitle">
         <form class="calendar-actual-form ui-form-sheet-layout" method="post" action="/calendar/event/update" id="calendarEventEditForm" data-actual-form>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
@@ -577,16 +595,12 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                     <label class="form-label calendar-actual-title-label" for="calendarEditEventTitle">일정명</label>
                     <input class="input calendar-actual-title-input" id="calendarEditEventTitle" name="title" type="text" maxlength="80" autocomplete="off" placeholder="무엇을 했나요?" required>
                     </div>
-                    <fieldset class="calendar-time-fields calendar-actual-time-range" data-calendar-edit-time-fields>
-                        <legend>시간</legend>
-                        <label for="calendarEditStartIndex"><span class="sr-only">시작시간</span><select class="input" name="start_index" id="calendarEditStartIndex" required><?php for ($index = 0; $index < 144; $index++): ?><option value="<?= $index ?>"><?= sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
-                        <span class="calendar-time-arrow" aria-hidden="true">→</span>
-                        <label for="calendarEditEndIndex"><span class="sr-only">종료시간</span><select class="input" name="end_index" id="calendarEditEndIndex" required><?php for ($index = 1; $index <= 144; $index++): ?><option value="<?= $index ?>"><?= $index === 144 ? '24:00' : sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10) ?></option><?php endfor; ?></select></label>
-                    </fieldset>
+                    <?php $actualTimePrefix = 'calendarEdit'; require __DIR__ . '/_actual-time-range.php'; ?>
                     </div>
 
+            <?php $quickTagPrefix = 'edit'; ?>
             <fieldset class="calendar-tag-links" data-edit-tag-group data-calendar-tag-group>
-                <legend>태그</legend>
+                <legend><span>태그</span><?php if (!empty($availableTagPalettes)): ?><button type="button" class="calendar-tag-add-toggle" data-quick-tag-toggle aria-expanded="false" aria-controls="calendarQuickTagCreateedit">+ 새 태그</button><?php endif; ?></legend>
                 <label class="calendar-tag-link is-empty">
                     <input type="radio" name="calendar_tag_id" value="">
                     <span>없음</span>
@@ -604,7 +618,6 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                         <span><?= e((string) $tag['name']) ?></span>
                     </label>
                 <?php endforeach; ?>
-                <?php $quickTagPrefix = 'edit'; ?>
                 <?php require __DIR__ . '/_quick-tag.php'; ?>
             </fieldset>
 
@@ -617,19 +630,21 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                 <?php if (!empty($calendar['routines']) && !empty($calendar['canEditRoutines'])): ?>
                     <button type="button" class="calendar-selection-row" data-actual-view-open="routine"><span>루틴</span><strong data-actual-summary="routine">연결 없음</strong><b>선택하기 ›</b></button>
                 <?php endif; ?>
-                <details class="calendar-actual-disclosure" data-actual-disclosure="wellness"><summary><span>생활 기록</span><strong data-actual-summary="wellness">기록 안 함</strong></summary><?php $wellnessFieldPrefix = 'calendarEditWellness'; require __DIR__ . '/_wellness-fields.php'; ?></details>
-                <details class="calendar-actual-disclosure" data-actual-disclosure="memo"><summary><span>메모</span><strong data-actual-summary="memo">메모 없음</strong></summary><label class="sr-only" for="calendarEditMemo">메모</label><textarea class="input calendar-memo-input" id="calendarEditMemo" name="memo" maxlength="500" rows="4" placeholder="메모를 입력하세요..."></textarea></details>
-            <details class="calendar-actual-disclosure calendar-energy-disclosure" data-actual-disclosure="energy">
+                <details class="calendar-actual-disclosure ui-disclosure" data-actual-disclosure="wellness"><summary><span>생활 기록</span><strong data-actual-summary="wellness">기록 안 함</strong></summary><?php $wellnessFieldPrefix = 'calendarEditWellness'; require __DIR__ . '/_wellness-fields.php'; ?></details>
+                <details class="calendar-actual-disclosure ui-disclosure" data-actual-disclosure="memo"><summary><span>메모</span><strong data-actual-summary="memo">메모 없음</strong></summary><label class="sr-only" for="calendarEditMemo">메모</label><textarea class="input calendar-memo-input" id="calendarEditMemo" name="memo" maxlength="500" rows="4" placeholder="메모를 입력하세요..."></textarea></details>
+            <details class="calendar-actual-disclosure ui-disclosure calendar-energy-disclosure" data-actual-disclosure="energy">
                 <summary><span>실행력</span><span class="calendar-energy-summary"><strong data-energy-summary-main>0</strong></span></summary>
                 <?php $energyFieldPrefix = 'calendarEditEnergy'; $energyDefaultType = 'none'; require __DIR__ . '/_execution-energy-fields.php'; ?>
             </details>
+
             </section>
+                    <span class="sr-only" id="calendarActualDeleteHoldHelp">삭제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요.</span>
 
                 </div>
                 <div class="calendar-sheet-actions calendar-actual-actions ui-form-sheet-actions">
+                    <button type="button" class="calendar-actual-delete calendar-delay-button ui-delay-button" data-actual-event-delete aria-describedby="calendarActualDeleteHoldHelp"><span>일정 삭제</span></button>
                     <button type="submit" class="btn btn-primary">수정 저장</button>
-                    <button type="button" class="btn btn-ghost calendar-delay-button" data-actual-event-delete aria-describedby="calendarActualDeleteHoldHelp"><span>일정 삭제</span></button>
-                    <span class="sr-only" id="calendarActualDeleteHoldHelp">삭제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요.</span>
+
                 </div>
             </div>
             <?php if (!empty($calendar['planOptions'])): ?>
@@ -658,7 +673,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
         </form>
     </section>
 
-    <section class="calendar-sheet" data-plan-item-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planItemSheetTitle">
+    <section class="calendar-sheet ui-standard-sheet ui-form-sheet" data-plan-item-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planItemSheetTitle">
         <form method="post" action="/calendar/plan-item" id="calendarPlanItemForm">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
@@ -727,7 +742,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
         </form>
     </section>
 
-    <section class="calendar-sheet" data-plan-item-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planItemEditSheetTitle">
+    <section class="calendar-sheet ui-standard-sheet ui-form-sheet" data-plan-item-edit-sheet hidden aria-modal="true" role="dialog" aria-labelledby="planItemEditSheetTitle">
         <form method="post" action="/calendar/plan-item/update" id="calendarPlanItemEditForm">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="calendar_mode" value="<?= e($calendarMode) ?>">
@@ -787,7 +802,7 @@ $enabledBlockTemplates = array_values(array_filter($calendar['blockTemplates'] ?
                     <option value="detach">연결을 끊고 계획 일정만 변경</option>
                 </select>
             </div>
-            <div class="calendar-sheet-actions">
+            <div class="calendar-sheet-actions ui-form-sheet-actions">
                 <button type="submit" class="btn btn-primary">수정 저장</button>
                 <button type="submit" class="btn btn-ghost" form="calendarPlanItemDeleteForm" data-plan-item-delete-button>계획 일정 삭제</button>
             </div>

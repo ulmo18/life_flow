@@ -404,6 +404,8 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
   `title` VARCHAR(80) NOT NULL,
   `importance` CHAR(1) NOT NULL DEFAULT 'D',
   `todo_status` VARCHAR(20) NOT NULL DEFAULT 'pending',
+  `followup_note` TEXT NULL,
+  `source_carryover_item_id` BIGINT UNSIGNED NULL,
   `start_index` SMALLINT UNSIGNED NULL,
   `end_index` SMALLINT UNSIGNED NULL,
   `estimated_duration_minutes` SMALLINT UNSIGNED NULL,
@@ -415,6 +417,8 @@ CREATE TABLE IF NOT EXISTS `daily_plan_items` (
   KEY `idx_daily_plan_items_plan_order` (`daily_plan_id`, `sort_order`),
   KEY `idx_daily_plan_items_goal` (`goal_id`),
   KEY `idx_daily_plan_items_source_template` (`source_plan_template_id`),
+  UNIQUE KEY `uq_daily_plan_items_carryover` (`daily_plan_id`, `source_carryover_item_id`),
+  CONSTRAINT `fk_daily_plan_items_carryover` FOREIGN KEY (`source_carryover_item_id`) REFERENCES `daily_plan_items` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_daily_plan_items_plan`
     FOREIGN KEY (`daily_plan_id`) REFERENCES `daily_plans` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_daily_plan_items_source_block`
@@ -437,6 +441,8 @@ CREATE TABLE IF NOT EXISTS `daily_plan_blocks` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `daily_plan_item_id` BIGINT UNSIGNED NOT NULL,
   `manual_status` VARCHAR(20) NOT NULL DEFAULT 'pending',
+  `reminder_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `reminder_minutes_before` SMALLINT UNSIGNED NOT NULL DEFAULT 5,
   `title_snapshot` VARCHAR(80) NULL,
   `importance_snapshot` CHAR(1) NULL,
   `goal_id_snapshot` BIGINT UNSIGNED NULL,

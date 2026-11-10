@@ -20,9 +20,9 @@
   left: 50%;
   width: min(calc(100% - 24px), 520px);
   transform: translateX(-50%) translateY(18px);
-  border: 1px solid rgba(215, 199, 179, 0.9);
+  border: 1px solid var(--border);
   border-radius: 22px;
-  background: rgba(255, 250, 242, 0.98);
+  background: var(--color-surface);
   box-shadow: 0 24px 60px rgba(26, 27, 58, 0.22);
   color: var(--color-text);
   max-height: min(calc(100dvh - 24px), 620px);
@@ -32,8 +32,8 @@
 }
 
 body[data-theme='dark'] .ui-panel {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(36, 37, 31, 0.98);
+  border-color: var(--border);
+  background: var(--color-surface);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
 }
 
@@ -64,11 +64,11 @@ body[data-theme='dark'] .ui-panel {
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-4) var(--space-2);
-  background: rgba(255, 250, 242, 0.98);
+  background: var(--color-surface);
 }
 
 body[data-theme='dark'] .ui-panel-header {
-  background: rgba(36, 37, 31, 0.98);
+  background: var(--color-surface);
 }
 
 .ui-sheet,
@@ -84,8 +84,23 @@ body[data-theme='dark'] .ui-panel-header {
 }
 
 .ui-panel-title {
-  font-size: var(--font-size-base);
-  line-height: 1.2;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.ui-panel-header > .ui-close-button,
+body[data-theme='dark'] .ui-panel-header > .ui-close-button {
+  flex: 0 0 44px;
+  padding: 0;
+  background: transparent;
+}
+
+.ui-panel-header > .ui-close-button:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 
 .ui-panel-body {
@@ -93,6 +108,7 @@ body[data-theme='dark'] .ui-panel-header {
   padding: var(--space-3) var(--space-4) 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
 }
 
 .ui-sheet-form {
@@ -110,7 +126,11 @@ body[data-theme='dark'] .ui-panel-header {
 
 .ui-panel-actions .btn {
   width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
+
+.ui-sheet-form > .ui-panel-actions { padding: var(--space-2) 0 0; }
 
 .ui-field {
   display: grid;
@@ -125,8 +145,14 @@ body[data-theme='dark'] .ui-panel-header {
   background: rgba(26, 27, 58, 0.06);
   color: var(--color-text);
   cursor: pointer;
+  font-family: inherit;
   font-size: 22px;
   line-height: 1;
+}
+
+.ui-close-button:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 /* Shared read-only Execution Energy value language. */
@@ -183,6 +209,21 @@ body[data-theme='dark'] .energy-change.is-recover {
  * should normally expand inline; a second sheet is reserved for a genuinely
  * long, searchable, or multi-select task.
  */
+.ui-standard-sheet {
+  --ui-sheet-width: 680px;
+  --ui-sheet-padding: var(--space-5);
+  --ui-sheet-radius: 24px;
+  --ui-sheet-heading-size: 15px;
+  position: relative;
+  z-index: 1;
+  width: min(100%, var(--ui-sheet-width));
+  margin: 0 auto;
+  padding: var(--ui-sheet-padding);
+  border-radius: var(--ui-sheet-radius) var(--ui-sheet-radius) 0 0;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
 .ui-form-sheet {
   max-height: min(82dvh, 720px);
   overflow-y: auto;
@@ -234,7 +275,33 @@ body[data-theme='dark'] .energy-change.is-recover {
   position: sticky;
   top: 0;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   background: var(--color-surface);
+}
+
+.ui-form-sheet-header > strong,
+.ui-form-sheet-header > div > strong {
+  min-width: 0;
+  color: var(--color-text);
+  font-size: var(--ui-sheet-heading-size, 15px);
+  font-weight: 700;
+}
+
+.ui-form-sheet-header > .ui-close-button,
+body[data-theme='dark'] .ui-form-sheet-header > .ui-close-button {
+  flex: 0 0 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+}
+
+.ui-form-sheet-header > .ui-close-button:hover,
+body[data-theme='dark'] .ui-form-sheet-header > .ui-close-button:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
 }
 
 .ui-form-sheet-actions {
@@ -303,6 +370,56 @@ body[data-theme='dark'] .ui-close-button {
   display: none;
 }
 
+.plan-reminder { display:grid; min-width:0; margin-block:var(--space-3); padding-top:var(--space-3); border-top:1px solid var(--border); }
+.plan-reminder [data-reminder-message]:empty { display:none; }
+.plan-reminder [data-reminder-clock]:empty { display:none; }
+.plan-reminder[data-clock-display='time'] [data-reminder-summary] strong { color:var(--color-primary-text); font-weight:700; font-variant-numeric:tabular-nums; }
+.plan-reminder[data-clock-display='time'] [data-reminder-clock] strong { color:var(--color-primary-text); font-size:var(--font-size-lg); font-weight:700; font-variant-numeric:tabular-nums; }
+.plan-reminder [data-reminder-message].is-error { color:var(--color-danger-text); }
+.plan-reminder-summary { min-height:44px; display:flex; align-items:center; gap:var(--space-2); cursor:pointer; font-size:var(--font-size-sm); font-weight:600; }
+.plan-reminder-summary [data-reminder-summary] { color:var(--color-text-muted); font-weight:400; }
+.plan-reminder-label { display:inline-flex; align-items:center; gap:var(--space-2); }
+.plan-reminder-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-block:var(--space-2); }
+.plan-reminder [data-plan-reminder-save] { width:100%; min-height:48px; }
+.plan-reminder-gates { display:grid; gap:var(--space-2); font-size:var(--font-size-sm); }
+.plan-reminder [hidden] { display:none; }
+
+/* Canonical form controls: Schedule and To-do must reuse these variants. */
+.ui-choice-button { display:flex; align-items:center; justify-content:center; min-width:0; min-height:48px; gap:var(--space-2); padding:5px 3px; border:1px solid var(--color-line); border-radius:12px; background:var(--color-surface-soft); color:var(--color-text); font:inherit; font-size:var(--font-size-sm); font-weight:600; text-align:center; cursor:pointer; transition:border-color .15s ease,background .15s ease,color .15s ease; }
+.ui-choice-button[aria-pressed='true'] { border-color:var(--color-primary); background:rgba(255,94,91,.13); color:var(--color-primary-text); }
+.ui-choice-button:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; }
+.ui-choice-button:disabled { opacity:.45; cursor:not-allowed; }
+.calendar-block-status-choice .ui-choice-button small { font:inherit; line-height:1.2; }
+.ui-status-row { display:grid; grid-template-columns:repeat(6,minmax(44px,1fr)); gap:clamp(2px,1vw,6px); min-width:0; overflow-x:auto; overscroll-behavior-x:contain; }
+.ui-status-row .ui-choice-button { display:grid; place-content:center; gap:2px; min-height:48px; }
+.ui-status-row .ui-choice-button small { font-size:11px; line-height:1.2; font-weight:600; white-space:nowrap; }
+.todo-followup { display:grid; gap:var(--space-2); margin-block:var(--space-3); }
+.todo-followup[hidden] { display:none; }
+.todo-followup .form-label { margin:0; }
+.todo-followup textarea { min-width:0; resize:vertical; }
+.todo-followup .form-hint:empty { display:none; }
+.ui-disclosure > summary { list-style:none; }
+.ui-disclosure > summary::-webkit-details-marker { display:none; }
+.ui-disclosure > summary::after { content:''; color:var(--color-text-muted); font-size:15px; font-weight:400; line-height:1; flex:0 0 8px; display:block; box-sizing:border-box; width:8px; height:8px; margin-left:auto; justify-self:center; align-self:center; border-right:1.5px solid var(--color-text-muted); border-bottom:1.5px solid var(--color-text-muted); transform:translateY(-2px) rotate(45deg); transition:transform .18s ease; }
+.ui-disclosure[open] > summary::after { transform:translateY(2px) rotate(225deg); }
+@media (prefers-reduced-motion:reduce) { .ui-disclosure > summary::after { transition:none; } }
+.ui-delay-button, .calendar-delay-button, .todo-delay-button { position:relative; overflow:hidden; isolation:isolate; touch-action:pan-y; user-select:none; -webkit-touch-callout:none; }
+.ui-delay-button::before, .calendar-delay-button::before, .todo-delay-button::before { content:''; position:absolute; inset:0; z-index:-1; background:var(--color-primary); opacity:.28; transform:scaleX(0); transform-origin:left center; pointer-events:none; }
+.ui-delay-button.is-holding::before, .calendar-delay-button.is-holding::before, .todo-delay-button.is-holding::before { transform:scaleX(1); transition:transform 1.5s linear; }
+
+/* The To-do add sheet is the shell reference, including structured Actual forms. */
+body[data-theme='dark'] .calendar-sheet.ui-standard-sheet.ui-form-sheet,
+.calendar-sheet.ui-standard-sheet.ui-form-sheet { position:absolute; left:50%; bottom:var(--calendar-keyboard-offset,0px); width:min(100%,var(--ui-sheet-width)); height:auto; max-height:min(82dvh,720px,var(--calendar-visual-height,100dvh)); margin:0; padding:var(--ui-sheet-padding); border:0; border-radius:var(--ui-sheet-radius) var(--ui-sheet-radius) 0 0; background:var(--color-surface); box-shadow:var(--shadow-md); transform:translateX(-50%); }
+.calendar-sheet.ui-standard-sheet > form:not([hidden]):not(.calendar-actual-form) { padding:0; gap:var(--space-3); }
+.calendar-sheet.ui-standard-sheet .calendar-sheet-header { margin:0; padding:0; border:0; background:var(--color-surface); }
+.calendar-sheet.ui-standard-sheet .calendar-sheet-header > strong { font-size:var(--ui-sheet-heading-size); font-weight:700; }
+.calendar-sheet.ui-standard-sheet .calendar-sheet-header > .ui-close-button { flex:0 0 44px; min-width:44px; min-height:44px; padding:0; background:transparent; }
+.calendar-sheet.ui-standard-sheet .calendar-sheet-header > .ui-close-button:hover { background:color-mix(in srgb,var(--color-text) 6%,transparent); }
+.calendar-sheet.ui-standard-sheet .calendar-actual-form,
+.calendar-sheet.ui-standard-sheet .calendar-actual-form .ui-form-sheet-view { height:auto; max-height:calc(min(82dvh,720px,var(--calendar-visual-height,100dvh)) - 2 * var(--ui-sheet-padding)); }
+.calendar-sheet.ui-standard-sheet .calendar-actual-body { gap:var(--space-3); padding:var(--space-4) 0 0; }
+.calendar-sheet.ui-standard-sheet .calendar-actual-actions { padding:10px 0 max(10px,env(safe-area-inset-bottom)); background:color-mix(in srgb,var(--color-surface) 96%,transparent); }
+
 .ui-modal-open .ui-modal {
   transform: translate(-50%, -50%) scale(1);
 }
@@ -316,3 +433,10 @@ body[data-theme='dark'] .ui-close-button {
     grid-template-columns: 1fr;
   }
 }
+
+.calendar-sheet.ui-standard-sheet .calendar-actual-basic-group { padding:0; border-radius:0; background:transparent; gap:var(--space-3); }
+.calendar-sheet.ui-standard-sheet .calendar-actual-title-input { font-weight:400; }
+.calendar-sheet.ui-standard-sheet .calendar-actual-title-input:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; }
+
+.ui-form-sheet-header > .ui-close-button:focus-visible { outline-offset:-3px; }
+.calendar-local-layer:has(.ui-standard-sheet:not([hidden])) .calendar-local-overlay { backdrop-filter:none; }

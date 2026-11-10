@@ -15,7 +15,9 @@ The current implementation supports:
 - Plan group copy
 - Plan group soft delete
 - Plan-block template create, list, edit, and soft delete
+- The Plan-block editor uses the shared bottom-aligned input sheet and grouped name/goal fields. Daily-template name validation is associated with its input.
 - Mixing copied Plan-block templates with directly entered blocks in one daily template
+- Template cards, name fields and block summaries use shared surface, border, radius and shadow tokens. Copy, block expand and block-template action controls have a minimum 44px height. Daily-template cards constrain their grid column so long names truncate without widening the page. Schedule-grid styling is unchanged.
 
 ## Runtime Rule
 
@@ -210,3 +212,11 @@ The shared UI layer also provides hover tooltips for elements with `data-ui-tool
 - Confirm `블록 목록 보기 · n개` matches the actual block count, then expand it and verify rows stay in start-time order and display importance, name, and time range on one line; verify long names truncate on a narrow screen.
 - Cancel and confirm a template copy from the icon, then open the detail page and cancel and confirm deletion from there.
 - On the Plan-block tab, open the fixed add action, create a block from the bottom sheet, reopen the same sheet from the right-side edit button, and cancel and confirm the right-side delete action.
+
+## Daily template controls
+
+The reusable Plan-block create/edit sheet contains Tab/Shift+Tab navigation and restores its opener on close or Escape. Hidden and disabled controls are excluded; shared confirmation and date dialogs keep keyboard priority. Template creation, editing and hold-delete behavior are unchanged.
+
+The create, edit and detail pages use a labelled back button. The detail page fixes 템플릿 삭제 and 템플릿 수정 above the bottom navigation; deleting requires a 1.5-second hold and short releases show a toast. Copied daily plans are unchanged by template deletion.
+
+- The daily-template detail actions use opaque surface buttons with equal widths, 8px spacing, and a consistent gap above the bottom navigator.

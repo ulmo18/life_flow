@@ -1,14 +1,8 @@
 <?php require __DIR__ . '/../../layouts/header.php'; ?>
 
 <main class="calendar-page plan-editor-page">
-    <section class="calendar-header">
-        <div>
-            <p class="eyebrow">Plan</p>
-            <h1 class="calendar-date"><?= e((string) ($heading ?? '계획 추가')) ?></h1>
-            <p class="calendar-subtitle">블록을 드래그한 뒤 이름과 중요도를 입력합니다.</p>
-        </div>
-        <a class="calendar-icon-button" href="/plan?view=days" aria-label="하루 템플릿 목록으로 이동">←</a>
-    </section>
+    <a class="btn btn-secondary plan-back-button" href="<?= !empty($sourcePlan) ? '/plan/show?id=' . e((string) $sourcePlan['id']) : '/plan?view=days' ?>">← 뒤로가기</a>
+    <h1 class="sr-only"><?= e((string) ($heading ?? '하루 템플릿 추가')) ?></h1>
 
     <?php if (!empty($errors['general'])): ?>
         <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
@@ -43,10 +37,11 @@
                 maxlength="80"
                 value="<?= e((string) ($old['name'] ?? '')) ?>"
                 placeholder="예: 평일"
+                <?= !empty($errors['name']) ? 'aria-invalid="true" aria-describedby="planNameError"' : '' ?>
                 required
             >
             <?php if (!empty($errors['name'])): ?>
-                <p class="field-error"><?= e((string) $errors['name']) ?></p>
+                <p class="field-error" id="planNameError"><?= e((string) $errors['name']) ?></p>
             <?php endif; ?>
         </div>
 
@@ -86,7 +81,7 @@
             </div>
         </section>
 
-        <button type="submit" class="btn btn-primary plan-floating-save">계획 저장</button>
+        <button type="submit" class="btn btn-primary plan-floating-save"><?= !empty($sourcePlan) ? '템플릿 수정' : '템플릿 저장' ?></button>
     </form>
 </main>
 

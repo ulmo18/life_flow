@@ -4,15 +4,16 @@
   top: 18px;
   bottom: auto;
   transform: translateX(-50%) translateY(-12px);
-  min-width: 280px;
+  min-width: min(280px, calc(100% - 32px));
   max-width: calc(100% - 32px);
   padding: 12px 15px;
-  border: 1px solid rgba(216, 200, 179, 0.92);
-  border-radius: 16px;
-  background: rgba(255, 250, 242, 0.98);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   color: var(--color-text);
   font-size: 13px;
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   opacity: 0;
@@ -21,6 +22,12 @@
   overflow: hidden;
   box-shadow: 0 14px 34px rgba(42, 38, 34, 0.16);
   z-index: 9999;
+}
+
+#toastText {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .has-app-chrome-body .toast {
@@ -34,16 +41,28 @@
 }
 
 .toast button {
+  flex: 0 1 auto;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: var(--space-2);
   border: 0;
   background: transparent;
-  color: var(--color-primary);
-  font-weight: 800;
+  color: var(--color-primary-text);
+  font: inherit;
+  font-weight: 700;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
+.toast button:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
 body[data-theme='dark'] .toast {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(36, 37, 31, 0.98);
+  border-color: var(--border);
+  background: var(--color-surface);
   color: var(--color-text);
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.36);
 }

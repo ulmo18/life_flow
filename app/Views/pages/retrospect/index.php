@@ -20,13 +20,25 @@ $selectedView = (string) ($selectedView ?? 'daily');
 
 <main class="page retrospect-page" data-retrospect-page data-date="<?= e($date) ?>">
     <h1 class="sr-only">회고</h1>
-    <div class="retrospect-primary-context<?= $selectedView === 'history' ? ' is-history' : '' ?>">
-        <?php if ($selectedView === 'daily'): ?>
-        <?php $dailyDateContext = ['title' => '회고', 'path' => '/retrospect', 'date' => $date, 'prevDate' => $retrospect['prevDate'], 'nextDate' => $retrospect['nextDate'], 'todayDate' => $todayDate, 'isToday' => $isToday, 'inputId' => 'retrospectContextDate', 'view' => $selectedView]; require __DIR__ . '/../../components/daily-date-navigation.php'; ?>
+    <div class="retrospect-primary-context">
+        <?php if ($selectedView === 'history'): $historyMonth = (string) ($history['month'] ?? substr($todayDate, 0, 7)); $historyMonthDate = DateTimeImmutable::createFromFormat('!Y-m', $historyMonth); ?>
+        <section class="daily-date-context retrospect-month-context" data-daily-context-date="<?= e($date) ?>" aria-label="발행 이력 월 탐색">
+            <div class="daily-date-swipe">
+                <form method="get" action="/retrospect" class="daily-date-picker retrospect-history-month-search">
+                    <input type="hidden" name="view" value="history"><input type="hidden" name="date" value="<?= e($date) ?>">
+                    <label class="sr-only" for="historyMonth">발행 회고 검색 월</label><input id="historyMonth" type="month" name="month" value="<?= e($historyMonth) ?>" required>
+                    <button type="button" class="retrospect-month-trigger" data-history-month-open aria-haspopup="dialog" aria-controls="historyMonthDialog" hidden></button>
+                    <noscript><button type="submit">보기</button></noscript>
+                </form>
+                <a class="daily-date-arrow" href="/retrospect?view=history&amp;date=<?= e($date) ?>&amp;month=<?= e($historyMonthDate->modify('-1 month')->format('Y-m')) ?>" aria-label="이전 달">&lsaquo;</a>
+                <a class="daily-date-arrow" href="/retrospect?view=history&amp;date=<?= e($date) ?>&amp;month=<?= e($historyMonthDate->modify('+1 month')->format('Y-m')) ?>" aria-label="다음 달">&rsaquo;</a>
+            </div>
+            <?php require __DIR__ . '/../../components/daily-context-actions.php'; ?>
+        </section>
         <?php else: ?>
-        <div class="retrospect-history-header"><strong>회고</strong><?php require __DIR__ . '/../../components/daily-context-actions.php'; ?></div>
+        <?php $dailyDateContext = ['title' => '회고', 'path' => '/retrospect', 'date' => $date, 'prevDate' => $retrospect['prevDate'], 'nextDate' => $retrospect['nextDate'], 'todayDate' => $todayDate, 'isToday' => $isToday, 'inputId' => 'retrospectContextDate', 'view' => $selectedView]; require __DIR__ . '/../../components/daily-date-navigation.php'; ?>
         <?php endif; ?>
-        <nav class="retrospect-view-switch" aria-label="회고 보기">
+        <nav class="ui-segmented-tabs retrospect-view-switch" aria-label="회고 보기">
             <a href="/retrospect?date=<?= e($date) ?>" <?= $selectedView === 'daily' ? 'aria-current="page"' : '' ?>>일일 회고</a>
             <a href="/retrospect?view=history&amp;date=<?= e($date) ?>" <?= $selectedView === 'history' ? 'aria-current="page"' : '' ?>>발행 이력</a>
 
@@ -38,15 +50,6 @@ $selectedView = (string) ($selectedView ?? 'daily');
     <?php if ($selectedView === 'history'): ?>
         <section class="retrospect-history" aria-labelledby="retrospectHistoryTitle">
             <h2 id="retrospectHistoryTitle" class="sr-only">발행 이력</h2>
-            <form method="get" action="/retrospect" class="retrospect-history-month-search">
-                    <input type="hidden" name="view" value="history">
-                    <input type="hidden" name="date" value="<?= e($date) ?>">
-                    <label class="sr-only" for="historyMonth">발행 회고 검색 월</label>
-                    <input id="historyMonth" class="input" type="month" name="month" value="<?= e((string) (($history['month'] ?? '') !== '' ? $history['month'] : substr($todayDate, 0, 7))) ?>" required>
-                    <button type="button" class="input retrospect-month-trigger" data-history-month-open aria-haspopup="dialog" aria-controls="historyMonthDialog" hidden></button>
-                    <button class="btn btn-secondary" type="submit">월별 보기</button>
-                    <?php if (!empty($history['month'])): ?><a class="btn btn-secondary" href="/retrospect?view=history&amp;date=<?= e($date) ?>&amp;month=">전체</a><?php endif; ?>
-            </form>
             <dialog id="historyMonthDialog" class="lf-date-dialog retrospect-month-dialog" aria-labelledby="historyMonthTitle">
                 <header class="lf-date-header"><strong id="historyMonthTitle">연·월 선택</strong><button type="button" class="lf-date-close" data-history-month-close aria-label="닫기">×</button></header>
                 <div class="lf-date-body">
@@ -54,17 +57,12 @@ $selectedView = (string) ($selectedView ?? 'daily');
                     <div class="lf-date-grid retrospect-month-grid" data-history-month-grid></div>
                 </div>
             </dialog>
-            <p class="retrospect-date-status"><?= empty($history['month']) ? '전체 기간의 발행 이력' : e((string) $history['month']) . ' 발행 이력' ?></p>
             <?php if (empty($history['items'])): ?>
-                <p class="retrospect-empty"><?= empty($history['month']) ? '아직 발행한 회고가 없습니다.' : '선택한 달에 발행된 회고가 없습니다.' ?></p>
+                <div class="retrospect-history-table-wrap"><p class="retrospect-history-empty">선택한 달에 발행된 회고가 없습니다.</p></div>
             <?php else: ?>
-                <ul class="retrospect-history-list retrospect-newspaper-list">
-                    <?php $historyMonth = null; ?>
+                <div class="retrospect-history-table-wrap"><table class="retrospect-history-table"><caption class="sr-only">발행 회고 목록</caption><thead><tr><th scope="col">발행 회고</th></tr></thead><tbody>
                     <?php foreach ($history['items'] as $item): ?>
-                        <?php if ($historyMonth !== $item['monthLabel']): $historyMonth = $item['monthLabel']; ?>
-                            <li class="retrospect-newspaper-month"><?= e((string) $historyMonth) ?></li>
-                        <?php endif; ?>
-                        <li class="retrospect-newspaper-item"><a href="/retrospect/report?date=<?= e((string) $item['date']) ?>">
+                        <tr><td><a class="retrospect-history-entry" href="/retrospect/report?date=<?= e((string) $item['date']) ?>">
                             <span class="retrospect-newspaper-date"><strong><?= e((string) $item['dateTitle']) ?></strong><span><?= e((string) $item['dateSubTitle']) ?></span><span class="retrospect-newspaper-arrow" aria-hidden="true">→</span></span>
                             <span class="retrospect-newspaper-kpt">
                                 <?php foreach (['Keep' => 'today_review', 'Problem' => 'today_thoughts', 'Try' => 'tomorrow_plan'] as $label => $key): ?>
@@ -73,9 +71,9 @@ $selectedView = (string) ($selectedView ?? 'daily');
                                 <?php endforeach; ?>
                             </span>
                             <small><?= e((string) ($item['planAchievementLabel'] === '계획 없음' ? '계획 없음' : '계획 ' . $item['planAchievementLabel'])) ?> · 루틴 <?= e((string) $item['routineAchievementRate']) ?>%</small>
-                        </a></li>
+                        </a></td></tr>
                     <?php endforeach; ?>
-                </ul>
+                </tbody></table></div>
                 <nav class="retrospect-pagination" aria-label="발행 이력 페이지">
                     <?php if (!empty($history['hasPrevious'])): ?><a class="btn btn-secondary" href="/retrospect?view=history&amp;date=<?= e($date) ?>&amp;month=<?= e((string) ($history['month'] ?? '')) ?>&amp;page=<?= e((string) ((int) $history['page'] - 1)) ?>">이전</a><?php endif; ?>
                     <?php if (!empty($history['hasNext'])): ?><a class="btn btn-secondary" href="/retrospect?view=history&amp;date=<?= e($date) ?>&amp;month=<?= e((string) ($history['month'] ?? '')) ?>&amp;page=<?= e((string) ((int) $history['page'] + 1)) ?>">다음</a><?php endif; ?>

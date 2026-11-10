@@ -61,8 +61,10 @@ final class GoalService
         $linkedPlans = $this->goalRepository->listLinkedPlansByGoalIds($userId, $goalIds);
         $linkedRoutines = $this->goalRepository->listLinkedRoutinesByGoalIds($userId, $goalIds);
         $linkedTodos = $this->goalRepository->countLinkedDailyPlanItemsByGoalIds($userId, $goalIds);
+        $todoItems = $this->goalRepository->listLinkedTodoItemsByGoalIds($userId, $goalIds);
+        $scheduledPlans = $this->goalRepository->listLinkedScheduledPlansByGoalIds($userId, $goalIds);
 
-        return array_map(function (array $goal) use ($linkedPlans, $linkedRoutines, $linkedTodos): array {
+        return array_map(function (array $goal) use ($linkedPlans, $linkedRoutines, $linkedTodos, $todoItems, $scheduledPlans): array {
             $goalId = (int) $goal['id'];
             $goal['linkedPlans'] = array_map(
                 fn (array $plan): array => $this->formatLinkedPlan($plan),
@@ -73,6 +75,11 @@ final class GoalService
                 $linkedRoutines[$goalId] ?? []
             );
             $goal['linkedTodoCount'] = (int) ($linkedTodos[$goalId] ?? 0);
+            $goal['linkedTodos'] = $todoItems[$goalId] ?? [];
+            $goal['linkedScheduledPlans'] = array_map(fn(array $plan): array => [
+                'title' => (string) $plan['title'], 'date' => (string) $plan['calendar_date'],
+                'timeRange' => $this->indexToTime((int) $plan['start_index']) . ' ~ ' . $this->indexToTime((int) $plan['end_index']),
+            ], $scheduledPlans[$goalId] ?? []);
 
             return $goal;
         }, $goals);

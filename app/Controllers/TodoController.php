@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Csrf;
 use App\Services\DailyDateAppearanceService;
 use App\Services\TodoService;
+use App\Services\NotificationService;
 use DateTimeImmutable;
 
 final class TodoController
@@ -35,13 +36,15 @@ final class TodoController
             'canEdit' => $date === $today,
             'activeTab' => ($_GET['tab'] ?? '') === 'recurring' ? 'recurring' : 'items',
             'csrfToken' => Csrf::token(),
+            'reminderMinuteOptions' => NotificationService::PLAN_LEAD_MINUTES,
+            'notificationSettings' => (new NotificationService())->settings($this->userId()),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
             'pageStyles' => [
                 $this->versionedAsset('/assets/css/components/todo-sheet.css'),
                 $this->versionedAsset('/assets/css/pages/todo.css'),
             ],
-            'pageScripts' => [$this->versionedAsset('/assets/js/pages/todo.js')],
+            'pageScripts' => [$this->versionedAsset('/assets/js/components/plan-reminder.js'), $this->versionedAsset('/assets/js/components/todo-followup.js'), $this->versionedAsset('/assets/js/pages/todo.js')],
         ]);
         unset($_SESSION['flash_success'], $_SESSION['errors']);
     }
@@ -136,6 +139,28 @@ final class TodoController
         $this->respond(['ok' => true, 'status' => $status], 200);
     }
 
+    public function showFollowup(): void
+    {
+        $id = filter_var($_GET['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
+        $result = $this->todoService->getFollowup($this->userId(), $id === false ? 0 : (int) $id);
+        $this->respond($result, $result['status'] ?? 200);
+    }
+
+    public function saveFollowup(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) $this->respond(['ok' => false, 'message' => '요청이 만료되었습니다.'], 419);
+        $result = $this->todoService->saveFollowup($this->userId(), $_POST);
+        $this->respond($result, $result['status'] ?? 200);
+    }
+
+    public function registerCarryover(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) $this->respond(['ok' => false, 'message' => '요청이 만료되었습니다.'], 419);
+        $result = $this->todoService->registerCarryover($this->userId(), $_POST);
+        if ($result['ok']) $_SESSION['flash_success'] = $result['message'];
+        $this->respond($result, $result['status'] ?? 200);
+    }
+
     public function delete(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
@@ -173,7 +198,11 @@ final class TodoController
 
     private function returnPath(mixed $returnTo, mixed $date): string
     {
-        if ($returnTo !== 'calendar') return '/todo';
+        if ($returnTo !== 'calendar') {
+            return is_string($date) && $date !== ''
+                ? '/todo?date=' . rawurlencode($this->normalizeDate($date))
+                : '/todo';
+        }
         $selectedDate = $this->normalizeDate(is_string($date) ? $date : '');
         return '/calendar?date=' . rawurlencode($selectedDate) . '&mode=plan';
     }

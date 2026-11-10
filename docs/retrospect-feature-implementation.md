@@ -4,7 +4,7 @@
 
 Retrospect is the daily review surface. It combines the selected date's Routine logs, copied daily Plan items, Actual Calendar events, and standalone Memos before the user writes and publishes a KPT report.
 
-- Daily Retrospect uses shared date navigation and keeps the selected date when moving between daily menus. Published history is an all-date view without date navigation; its mobile header retains search and menu controls, while its tabs stay below the desktop header. Goal review is an all-date view in the Goal menu.
+- Daily Retrospect uses shared date navigation and keeps the selected date when moving between daily menus. Published history uses its own month selector without daily navigation; its mobile header retains search and menu controls, while its tabs stay below the desktop header. Goal review is an all-date view in the Goal menu.
 - The sticky date and view navigation extends through the page's outer padding, while the report content keeps its normal inset. Daily Retrospect does not display the 작성중 or 발행됨 status label.
 
 Daily Retrospect does not display the starting Execution Energy card. The editable condition and perceived-burden form remains in Today's Calendar `+` menu, and existing per-schedule energy details remain available.
@@ -16,11 +16,12 @@ Daily Retrospect does not display the starting Execution Energy card. The editab
 - The Schedule tab shows individual block records and details, without a duplicate activity aggregate, minute totals, or an edit shortcut. Existing time, difference and per-schedule energy details remain available. Published report pages keep their existing presentation and snapshots.
 - 중요도순·시간순·태그별 정렬은 현재 날짜와 발행 회고 수정 상태를 유지하면서 일정 목록과 상세창을 비동기로 함께 갱신한다. 빠른 연속 선택에서는 마지막 요청만 반영하고 실패 시 기존 목록을 유지하며 오류를 표시한다. JavaScript를 사용할 수 없을 때는 기존 정렬 링크가 동작한다.
 - The conditional `오늘로 이동` and `날짜 선택` controls use the shared compact secondary-button treatment.
-- `발행 이력` lists submitted reports in pages of 20, grouped by year and month within each page. A newspaper-style row shows the date, one truncated line each for Keep, Problem and Try (or `작성 없음`), and the saved achievement rates. The whole row opens the dedicated published report at `/retrospect/report?date=YYYY-MM-DD`. Republishing updates that date's one report; version history is intentionally not stored.
+- `발행 이력` lists submitted reports in pages of 20 for the selected month, using the To-do page's bordered table surface and row dividers. A row shows the date, one truncated line each for Keep, Problem and Try (or `작성 없음`), and the saved achievement rates. The whole row opens the dedicated published report at `/retrospect/report?date=YYYY-MM-DD`. Republishing updates that date's one report; version history is intentionally not stored.
 - Published reports and Calendar's report preview show at most one optional fact below the KPT text. A direct B Plan block / Actual connection has priority, with distinct block and Actual counts; otherwise the number of recorded Actuals is shown. `근거 보기` lists up to five saved snapshot records. No source event identifier, duplicate identifiers, invalid time ranges, or an empty Actual snapshot suppresses the feedback. Item-only or mismatched block links never qualify for the B rule. Feedback uses no AI, new DB fields, or user's manually selected Plan status; the saved KPT and snapshot are unchanged. Republishing replaces the snapshot, so feedback is recalculated rather than versioned. Generation failure suppresses only the feedback.
-- Published history initially selects the current month in the user's time zone, regardless of the date selected in Daily Retrospect. `월별 보기` filters the history list to the chosen month; an empty month shows an explanatory message. `전체` restores the unfiltered history while keeping the month control set to the current month, and pagination retains the chosen filter. A year-and-month dialog matches the shared date picker; the native month input remains available without JavaScript or dialog support.
+- Published history initially selects the current month in the user's time zone, regardless of the date selected in Daily Retrospect. Choosing a year and month immediately loads that month's list; an empty month shows an explanatory message and pagination retains the month. A year-and-month dialog matches the shared date picker; the native month input remains available without dialog support, and without JavaScript a submit button provides the fallback.
+- The selected month control leads directly into the history table without a duplicate month or history heading between them.
 - For dates before yesterday, Daily Retrospect shows only a dated, newspaper-inspired card linking to that date's published report when one exists; the entire card is tappable. Otherwise it shows an empty message without a border or shadow, distinguishing it from the interactive card. Today and yesterday retain their existing review workflow.
-- `목표 회고` is available from the Goal menu and retains aggregate Goal execution feedback and completed routine history.
+- `목표 회고` is available from the Goal menu and lists completed Goals. Its detail sheet shows linked Plan-block and Actual records, Goal-linked Routine logs, totals and a chronological timeline; it distinguishes item-only links and does not infer a Routine-to-Actual connection. The separate completed-Routine history list is not shown there.
 
 ### Daily tabs
 
@@ -142,4 +143,17 @@ Try와 실제 일정의 연결은 현재 비활성화되어 발행 회고·일�
 `tests/retrospect_try_links_mysql.php`는 별도로 준비한 `lifeflow_test_` 접두사의 일회용 MySQL DB에서만 실행된다. 직접 연결의 소유권, 중복 요청, 재발행 후 원문 보존, 해제와 삭제된 일정의 처리뿐 아니라 실제 일정 및 루틴 피드백의 발행 스냅샷과 재발행을 확인한다. 실제 서비스 DB를 대상으로 실행하지 않는다.
 # Explicit Plan completion
 
+- Read-only Routine calendar cells use the shared success/danger background and text tokens for O/X in both light and dark themes, while retaining their symbols and grid layout.
+
 For live daily reviews, Plan achievement counts blocks whose stored state is `completed` and which have a linked Actual. Actual linkage and time totals remain separate execution evidence; an in-progress linked block is not counted as achieved. Previously published snapshots keep their saved historical values until republished. Existing linked blocks must be backfilled before deployment as documented in `docs/database-migrations.md`.
+
+- Published reports show a Goal review after daily KPT for Goals currently completed on that report date. The Goal review reuses the completed Goal review sheet’s current relationship, activity totals, and chronological activity history. Daily report snapshots stay unchanged; duplicate Goal milestones are suppressed when the Goal review is shown.
+
+- Published report pages reuse the daily Retrospect sticky context and tab navigation. Routine state marks appear inside a square.
+
+- Daily, history and published-report headers use the same date navigation. In history, changing the selected date opens its month; first entry without a date defaults to the current month. Report navigation keeps adjacent published-date links.
+- The report's KPT, Goal review, schedule, routine and memo sections are native independent disclosures, initially expanded. The report no longer exposes its own edit button; daily Retrospect retains the edit entry. A date-selected original editorial sentence appears above KPT without storing or attributing a quotation. Completed Goals use a newspaper-style highlighted card.
+
+- Published history places the existing month selector in the sticky date-header position; adjacent arrows move by month and the main content no longer repeats the selector.
+
+- Published report browsing keeps the session's selected daily date in the shared header. Previous/next report links change only the viewed report; date navigation in the header remains a separate daily action.

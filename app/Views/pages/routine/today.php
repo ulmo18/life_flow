@@ -24,13 +24,10 @@ $renderRoutineRows = static function (array $items) use ($csrfToken, $date, $can
     <?php endif; ?>
 
     <?php if (empty($routines)): ?>
-        <section class="card routine-today-empty">
-            <strong><?= e(t('routine.today_empty')) ?></strong>
-            <a class="btn btn-primary" href="/manage/routines"><?= e(t('routine.manage_link')) ?></a>
-        </section>
+        <section class="routine-today-empty ui-list-surface"><p class="ui-list-empty"><?= e(t('routine.today_empty')) ?></p></section>
     <?php else: ?>
-        <section class="routine-today-group" data-routine-group="unfinished"><header><strong>미완료 루틴</strong><span data-routine-group-count><?= e((string) count($unfinishedRoutines)) ?>개</span></header><div class="routine-today-table-wrap"><table><tbody data-routine-group-body><?php $renderRoutineRows($unfinishedRoutines); ?></tbody></table><p data-routine-group-empty <?= !empty($unfinishedRoutines) ? 'hidden' : '' ?>><?= $isToday ? '오늘의 루틴을 모두 완성했어요. 이 흐름이 내일의 힘이 될 거예요.' : '선택한 날짜의 루틴을 모두 완료했어요.' ?></p></div></section>
-        <section class="routine-today-group" data-routine-group="completed"><header><strong>완료 루틴</strong><span data-routine-group-count><?= e((string) count($completedRoutines)) ?>개</span></header><div class="routine-today-table-wrap"><table><tbody data-routine-group-body><?php $renderRoutineRows($completedRoutines); ?></tbody></table><p data-routine-group-empty <?= !empty($completedRoutines) ? 'hidden' : '' ?>>첫 루틴을 완료하며 오늘의 흐름을 시작해보세요.</p></div></section>
+        <section class="routine-today-group" data-routine-group="unfinished"><header><strong>미완료 루틴</strong><span data-routine-group-count><?= e((string) count($unfinishedRoutines)) ?>개</span></header><div class="routine-today-table-wrap ui-list-surface"><table class="ui-list-table"><tbody data-routine-group-body><?php $renderRoutineRows($unfinishedRoutines); ?></tbody></table><p class="ui-list-empty" data-routine-group-empty <?= !empty($unfinishedRoutines) ? 'hidden' : '' ?>><?= $isToday ? '오늘의 루틴을 모두 완성했어요. 이 흐름이 내일의 힘이 될 거예요.' : '선택한 날짜의 루틴을 모두 완료했어요.' ?></p></div></section>
+        <section class="routine-today-group" data-routine-group="completed"><header><strong>완료 루틴</strong><span data-routine-group-count><?= e((string) count($completedRoutines)) ?>개</span></header><div class="routine-today-table-wrap ui-list-surface"><table class="ui-list-table"><tbody data-routine-group-body><?php $renderRoutineRows($completedRoutines); ?></tbody></table><p class="ui-list-empty" data-routine-group-empty <?= !empty($completedRoutines) ? 'hidden' : '' ?>>첫 루틴을 완료하며 오늘의 흐름을 시작해보세요.</p></div></section>
     <?php endif; ?>
 </main>
 
@@ -38,16 +35,18 @@ $renderRoutineRows = static function (array $items) use ($csrfToken, $date, $can
 
 <div class="routine-quick-layer" data-routine-quick-layer hidden>
     <button type="button" class="routine-quick-overlay" data-routine-quick-close aria-label="닫기"></button>
-    <section class="routine-quick-sheet ui-form-sheet" role="dialog" aria-modal="true" aria-labelledby="routineQuickTitle">
+    <section class="routine-quick-sheet ui-form-sheet ui-standard-sheet" role="dialog" aria-modal="true" aria-labelledby="routineQuickTitle">
         <div class="routine-quick-header ui-form-sheet-header">
             <strong id="routineQuickTitle">루틴 추가</strong>
             <button type="button" class="ui-close-button" data-routine-quick-close aria-label="닫기">×</button>
         </div>
         <form method="post" action="/routine/quick" data-routine-quick-form>
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-            <label class="form-label" for="routineQuickName">루틴명</label>
-            <input class="input" id="routineQuickName" name="name" type="text" maxlength="60" placeholder="매일 이어갈 루틴을 입력하세요" autocomplete="off" required>
-            <p class="muted">오늘부터 7일 동안 진행되며 기간·목표·알림은 루틴 관리에서 변경할 수 있어요.</p>
+            <div class="form-group">
+                <label class="form-label" for="routineQuickName">루틴명</label>
+                <input class="input" id="routineQuickName" name="name" type="text" maxlength="60" placeholder="매일 이어갈 루틴을 입력하세요" autocomplete="off" aria-describedby="routineQuickHint" required>
+            </div>
+            <p class="form-hint" id="routineQuickHint">오늘부터 7일 동안 진행되며 기간·목표·알림은 루틴 관리에서 변경할 수 있어요.</p>
             <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary">루틴 추가</button></div>
         </form>
     </section>

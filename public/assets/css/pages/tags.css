@@ -41,19 +41,13 @@
 
 .tag-palette-option {
   position: relative;
-  min-height: 38px;
+  min-height: 44px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(216, 200, 179, 0.84);
+  border: 1px solid var(--color-control-line);
   border-radius: var(--radius-sm);
-  background: rgba(255, 250, 242, 0.68);
+  background: var(--color-surface);
   cursor: pointer;
-}
-
-body[data-theme='dark'] .tag-palette-option,
-body[data-theme='dark'] .tag-card {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(36, 37, 31, 0.96);
 }
 
 .tag-palette-option input {
@@ -76,6 +70,11 @@ body[data-theme='dark'] .tag-card {
   box-shadow: 0 0 0 3px rgba(26, 27, 58, 0.1);
 }
 
+.tag-palette-option:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .tag-palette-option.is-disabled {
   opacity: 0.34;
   cursor: not-allowed;
@@ -88,15 +87,13 @@ body[data-theme='dark'] .tag-card {
 
 .tag-card {
   display: grid;
+  min-width: 0;
   gap: var(--space-2);
   padding: var(--space-4);
-  border: 1px solid rgba(216, 200, 179, 0.86);
-  border-radius: var(--radius-md);
-  background: rgba(255, 250, 242, 0.84);
-}
-
-body[data-theme='dark'] .tag-card {
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 body[data-theme='dark'] .tag-palette-option:has(input:checked) {
@@ -124,24 +121,37 @@ body[data-theme='dark'] .tag-swatch {
   display: flex;
   align-items: baseline;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
+
+.tag-card-title strong { overflow-wrap: anywhere; }
 
 .tag-system-title form {
   margin: 0;
 }
 
 .tag-visibility-toggle {
-  min-height: 40px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 4px 9px 4px 5px;
-  border: 1px solid rgba(216, 200, 179, 0.84);
+  border: 1px solid var(--color-control-line);
   border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text-muted);
   cursor: pointer;
+  font-family: inherit;
 }
+
+.tag-visibility-toggle:focus-visible,
+.tag-edit-panel summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.tag-edit-panel summary { min-height: 44px; }
 
 .tag-visibility-toggle > span {
   position: relative;
@@ -197,5 +207,5 @@ body[data-theme='dark'] .tag-swatch {
 }
 
 .tag-edit-label {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }

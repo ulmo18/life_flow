@@ -20,7 +20,7 @@ $viewQuery = $contextView !== '' && $contextView !== 'daily' ? '&view=' . rawurl
 $contextMode = (string) ($context['mode'] ?? '');
 $modeQuery = $contextMode !== '' ? '&mode=' . rawurlencode($contextMode) : '';
 ?>
-<section class="daily-date-context" data-daily-context-date="<?= e($contextDate) ?>" aria-label="<?= e((string) ($context['title'] ?? '날짜')) ?> 날짜 탐색">
+<section class="daily-date-context" data-daily-context-date="<?= e($contextDate) ?>" <?= !empty($context['preserveSessionDate']) ? 'data-daily-context-preserve' : '' ?> aria-label="<?= e((string) ($context['title'] ?? '날짜')) ?> 날짜 탐색">
     <div class="daily-date-swipe" data-daily-date-swipe data-prev-date="<?= e((string) ($context['prevDate'] ?? $contextDate)) ?>" data-next-date="<?= e((string) ($context['nextDate'] ?? $contextDate)) ?>">
     <form class="daily-date-picker" method="get" action="<?= e($contextPath) ?>">
         <span class="daily-date-value <?= e((string) ($dailyDateClass ?? '')) ?>" aria-hidden="true"><?= e($contextDateValue->format('n.j')) ?></span><span class="daily-date-weekday" aria-hidden="true"><?= e($contextWeekday) ?></span><span class="daily-date-caret" aria-hidden="true">▾</span>
@@ -31,8 +31,8 @@ $modeQuery = $contextMode !== '' ? '&mode=' . rawurlencode($contextMode) : '';
     </form>
     <a class="daily-date-arrow" href="<?= e($contextPath) ?>?date=<?= e((string) ($context['prevDate'] ?? $contextDate)) ?><?= e($viewQuery . $modeQuery) ?>" aria-label="이전 날짜">&lsaquo;</a>
     <a class="daily-date-arrow" href="<?= e($contextPath) ?>?date=<?= e((string) ($context['nextDate'] ?? $contextDate)) ?><?= e($viewQuery . $modeQuery) ?>" aria-label="다음 날짜">&rsaquo;</a>
-    <?php if (empty($context['isToday'])): ?>
-        <a class="daily-today-link" href="<?= e($contextPath) ?>?date=<?= e((string) ($context['todayDate'] ?? date('Y-m-d'))) ?><?= e($viewQuery . $modeQuery) ?>"><?= e(t('nav.today')) ?></a>
+    <?php if (empty($context['isToday']) || !empty($context['preserveSessionDate'])): ?>
+        <a class="daily-today-link" href="<?= e($contextPath) ?>?date=<?= e((string) ($context['todayDate'] ?? date('Y-m-d'))) ?><?= e($viewQuery . $modeQuery) ?>" <?= !empty($context['preserveSessionDate']) && !empty($context['isToday']) ? 'hidden' : '' ?>><?= e(t('nav.today')) ?></a>
     <?php endif; ?>
     </div>
     <?php require __DIR__ . '/daily-context-actions.php'; ?>

@@ -32,12 +32,18 @@ $isCalendarActive = $currentPath === '/calendar';
 $isPlanActive = $currentPath === '/plan' || strpos($currentPath, '/plan/') === 0;
 $isRoutineActive = $currentPath === '/routine';
 $isRoutineManageActive = $currentPath === '/manage/routines';
-$isRetrospectActive = $currentPath === '/retrospect';
+$isRetrospectActive = $currentPath === '/retrospect' || $currentPath === '/retrospect/report';
 $isGoalActive = $currentPath === '/goal';
 $isMemoActive = $currentPath === '/memo';
 $isExecutionEnergyActive = $currentPath === '/execution-energy';
 $isSearchActive = $currentPath === '/search';
-$isDailyPrimaryPage = in_array($currentPath, ['/calendar', '/routine', '/todo', '/retrospect'], true);
+$isDailyPrimaryPage = in_array($currentPath, ['/calendar', '/routine', '/todo', '/retrospect', '/retrospect/report'], true);
+$isCompactMenuHeader = $currentPath === '/dashboard' || $isPlanActive
+    || $currentPath === '/manage/routines' || str_starts_with($currentPath, '/manage/routines/')
+    || $currentPath === '/goal' || str_starts_with($currentPath, '/goal/')
+    || $currentPath === '/execution-energy' || str_starts_with($currentPath, '/execution-energy/')
+    || $currentPath === '/memo' || str_starts_with($currentPath, '/memo/')
+    || $currentPath === '/search' || $currentPath === '/tags' || str_starts_with($currentPath, '/tags/');
 $themePreference = (string) ($_SESSION['theme_preference'] ?? 'light');
 $themePreference = $themePreference === 'dark' ? 'dark' : 'light';
 $headerContextLabel = 'LifeFlow';
@@ -63,7 +69,7 @@ if ($showAppChrome) {
 </head>
 <body class="<?= $showAppChrome ? 'has-app-chrome-body' : '' ?><?= $showAppChrome && $isDailyPrimaryPage ? ' daily-primary-page' : '' ?>" data-theme="<?= e($themePreference) ?>">
 <div class="app-shell<?= $showAppChrome ? ' has-app-chrome' : '' ?>">
-    <header class="site-header<?= $showAppChrome && $isDailyPrimaryPage ? ' is-daily-primary-header' : '' ?>" data-site-header>
+    <header class="site-header<?= $showAppChrome && $isDailyPrimaryPage ? ' is-daily-primary-header' : '' ?><?= $showAppChrome && $isCompactMenuHeader ? ' is-compact-menu-header' : '' ?>" data-site-header>
         <div class="site-header-inner">
             <?php if ($showAppChrome): ?><div class="site-brand"><?= e($headerContextLabel) ?></div><?php else: ?><h1 class="site-brand"><a href="/dashboard">LifeFlow</a></h1><?php endif; ?>
             <?php if ($showAppChrome): ?>

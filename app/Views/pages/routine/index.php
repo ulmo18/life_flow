@@ -30,7 +30,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
         <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
     <?php endif; ?>
 
-    <nav class="routine-management-tabs" aria-label="루틴 상태">
+    <nav class="ui-segmented-tabs routine-management-tabs" aria-label="루틴 상태">
         <a class="<?= $selectedStatus === 'active' ? 'is-active' : '' ?>" href="/manage/routines?status=active&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'active' ? 'aria-current="page"' : '' ?>>활성 루틴</a>
         <a class="<?= $selectedStatus === 'completed' ? 'is-active' : '' ?>" href="/manage/routines?status=completed&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'completed' ? 'aria-current="page"' : '' ?>>완료·종료 루틴</a>
     </nav>
@@ -43,7 +43,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
 
     <section class="routine-list-section" aria-label="<?= $selectedStatus === 'active' ? '활성 루틴' : '완료 및 종료 루틴' ?> 목록">
         <?php if (empty($routines)): ?>
-            <div class="routine-empty">
+            <div class="ui-list-surface ui-empty-state">
                 <?php if ($selectedStatus === 'active'): ?>
                     <strong>현재 진행 중인 루틴이 없습니다.</strong>
                     <p class="muted">작은 실천을 7일 동안 시작하고 필요할 때 이어가 보세요.</p>
@@ -133,7 +133,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
 <div class="routine-local-layer" data-routine-layer hidden>
     <button type="button" class="routine-local-overlay" data-routine-close aria-label="루틴 창 닫기"></button>
 
-    <section class="routine-sheet ui-form-sheet" data-routine-sheet="create" hidden aria-modal="true" role="dialog" aria-labelledby="routineCreateTitle">
+    <section class="routine-sheet ui-form-sheet ui-standard-sheet" data-routine-sheet="create" hidden aria-modal="true" role="dialog" aria-labelledby="routineCreateTitle">
         <div class="routine-sheet-header ui-form-sheet-header">
             <strong id="routineCreateTitle">루틴 추가</strong>
             <button type="button" class="ui-close-button" data-routine-close aria-label="닫기">×</button>
@@ -143,41 +143,38 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
             <input type="hidden" name="return_status" value="active">
             <input type="hidden" name="return_month" value="<?= e((string) $selectedMonth) ?>">
 
-            <label class="form-label" for="routineName">습관명</label>
-            <input class="input" id="routineName" name="name" type="text" maxlength="60" value="<?= e((string) ($old['name'] ?? '')) ?>" required>
-            <?php if (!empty($errors['name'])): ?>
-                <p class="field-error"><?= e((string) $errors['name']) ?></p>
-            <?php endif; ?>
+            <div class="form-group">
+                <label class="form-label" for="routineName">습관명</label>
+                <input class="input" id="routineName" name="name" type="text" maxlength="60" value="<?= e((string) ($old['name'] ?? '')) ?>" <?= !empty($errors['name']) ? 'aria-invalid="true" aria-describedby="routineNameError"' : '' ?> required>
+                <?php if (!empty($errors['name'])): ?><p class="field-error" id="routineNameError"><?= e((string) $errors['name']) ?></p><?php endif; ?>
+            </div>
 
             <div class="routine-form-grid routine-period-inputs" data-routine-period-inputs>
-                <div>
+                <div class="form-group">
                     <label class="form-label" for="routineStartDate">시작일</label>
                     <input class="input" id="routineStartDate" name="start_date" type="date" value="<?= e($selectedStartDate) ?>" required data-routine-start-date>
                 </div>
-                <div>
+                <div class="form-group">
                     <label class="form-label" for="routineDuration">기간</label>
-                    <select class="input" id="routineDuration" name="duration_days" data-routine-duration>
+                    <select class="input" id="routineDuration" name="duration_days" data-routine-duration <?= !empty($errors['duration_days']) ? 'aria-invalid="true" aria-describedby="routineDurationError"' : '' ?>>
                         <?php foreach ($durationOptions as $days): ?>
                             <option value="<?= e((string) $days) ?>" <?= $selectedDuration === (int) $days ? 'selected' : '' ?>>
                                 <?= e((string) $days) ?>일
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <?php if (!empty($errors['duration_days'])): ?><p class="field-error" id="routineDurationError"><?= e((string) $errors['duration_days']) ?></p><?php endif; ?>
                 </div>
-                <div>
+                <div class="form-group">
                     <label class="form-label" for="routineEndDate">마감일</label>
-                    <input class="input" id="routineEndDate" name="end_date" type="date" value="<?= e($selectedEndDate) ?>" min="<?= e($selectedStartDate) ?>" max="<?= e($maximumInitialEndDate) ?>" required data-routine-end-date>
+                    <input class="input" id="routineEndDate" name="end_date" type="date" value="<?= e($selectedEndDate) ?>" min="<?= e($selectedStartDate) ?>" max="<?= e($maximumInitialEndDate) ?>" <?= !empty($errors['end_date']) ? 'aria-invalid="true" aria-describedby="routineEndDateError"' : '' ?> required data-routine-end-date>
+                    <?php if (!empty($errors['end_date'])): ?><p class="field-error" id="routineEndDateError"><?= e((string) $errors['end_date']) ?></p><?php endif; ?>
                 </div>
             </div>
-            <?php if (!empty($errors['duration_days'])): ?>
-                <p class="field-error"><?= e((string) $errors['duration_days']) ?></p>
-            <?php endif; ?>
-            <?php if (!empty($errors['end_date'])): ?>
-                <p class="field-error"><?= e((string) $errors['end_date']) ?></p>
-            <?php endif; ?>
 
+            <div class="form-group">
             <label class="form-label" for="routineGoal">목표</label>
-            <select class="input" id="routineGoal" name="goal_id">
+            <select class="input" id="routineGoal" name="goal_id" <?= !empty($errors['goal_id']) ? 'aria-invalid="true" aria-describedby="routineGoalError"' : '' ?>>
                 <option value="">연결하지 않음</option>
                 <?php foreach (($goalOptions ?? []) as $goal): ?>
                     <option value="<?= e((string) $goal['id']) ?>" <?= $selectedGoalId === (int) $goal['id'] ? 'selected' : '' ?>>
@@ -186,16 +183,20 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                 <?php endforeach; ?>
             </select>
             <?php if (!empty($errors['goal_id'])): ?>
-                <p class="field-error"><?= e((string) $errors['goal_id']) ?></p>
+                <p class="field-error" id="routineGoalError"><?= e((string) $errors['goal_id']) ?></p>
             <?php endif; ?>
+            </div>
 
-            <label class="routine-reminder-option">
-                <input type="checkbox" name="reminder_enabled" value="1" <?= !empty($old['reminder_enabled']) ? 'checked' : '' ?>>
-                <span>중간 루틴 리마인드 사용</span>
-                <input class="input" name="reminder_time" type="time" value="<?= e((string) ($old['reminder_time'] ?? $defaultReminderTime)) ?>">
-            </label>
+            <div class="routine-reminder-option">
+                <label class="routine-reminder-toggle" for="routineReminderEnabled">
+                    <input id="routineReminderEnabled" type="checkbox" name="reminder_enabled" value="1" <?= !empty($old['reminder_enabled']) ? 'checked' : '' ?>>
+                    <span>중간 루틴 리마인드 사용</span>
+                </label>
+                <label class="sr-only" for="routineReminderTime">중간 루틴 리마인드 시간</label>
+                <input class="input" id="routineReminderTime" name="reminder_time" type="time" value="<?= e((string) ($old['reminder_time'] ?? $defaultReminderTime)) ?>" <?= !empty($errors['reminder_time']) ? 'aria-invalid="true" aria-describedby="routineReminderError"' : '' ?>>
+            </div>
             <?php if (!empty($errors['reminder_time'])): ?>
-                <p class="field-error"><?= e((string) $errors['reminder_time']) ?></p>
+                <p class="field-error" id="routineReminderError"><?= e((string) $errors['reminder_time']) ?></p>
             <?php endif; ?>
 
             <div class="ui-form-sheet-actions"><button type="submit" class="btn btn-primary">저장</button></div>
@@ -212,7 +213,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
             </div>
             <p class="muted routine-detail-hint">시작일부터 종료일까지 월별로 이어진 실천 기록입니다. 오늘과 과거의 칸을 누르면 공백, O, X 순서로 수정할 수 있습니다.</p>
             <?php if (empty($routine['periodGroups'])): ?>
-                <div class="routine-empty compact">
+                <div class="ui-list-surface ui-empty-state">
                     <strong>아직 확인할 날짜가 없습니다.</strong>
                     <p class="muted">시작일이 되면 날짜별 상태를 바꿀 수 있습니다.</p>
                 </div>
@@ -265,7 +266,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
             <?php endif; ?>
         </section>
 
-        <section class="routine-sheet ui-form-sheet" data-routine-sheet="edit-<?= e((string) $routineId) ?>" hidden aria-modal="true" role="dialog" aria-labelledby="routineEditTitle<?= e((string) $routineId) ?>">
+        <section class="routine-sheet ui-form-sheet ui-standard-sheet" data-routine-sheet="edit-<?= e((string) $routineId) ?>" hidden aria-modal="true" role="dialog" aria-labelledby="routineEditTitle<?= e((string) $routineId) ?>">
             <div class="routine-sheet-header ui-form-sheet-header is-sticky">
                 <strong id="routineEditTitle<?= e((string) $routineId) ?>">루틴 수정</strong>
                 <button type="button" class="ui-close-button" data-routine-close aria-label="닫기">×</button>
@@ -285,8 +286,8 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                 <input type="hidden" name="routine_id" value="<?= e((string) $routineId) ?>">
 
                 <fieldset class="routine-edit-section"><legend>기본 정보</legend>
-                <label class="form-label" for="routineName<?= e((string) $routineId) ?>">습관명</label>
-                <input class="input" id="routineName<?= e((string) $routineId) ?>" name="name" type="text" maxlength="60" value="<?= e((string) $routine['name']) ?>" required>
+                <div class="form-group"><label class="form-label" for="routineName<?= e((string) $routineId) ?>">습관명</label>
+                <input class="input" id="routineName<?= e((string) $routineId) ?>" name="name" type="text" maxlength="60" value="<?= e((string) $routine['name']) ?>" required></div>
 
                 <div class="routine-period-summary">
                     <span>수행 기간</span>
@@ -296,7 +297,7 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                 <input type="hidden" name="start_date" value="<?= e((string) $routine['startDate']) ?>">
                 <input type="hidden" name="duration_days" value="<?= e((string) $routine['durationDays']) ?>">
 
-                <label class="form-label" for="routineGoal<?= e((string) $routineId) ?>">목표</label>
+                <div class="form-group"><label class="form-label" for="routineGoal<?= e((string) $routineId) ?>">목표</label>
                 <select class="input" id="routineGoal<?= e((string) $routineId) ?>" name="goal_id">
                     <option value="">연결하지 않음</option>
                     <?php foreach (($goalOptions ?? []) as $goal): ?>
@@ -304,14 +305,17 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
                             <?= e((string) $goal['label']) ?>
                         </option>
                     <?php endforeach; ?>
-                </select>
+                </select></div>
                 </fieldset>
 
-                <fieldset class="routine-edit-section routine-edit-reminder"><legend>알림</legend><label class="routine-reminder-option">
-                    <input type="checkbox" name="reminder_enabled" value="1" <?= !empty($routine['reminderEnabled']) ? 'checked' : '' ?> data-routine-reminder-toggle>
-                    <span>중간 루틴 리마인드 사용</span>
-                    <input class="input" name="reminder_time" type="time" value="<?= e((string) ($routine['reminderTime'] ?: $defaultReminderTime)) ?>" data-routine-reminder-time <?= empty($routine['reminderEnabled']) ? 'hidden disabled' : '' ?>>
-                </label></fieldset>
+                <fieldset class="routine-edit-section routine-edit-reminder"><legend>알림</legend><div class="routine-reminder-option">
+                    <label class="routine-reminder-toggle" for="routineReminderEnabled<?= e((string) $routineId) ?>">
+                        <input id="routineReminderEnabled<?= e((string) $routineId) ?>" type="checkbox" name="reminder_enabled" value="1" <?= !empty($routine['reminderEnabled']) ? 'checked' : '' ?> data-routine-reminder-toggle>
+                        <span>중간 루틴 리마인드 사용</span>
+                    </label>
+                    <label class="sr-only" for="routineReminderTime<?= e((string) $routineId) ?>">중간 루틴 리마인드 시간</label>
+                    <input class="input" id="routineReminderTime<?= e((string) $routineId) ?>" name="reminder_time" type="time" value="<?= e((string) ($routine['reminderTime'] ?: $defaultReminderTime)) ?>" data-routine-reminder-time <?= empty($routine['reminderEnabled']) ? 'hidden disabled' : '' ?>>
+                </div></fieldset>
 
                 <div class="routine-edit-actions is-sticky ui-form-sheet-actions">
                     <button type="submit" class="btn btn-primary">저장</button>

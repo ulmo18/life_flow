@@ -53,11 +53,21 @@ final class MemoController
             $this->redirectWithErrors($returnPath, $errors, str_starts_with($returnPath, '/calendar') ? [] : $_POST);
         }
 
-        if ($this->memoService->create($this->userId(), $validation['data']['content']) === null) {
+        $isCalendarQuickMemo = str_starts_with($returnPath, '/calendar');
+        $result = $isCalendarQuickMemo
+            ? $this->memoService->createCalendarQuickMemo($this->userId(), $validation['data']['content'])
+            : ['status' => 'standalone', 'id' => $this->memoService->create($this->userId(), $validation['data']['content'])];
+        if ($result['id'] === null) {
             $this->redirectWithErrors($returnPath, ['general' => '메모 저장 중 오류가 발생했습니다.'], $_POST);
         }
 
-        $_SESSION['flash_success'] = '메모를 저장했습니다.';
+        $_SESSION['flash_success'] = match ($result['status']) {
+            'linked' => '현재 일정에 메모를 저장했습니다.',
+            'too_long' => '일정 메모가 500자를 초과해 별도 메모로 저장했습니다.',
+            'ambiguous' => '겹치는 일정이 여러 개여서 별도 메모로 저장했습니다.',
+            'standalone' => $isCalendarQuickMemo ? '현재 일정이 없어 별도 메모로 저장했습니다.' : '메모를 저장했습니다.',
+            default => '메모를 저장했습니다.',
+        };
         $this->redirect($returnPath);
     }
 

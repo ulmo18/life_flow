@@ -1,5 +1,15 @@
 # Database Migrations
 
+## To-do follow-up and explicit carryover registration
+
+Existing MySQL/MariaDB installs apply `sql/migration.todo_followup.mysql.sql`, then `sql/migration.todo_carryover.mysql.sql`, each once after backup. They add a nullable follow-up note, a nullable self-referencing source ID and a unique daily-plan/source index. Existing tasks stay unchanged and no tasks are copied by migration. Current full schemas already include these objects; do not reapply incremental ALTERs to them.
+
+SQLite bootstraps each missing column and the unique index independently. Matching SQLite migration files are available for controlled manual use only when their target objects do not exist. Existing MySQL without the columns remains readable: the notice can show eligible yesterday sources, but note saving/registration stays unavailable until migration. Both the pre-feature MariaDB 10.11 migration path and repeatable SQLite bootstrap were verified in disposable databases.
+
+## Plan block reminders
+
+Existing MySQL/MariaDB databases must apply `sql/migration.plan_block_reminders.mysql.sql` once before using block reminders. It adds `reminder_enabled` (0) and `reminder_minutes_before` (5) to `daily_plan_blocks`; existing blocks remain opted out. Do not reapply after columns exist or after initializing the current full schema. SQLite adds each missing column at connection time; `sql/migration.plan_block_reminders.sqlite.sql` is for manual use only when neither column exists. Partially migrated SQLite databases should use automatic bootstrap. Missing MySQL columns disable controls and writes return 503 without breaking block reads. Disposable MariaDB 10.11 migration and SQLite repeatable-bootstrap tests passed.
+
 Recurring-template placements require `sql/migration.daily_plan_recurring_source.mysql.sql` once on existing MySQL/MariaDB databases. SQLite adds the equivalent nullable column automatically; the matching SQLite migration is available for manual use. Existing template-only records are not changed.
 
 To-do item states require `sql/migration.daily_plan_item_todo_status.mysql.sql` once on existing MySQL/MariaDB databases. SQLite applies the equivalent migration automatically. Existing items begin at `pending`; existing per-block states are preserved separately and are not converted into item completion.

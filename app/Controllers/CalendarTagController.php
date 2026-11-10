@@ -25,7 +25,7 @@ final class CalendarTagController
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'pageStyles' => ['/assets/css/pages/tags.css'],
+            'pageStyles' => [$this->versionedAsset('/assets/css/pages/tags.css')],
         ]);
 
         unset($_SESSION['errors'], $_SESSION['old'], $_SESSION['flash_success']);
@@ -159,6 +159,12 @@ final class CalendarTagController
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
+    }
+
+    private function versionedAsset(string $path): string
+    {
+        $file = dirname(__DIR__, 2) . '/public' . $path;
+        return is_file($file) ? $path . '?v=' . filemtime($file) : $path;
     }
 
     private function render(string $viewPath, array $data = []): void

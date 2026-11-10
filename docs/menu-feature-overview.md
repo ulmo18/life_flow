@@ -1,5 +1,13 @@
 # Menu Feature Overview
 
+## Timed Plan notification controls
+
+Today's To-do list may show a notice about yesterday's progress/postponed items. Users review the original state/context and explicitly choose which ones to register today. Viewing the notice never copies tasks, and older dates do not automatically accumulate in it. Today's registered item starts untimed/pending and retains a source relation and note; yesterday's records remain unchanged. State controls are a single row in both detail sheets. See `todo-feature-implementation.md`.
+
+Schedule Plan-block details and To-do status/linked-record details edit the same placement-owned reminder. Default is off with a five-minute lead; choices are start time or 5/10/15/30/60 minutes before. Untimed sources alone do not generate alarms. Settings owns master/Calendar gates. See `notification-feature-implementation.md` for scheduling and native integration limits.
+
+Reminder controls start collapsed; opening shows either global states with a Settings link or per-block choice/save buttons. Schedule Plan details also change the linked To-do's state directly, including completion without Actuals. Timed creation preserves the current split/workspace and reports Plan/To-do creation by Toast. Both timetables require a 450 ms stationary hold on resize handles; scrolling before activation never resizes. Work-drawer title icons match their opener buttons.
+
 ## Purpose
 This document describes the intended roles of the main LifeFlow menus before feature work begins.
 
@@ -9,7 +17,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - The bottom navigator is reserved for daily execution in this order: Retrospect, Routine, To-do, Schedule. Execution Energy remains available as a separate 52px glass-liquid HUD on the left of the navigator; it opens the usage history without occupying a navigation slot or overlapping the daily floating action.
 - Schedule opens Calendar at the shared viewed date when navigating between daily menus in the same session; a new session defaults to today. The route and internal feature name remain `/calendar` and Calendar; `Today` is reserved for controls that return to the current date.
 - The bottom Routine page accepts `?date=YYYY-MM-DD`, starts at today, and shows routines whose execution period includes the selected date. Today and past dates can update execution state in `routine_logs`; future dates are read-only.
-- The bottom To-do page accepts `?date=YYYY-MM-DD` and opens with the `할 일` tab: a compact table shows each To-do's importance, name and state symbol. The state button opens one bottom sheet with state choices and the plan/Actual tree, comparing each Actual to its own plan. Its add button creates today's To-do. The `반복 할 일` tab groups reusable templates by enabled state, allows changing that state in the editor, and adds enabled templates to today's To-dos. State changes work on any date, while other source edits remain today-only. Calendar follows item-level state and importance for linked plans; Retrospect has not yet adopted them.
+- The bottom To-do page accepts `?date=YYYY-MM-DD` and opens with the `할 일` tab: a compact table shows each To-do's importance, name and state symbol. The state button opens one bottom sheet with state choices and the plan/Actual tree, comparing each Actual to its own plan. Its add button creates a To-do for the selected date. The `반복 할 일` tab groups reusable templates by enabled state, allows changing that state in the editor, and adds enabled templates to today's To-dos. State changes work on any date, while other source edits remain today-only. Calendar follows item-level state and importance for linked plans; Retrospect has not yet adopted them.
 - Routine, To-do, Retrospect and Calendar use the same compact sticky date context, typography and colors, with previous/next-day navigation, swipe, the shared date picker, a conditional Today action, and mobile Search/aside access. Retrospect's view tabs sit on the next row.
 - Retrospect, Routine, and To-do use the same centered daily primary floating-action style. Routine's Management link uses the same secondary pill treatment as Retrospect date controls.
 - Daily Routine uses unfinished/completed groups; To-do uses To-do/recurring tabs with compact counts, divided rows, and empty messages. Source rows retain their state actions and editable names.
@@ -125,9 +133,8 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Retrospect actual-event rows use the Calendar tag color as a left accent line, while keeping a neutral row background and showing duration plus time-range labels.
 - Retrospect should summarize progress based on calendar, plan, routine, and goal data.
 - Daily Retrospect does not show the starting Execution Energy card. The condition input remains in Today's Calendar `+` menu.
-- Retrospect has a daily view and a goal review view. Goal review aggregates goal-linked Plan execution, actual Calendar events, Routine follow-through, and completed Routine history.
-- Completed Routine history uses the same month-grouped seven-column period record as Routine detail and keeps past-state correction available without a page reload.
-- Standalone Memo records remain independent from goals and Calendar event memos. Daily Retrospect combines active same-day standalone Memos with non-empty Actual-event memos into one chronological Memo tab, with source labels and the Actual start time used for event memos.
+- Retrospect has a daily view and a goal review view. Goal review lists completed goals and shows their linked Plan blocks, Actual records and Routine logs in a chronological detail sheet without inferring links that are not stored.
+- Memo-page standalone records remain independent from goals and Calendar event memos. Daily Retrospect combines active same-day standalone Memos with non-empty Actual-event memos into one chronological Memo tab, with source labels and the Actual start time used for event memos.
 - Publishing snapshots active same-day standalone Memos and Actual-event memos through their existing snapshot tables, so later source deletion does not remove either kind from the published report.
 - Memo trash entries are purged after 30 days when the trash is opened, and users can empty the trash immediately.
 - See `docs/retrospect-feature-implementation.md` for table, route, metric, and UI details.
@@ -136,7 +143,8 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Goal is a higher-level planning structure presented as an automatically arranged Goal Map rather than a metadata-heavy card list.
 - Root and child goals can be created with a title only. Type, period, status, parent, and behavior details are optional refinements in the selected goal's detail panel.
 - The Goal Map supports unlimited practical depth, depth-based emphasis, collapse/expand with descendant counts, sibling ordering, and cycle-safe parent movement without storing layout coordinates.
-- `지금 집중` is the default Goal tab and shows up to five active goals explicitly selected with the focus flag. `전체 목표` preserves the full hierarchy, initially expands only paths containing focused goals, and offers global expand/collapse controls. Desktop details open in a top-aligned, internally scrolling right panel and mobile details open as a bottom sheet.
+- All-goal rows use a focus star, a strike-through for paused names, muted archived names and a quiet completed label; focused-list rows omit the redundant focus star. Goal tabs expose their own help via a compact popover, and reminders wrap in shaded cards. The edit sheet reuses the shared date picker and a 1.5-second delayed delete; save and focus actions preserve the current Goal tab.
+- `지금 집중` is the default Goal tab and shows up to five active goals explicitly selected with the focus flag. `전체 목표` preserves the full hierarchy, initially expands only paths containing focused goals, and offers a global expand/collapse toggle. Selecting a goal opens its detail panel and linked-record tabs; the detail footer opens the separate editor. Desktop panels scroll on the right and mobile panels open as bottom sheets.
 - Goal depth should support:
   - Bucket list
   - Yearly goal
@@ -144,7 +152,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
   - Quarterly goal
   - Monthly goal
 - Goal hierarchy is optional. Users can start with a monthly goal only, or connect smaller goals under larger goals.
-- Goal records support a lightweight behavior reminder memo.
+- Goal records support a lightweight behavior reminder shown below the name in the Goal Map and in Goal details.
 - Goals connect to plan schedules, actual schedules, and routines.
 - Existing active, completed, archived, paused, bucket, yearly, half-year, quarterly, and monthly values remain available in detailed editing for compatibility.
 - Time-bound goals show period progress so users can quickly see how far the goal window has advanced.
@@ -223,3 +231,14 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - See `docs/database-migrations.md` before deploying schema changes to an existing database.
 - See `docs/android-webview-integration.md` before changing native bridge or pull-to-refresh behavior.
 - See `docs/notification-feature-implementation.md` before changing Android bridge notification payloads or Settings notification behavior.
+
+- On mobile, a quick horizontal swipe on empty Calendar grid space moves between Plan-only, split and Actual-only views. Plan-only puts the time labels on the right; long-press selection and block manipulation remain separate.
+- Browsing a published report preserves the shared daily selected date independently of the report date.
+
+- Daily-template detail keeps Delete and Edit fixed above bottom navigation. Delete requires a 1.5-second hold; creation and editing use a labelled back button without a large title.
+
+- A quick memo from Calendar is appended to the single owned Actual event containing the current user-local time, so its memo indicator appears. When no event matches, multiple events match, or the combined text would exceed the event memo 500-character limit, it is saved as a standalone memo with a corresponding message. Attached quick memos are stored only in the event, not duplicated as standalone notes; earlier standalone memos are not retroactively linked.
+
+- Calendar displays standalone memos at their local creation time as grouped Actual-grid markers when the corresponding slot has no Actual block; selecting a marker opens a memo list without creating an event.
+
+- Dashboard hides links to the prototype pages; the working Schedule link remains available. Calendar offers a review link from 22:00 to midnight when today’s review is not submitted.

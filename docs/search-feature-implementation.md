@@ -24,6 +24,7 @@ Deleted source records are excluded. Submitted Retrospect data remains searchabl
 - Each source uses prepared `LIKE` queries capped at 20 rows; `SearchService` normalizes, merges, sorts newest first, and caps the page at 60 results.
 - MySQL and SQLite use the same query path. No driver-specific full-text feature is required for the initial implementation.
 - Result text is escaped in the view. Each result links to the owning feature or exact Calendar/Retrospect date when available.
+- The query has an explicit label separate from its submit button. Filter labels use the common 8px input spacing; filters stack below 360px. Result cards share the app's surface, 16px radius and padding, wrap long text and show keyboard focus. Type badges use the semantic primary-text color in both themes.
 
 ## MVC
 

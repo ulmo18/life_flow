@@ -13,11 +13,19 @@ The current implementation supports:
 - browsing a Monday-first, 42-cell monthly execution calendar on every management card
 - treating 60 accumulated completed days as the habit-formation milestone
 - creating and editing routines from mobile bottom sheets
+- sharing the standard bottom-aligned 20px input-sheet surface for creation/editing, while preserving the 560px width cap and the separate inset read-only detail panel; sticky headers/actions follow the sheet padding and height follows the dynamic viewport
+- aligning standard input-sheet sticky headers at the negative sheet padding so scrolled fields cannot show above the header; confirmed against the actual PHP-rendered management page
+- grouping labels with their controls in management sheets and associating creation errors with the relevant inputs
+- using shared card surface, border, radius and shadow tokens, with 44px month-navigation controls
+- using the shared empty-state surface and typography for empty management lists and detail calendars
+- separately labelling reminder enable and time controls in creation and editing; the row stacks below 360px and retains the existing edit-time visibility toggle
+- containing keyboard focus in management dialogs and daily quick creation, focusing the name field (or close control for details), and restoring the opener on dismissal; nested confirmations and date dialogs retain keyboard priority
 - soft-deleting routines from the edit bottom sheet
 - extending active routines by a user-selected number of days, up to 365 total days
 - completing or stopping a routine early while preserving its logs for Retrospect
 - opening a routine detail bottom sheet with month-grouped seven-column period records
 - toggling daily execution from the Routine page in the order blank, `O`, `X`, blank
+- presenting the shared 44px state control with theme-aware neutral/success/danger surfaces and an inset keyboard-focus outline; the O/X state cycle and stored values are unchanged
 - toggling daily execution from the Calendar routine popup with the same state cycle
 - updating Routine and Calendar toggle states without a full page refresh when JavaScript is available
 - optional one-per-day middle routine reminder metadata
@@ -179,3 +187,5 @@ Useful feedback signals:
 - recent recovery after missed days
 - routines that are close to finishing
 - routines that have not started despite being active
+
+- The daily Routine empty state matches the To-do list empty table styling and does not repeat the Routine Management link inside the message.
