@@ -7,15 +7,6 @@
     <?php endif; ?>
     <?php if ($showAppChrome ?? false): ?>
         <div class="bottom-navigation-shell">
-            <a class="bottom-nav-item bottom-nav-energy" href="/execution-energy/history" <?= ($currentPath ?? '') === '/execution-energy/history' ? 'aria-current="page"' : '' ?> data-energy-orb data-energy-date="<?= e(date('Y-m-d')) ?>" data-energy-cache-key="<?= e('life-flow.energy.' . (string) ($_SESSION['user_id'] ?? 0)) ?>" data-ui-tooltip="실행력 사용 이력" aria-label="실행력 사용 이력">
-                <span class="bottom-nav-energy-orb" aria-hidden="true">
-                    <span class="bottom-nav-energy-liquid"></span>
-                    <span class="bottom-nav-energy-bubbles"><i></i><i></i><i></i></span>
-                    <strong data-energy-orb-value>…</strong>
-                    <span class="bottom-nav-energy-glare"></span>
-                </span>
-                <span class="sr-only"><?= e(t('nav.execution_energy')) ?></span>
-            </a>
             <nav class="bottom-navigator" data-daily-date-session="<?= e(substr(hash('sha256', session_id()), 0, 24)) ?>" aria-label="<?= e(t('nav.primary')) ?>">
                 <a class="bottom-nav-item" href="/retrospect" <?= !empty($isRetrospectActive) ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">▥</span>
@@ -23,11 +14,11 @@
                 </a>
                 <a class="bottom-nav-item" href="/routine" <?= ($currentPath ?? '') === '/routine' ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">✓</span>
-                    <span><?= e(t('nav.routine')) ?></span>
+                    <span><?= e(t('nav.today_routine')) ?></span>
                 </a>
                 <a class="bottom-nav-item" href="/todo" <?= ($currentPath ?? '') === '/todo' ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">□</span>
-                    <span><?= e(t('nav.todo')) ?></span>
+                    <span><?= e(t('nav.today_todo')) ?></span>
                 </a>
                 <a class="bottom-nav-item" href="/calendar?focus=current" <?= ($currentPath ?? '') === '/calendar' ? 'aria-current="page"' : '' ?>>
                     <span class="bottom-nav-icon" aria-hidden="true">▦</span>
@@ -45,7 +36,7 @@
             <strong class="ui-panel-title" id="lifeFlowModalTitle"></strong>
             <button type="button" class="ui-close-button" data-ui-close aria-label="<?= e(t('common.close')) ?>">×</button>
         </div>
-        <p class="ui-panel-body" id="lifeFlowModalBody"></p>
+        <div class="ui-panel-body" id="lifeFlowModalBody"></div>
         <div class="ui-panel-actions">
             <button type="button" class="btn btn-ghost" data-ui-cancel><?= e(t('common.cancel')) ?></button>
             <button type="button" class="btn btn-primary" data-ui-confirm><?= e(t('common.confirm')) ?></button>
@@ -94,7 +85,6 @@ $uiJsVersion = is_file($uiJsPath) ? filemtime($uiJsPath) : false;
 <?php if ($showAppChrome ?? false): ?>
     <?php $appLayoutJsPath = dirname(__DIR__, 3) . '/public/assets/js/components/app-layout.js'; $appLayoutJsVersion = is_file($appLayoutJsPath) ? filemtime($appLayoutJsPath) : false; ?>
     <script src="/assets/js/components/app-layout.js<?= $appLayoutJsVersion === false ? '' : '?v=' . e((string) $appLayoutJsVersion) ?>"></script>
-    <script src="/assets/js/components/execution-energy-orb.js"></script>
 <?php endif; ?>
 <?php foreach (($pageScripts ?? []) as $scriptPath): ?>
     <script src="<?= e((string) $scriptPath) ?>"></script>

@@ -8,9 +8,11 @@ $formatMinutes = static function (int $minutes): string {
 ?>
 <main class="page goal-page retrospect-page">
     <h1 class="sr-only">목표 회고</h1>
-    <nav class="ui-segmented-tabs goal-mode-switch" aria-label="목표 범위">
-        <a href="/goal">지금 집중</a><a href="/goal?mode=all">전체 목표</a><a href="/goal/review" aria-current="page">목표 회고</a>
-    </nav>
+    <div class="ui-menu-context">
+        <nav class="ui-segmented-tabs goal-mode-switch" aria-label="목표 범위">
+            <a href="/goal">지금 집중</a><a href="/goal?mode=all">전체 목표</a><a href="/goal/review" aria-current="page">목표 회고</a>
+        </nav>
+    </div>
     <?php $goalTabTitle = '목표 회고'; $goalTabHelp = '완료된 목표를 선택하면 연결된 계획, 실제 일정과 루틴의 활동 기록을 확인할 수 있어요.'; $showGoalToggle = false; require __DIR__ . '/tab-heading.php'; ?>
     <section class="goal-review-list" aria-label="완료된 목표">
         <div class="goal-record-table-wrap ui-list-surface">

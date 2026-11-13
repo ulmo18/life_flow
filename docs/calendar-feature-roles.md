@@ -231,3 +231,18 @@ Read this file before changing calendar, toast, dashboard entry, or calendar dat
 - The time-grid memo viewer reuses the structured Calendar sheet: a fixed header and close control, an internally scrolling memo list, and a safe-area-aware fixed Memo management action.
 
 - If today’s Retrospect is not submitted, Calendar shows a sticky link to today’s review from 22:00 until midnight in the user’s time zone, regardless of the viewed Calendar date. The ten-minute clock update reveals it if the page stays open. There is currently no sleep-time detection; submission is checked when Calendar loads.
+
+- Actual blocks may be dropped onto Plan to correct a wrong-grid entry. Drop opens confirmation, never an immediate conversion. The range preserves duration/grab offset; server validation and an atomic transaction create/reuse the Plan and remove Actual-only metadata. Existing linked Plans move to the confirmed target without duplication; a sheet text-link fallback uses the saved range. Actual-to-Actual drag remains a range move. See `actual-to-plan-conversion-review.md`.
+
+## Dashboard today summary (2026-11-13)
+
+DashboardService composes existing dated Todo/Routine/Retrospect sources and Calendar Actuals for a read-only overview and one nearest timed event. Todo planItems expose endIndex alongside startIndex for interval comparison; Calendar ownership, notifications and mutation APIs are unchanged. Dashboard links explicitly carry today’s user-local date rather than the shared last-viewed daily date. See dashboard-feature-implementation.md for ranking and validation.
+
+### Day-template entry (2026-11-14)
+Plan placement exposes 하루 템플릿 선택 at the top and links 반복 할 일 관리 to /todo?tab=recurring. The + menu no longer offers a separate template connector. A native dialog requires a template and acknowledgement that existing date plans are replaced and Actual links detached (Actual records remain). Applying closes the dialog and placement panel and restores the 50:50 Plan/Actual view. Cancelling preserves placement mode.
+
+- Empty Actual-grid entry requires a stationary 360 ms touch/click hold. Moving 8 px before activation cancels entry, allowing horizontal view-ratio swipes and vertical scrolling. Mobile-width ratio swipes accept primary touch, mouse and pen input; blocks and controls retain their own interactions.
+
+- Moving/copying a placed Plan block starts only after a stationary 450 ms touch/click hold. Before activation, movement/scroll cancels the operation; short taps retain Plan details. After activation, dragging to Actual copies the Plan while dragging within Plan moves it. Endpoint handles keep their separate resize hold.
+
+- Actual-to-Plan and Actual-to-Actual block dragging require a stationary 450 ms touch/click hold. Short taps retain details; movement before activation permits scrolling. A Plan drop overlapping another placed Plan is rejected before confirmation; only the Actual’s own linked Plan block is excluded when reusing it. The Actual remains intact on rejection.

@@ -40,11 +40,13 @@ final class TodoController
             'notificationSettings' => (new NotificationService())->settings($this->userId()),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
+            'kakaoMapKey' => (string) (getenv('KAKAO_MAP_JS_KEY') ?: ''),
             'pageStyles' => [
+                $this->versionedAsset('/assets/css/components/location-fields.css'),
                 $this->versionedAsset('/assets/css/components/todo-sheet.css'),
                 $this->versionedAsset('/assets/css/pages/todo.css'),
             ],
-            'pageScripts' => [$this->versionedAsset('/assets/js/components/plan-reminder.js'), $this->versionedAsset('/assets/js/components/todo-followup.js'), $this->versionedAsset('/assets/js/pages/todo.js')],
+            'pageScripts' => [$this->versionedAsset('/assets/js/components/location-fields.js'), $this->versionedAsset('/assets/js/components/plan-reminder.js'), $this->versionedAsset('/assets/js/components/todo-followup.js'), $this->versionedAsset('/assets/js/pages/todo.js')],
         ]);
         unset($_SESSION['flash_success'], $_SESSION['errors']);
     }
@@ -129,9 +131,8 @@ final class TodoController
         $itemId = filter_var($_POST['daily_plan_item_id'] ?? null, FILTER_VALIDATE_INT);
         $status = is_string($_POST['status'] ?? null) ? $_POST['status'] : '';
         try {
-            if ($itemId === false || $itemId <= 0 || !$this->todoService->updateStatus($this->userId(), (int) $itemId, $status)) {
-                $this->respond(['ok' => false, 'message' => '상태를 변경하지 못했습니다.'], 422);
-            }
+            $result = $this->todoService->saveStatus($this->userId(), (int) $itemId, $status, array_key_exists('note', $_POST) ? $_POST['note'] : null);
+            if (!$result['ok']) $this->respond($result, $result['code']);
         } catch (\Throwable $exception) {
             error_log('[todo] status update failed: ' . $exception->getMessage());
             $this->respond(['ok' => false, 'message' => '상태를 변경하지 못했습니다. 다시 시도해 주세요.'], 500);

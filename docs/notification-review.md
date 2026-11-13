@@ -23,7 +23,7 @@
 - 위치: `app/Services/CalendarService.php`의 `getDayViewData()`와 `buildPlanReminderItems()`, `app/Services/NotificationService.php`의 `calendarPlanPayload()`.
 - 수정 방향: 알림 전용 목록은 날짜별 실제 계획 블록에서 만들고 안정적인 block ID를 예약 키에 포함한다. 블록 미지원 스키마에서는 기존 원본 시간의 대체 경로를 유지한다. 같은 변환 함수를 사용하는 `planActivityItems`는 시간 미정 배치 원본도 보여야 하므로 함께 바꾸면 안 된다.
 
-### P2. 목표 마감 알림의 시간대 오프셋 누락
+### 해결됨 — P2. 목표 마감 알림의 시간대 오프셋 누락
 
 목표의 `fireAt`은 `YYYY-MM-DDTHH:mm:ss`로 만들어져 오프셋이 없다. 바깥 payload의 `timeZone`과 별개로 브리지는 `Date.parse(item.fireAt)`으로 과거 여부를 판단한다. 이 해석은 사용자 시간대가 아니라 기기의 현지 시간에 의존한다.
 
@@ -34,7 +34,7 @@
 - 위치: `app/Services/NotificationService.php`의 `goalDeadlinePayload()`, `public/assets/js/components/android-bridge.js`의 `Date.parse` 필터.
 - 수정 방향: 사용자 `DateTimeZone`으로 마감일과 D-1의 시점을 만들고 `DATE_ATOM` 오프셋을 포함한다. 두 경로 모두 같은 과거 제외 정책을 적용한다.
 
-### P2. 루틴별 저장 시각이 알림 데이터에 반영되지 않음
+### 해결됨 — P2. 루틴별 저장 시각이 알림 데이터에 반영되지 않음
 
 루틴 생성/수정은 `routines.reminder_time`을 저장하고 조회 모델도 반환한다. 하지만 `routineReminderPayload()`는 모든 항목의 `time`을 설정의 `routine_reminder_time`으로 채운다.
 
@@ -63,3 +63,9 @@
 수동 재현: 미래 날짜의 할 일 하나를 두 시간대에 배치한 뒤 동기화 데이터의 항목 수와 시각을 비교한다. 루틴별 시간과 공통 시간을 다르게 저장해 전송값을 확인한다. 서로 다른 사용자/기기 시간대에서 목표 마감과 D-1을 확인한다. 실제 수신 확인은 웹 재현과 별도다.
 
 재현 스크립트와 결과 JSON은 로컬 `storage/notification-review/2026-11-10/`에 보관한다. 의도적으로 현재 문제를 드러내는 검수 스크립트이며 정상 회귀 테스트 모음에 추가하지 않았다.
+
+## 사용자 결정 반영
+
+목표 마감일과 D-1은 현재 사용자 시간대의 DateTimeImmutable로 계산하고 DATE_ATOM 오프셋을 출력한다. 조회 기준 오늘과 과거 제외도 사용자 시간대 기준이다. D-1은 하루 전의 현지 시각이며 DST 경계에서는 각 날짜의 오프셋을 따로 사용한다. 루틴 알림은 유효한 개별 reminder_time을 우선하고 없거나 잘못된 값일 때만 공통 시각으로 대체한다. 위 두 항목의 기존 재현 내용은 수정 전 기록이다. 알림 취소/로그아웃/계정 전환 예약 정리는 사용자 결정에 따라 추후 작업이다.
+
+검증: tests/notification_timezone_routine.php에서 서로 다른 호스트/사용자 시간대, 봄·가을 DST, 사용자 현지의 지난 시각 제외, 전역 게이트, 개별 HH:mm·HH:mm:ss·00:00 우선 및 누락/잘못된 값의 공통 시각 대체를 확인했다.

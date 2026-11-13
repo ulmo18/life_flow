@@ -19,6 +19,7 @@
     };
     function start(event, point, touch) {
       if (hold || !options.allowed()) return;
+      if (options.ignoreSelector && event.target.closest(options.ignoreSelector)) return;
       const handle = event.target.closest(options.selector);
       const block = handle?.closest(options.blockSelector);
       if (!block) return;
@@ -26,7 +27,7 @@
       hold = current;
       current.timer = window.setTimeout(() => {
         if (hold !== current || !options.allowed()) { cancel(); return; }
-        current.active = options.begin(block, handle) !== false;
+        current.active = options.begin(block, handle, point) !== false;
         if (!current.active) { clear(); return; }
         if (!touch) {
           try { layer.setPointerCapture(current.pointerId); } catch (_) { cancel(); }
@@ -43,11 +44,13 @@
       options.move(point.clientX, point.clientY);
     }
     function finish(event) {
+      const current = hold;
       const active = hold?.active;
       clear();
       if (!active) return;
       if (event.cancelable) event.preventDefault();
-      options.finish();
+      const point = current.touch ? Array.from(event.changedTouches || []).find(point => point.identifier === current.identifier) : event;
+      options.finish(point?.clientX, point?.clientY);
     }
     layer.addEventListener('pointerdown', event => {
       if (event.pointerType === 'touch' || event.isPrimary === false || event.button !== 0) return;
@@ -80,6 +83,7 @@
     });
     window.addEventListener('scroll', () => { if (hold && !hold.active) cancel(); }, {capture:true, passive:true});
     window.addEventListener('blur', cancel);
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') cancel(); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
   };
 })();

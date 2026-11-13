@@ -48,7 +48,7 @@ final class RetrospectController
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'pageStyles' => [$this->versionedAsset('/assets/css/components/routine-state.css'), $this->versionedAsset('/assets/css/pages/retrospect.css')],
-            'pageScripts' => ['/assets/js/components/routine-state.js', $this->versionedAsset('/assets/js/pages/retrospect.js')],
+            'pageScripts' => ['/assets/js/components/routine-state.js', $this->versionedAsset('/assets/js/components/month-picker.js'), $this->versionedAsset('/assets/js/pages/retrospect.js')],
         ]);
 
         unset($_SESSION['errors'], $_SESSION['flash_success']);

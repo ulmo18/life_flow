@@ -212,6 +212,7 @@ final class TodoService
                     'importance' => $source['importance'] ?? ($block['source_deleted_at'] !== null ? (string) $block['source_importance'] : (string) ($block['importance'] ?? 'D')),
                     'goalTitle' => $block['goal_title'] === null ? null : (string) $block['goal_title'],
                     'startIndex' => (int) $block['start_index'],
+                    'endIndex' => (int) $block['end_index'],
                     'timeRange' => $this->formatTime((int) $block['start_index']) . '–' . $this->formatTime((int) $block['end_index']),
                     'actualTimeRanges' => $actualRanges,
                     'status' => $source['todoStatus'] ?? ($block['source_deleted_at'] !== null ? (string) $block['source_todo_status'] : (string) ($block['manual_status'] ?? 'pending')),
@@ -230,6 +231,7 @@ final class TodoService
                     'importance' => $item['importance'],
                     'goalTitle' => $item['goalTitle'],
                     'startIndex' => $item['startIndex'],
+                    'endIndex' => $item['endIndex'],
                     'timeRange' => $this->formatTime($item['startIndex']) . '–' . $this->formatTime($item['endIndex']),
                     'actualTimeRanges' => [],
                     'status' => $item['todoStatus'],
@@ -264,6 +266,18 @@ final class TodoService
     public function updateStatus(int $userId, int $itemId, string $status): bool
     {
         return $this->calendarRepository->updateTodoStatus($userId, $itemId, $status);
+    }
+
+    public function saveStatus(int $userId, int $itemId, string $status, mixed $note = null): array
+    {
+        if ($itemId <= 0 || !in_array($status, ['pending','completed','cancelled','postponed','in_progress','external'], true)) return ['ok'=>false, 'code'=>422, 'message'=>'상태를 확인해 주세요.'];
+        if ($note !== null) {
+            if (!is_string($note) || !in_array($status, ['in_progress','postponed'], true) || mb_strlen($note) > 500) return ['ok'=>false, 'code'=>422, 'message'=>'이어가기 메모는 500자 이내로 입력해 주세요.'];
+            $note = trim($note);
+            if ($note !== '' && !$this->calendarRepository->supportsTodoFollowup()) return ['ok'=>false, 'code'=>503, 'message'=>'메모 저장을 위한 업데이트가 필요합니다.'];
+        }
+        if (!$this->calendarRepository->updateTodoStatus($userId, $itemId, $status, $note)) return ['ok'=>false, 'code'=>422, 'message'=>'상태를 변경하지 못했습니다.'];
+        return ['ok'=>true, 'status'=>$status];
     }
 
     public function getFollowup(int $userId, int $itemId): array
@@ -405,6 +419,7 @@ final class TodoService
         }
         $validation = $this->calendarService->validateDailyPlanItemInput([
             'date' => $input['date'] ?? date('Y-m-d'),
+            'location_json' => $input['location_json'] ?? null,
             'title' => $input['title'] ?? '',
             'importance' => $input['importance'] ?? 'D',
             'goal_id' => $input['goal_id'] ?? '',

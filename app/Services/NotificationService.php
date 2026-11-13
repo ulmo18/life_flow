@@ -204,12 +204,16 @@ final class NotificationService
             $durationDays = max(1, (int) $routine['duration_days']);
             $endDate = (new DateTimeImmutable($startDate))->modify('+' . ($durationDays - 1) . ' days')->format('Y-m-d');
             $name = (string) $routine['name'];
+            $routineTime = trim((string) ($routine['reminder_time'] ?? ''));
+            $time = preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/', $routineTime)
+                ? substr($routineTime, 0, 5)
+                : (string) $settings['routine_reminder_time'];
 
             return [
                 'key' => 'routine_' . (string) $routine['id'],
                 'type' => 'routine',
                 'routineId' => (int) $routine['id'],
-                'time' => (string) $settings['routine_reminder_time'],
+                'time' => $time,
                 'startDate' => $startDate,
                 'endDate' => $endDate,
                 'title' => $this->message('notification.routine_title', $settings),
@@ -271,30 +275,35 @@ final class NotificationService
             return [];
         }
 
+        $timezone = $this->timezone($settings);
+        $now = new DateTimeImmutable('now', $timezone);
         $items = [];
-        foreach ($this->goalRepository->listDeadlineReminderTargets($userId, date('Y-m-d')) as $goal) {
+        foreach ($this->goalRepository->listDeadlineReminderTargets($userId, $now->format('Y-m-d')) as $goal) {
             $endDate = (string) $goal['period_end_date'];
             $goalId = (int) $goal['id'];
+            $deadline = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $endDate . ' ' . (string) $settings['goal_deadline_time'], $timezone);
+            if (!$deadline || $deadline->format('Y-m-d') !== $endDate) continue;
 
             if ((int) $settings['goal_deadline_day_before_enabled'] === 1) {
-                $dayBefore = (new DateTimeImmutable($endDate))->modify('-1 day')->format('Y-m-d');
-                if ($dayBefore >= date('Y-m-d')) {
+                $dayBefore = $deadline->modify('-1 day');
+                if ($dayBefore > $now) {
                     $items[] = [
                         'key' => 'goal_deadline_d1_' . (string) $goalId,
                         'type' => 'goal_deadline_d1',
                         'goalId' => $goalId,
-                        'fireAt' => $dayBefore . 'T' . (string) $settings['goal_deadline_time'] . ':00',
+                        'fireAt' => $dayBefore->format(DATE_ATOM),
                         'title' => $this->message('notification.goal_title', $settings),
                         'message' => $this->message('notification.goal_day_before', $settings),
                     ];
                 }
             }
 
+            if ($deadline <= $now) continue;
             $items[] = [
                 'key' => 'goal_deadline_' . (string) $goalId,
                 'type' => 'goal_deadline',
                 'goalId' => $goalId,
-                'fireAt' => $endDate . 'T' . (string) $settings['goal_deadline_time'] . ':00',
+                'fireAt' => $deadline->format(DATE_ATOM),
                 'title' => $this->message('notification.goal_title', $settings),
                 'message' => $this->message('notification.goal_deadline', $settings),
             ];

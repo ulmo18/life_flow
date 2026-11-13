@@ -139,3 +139,7 @@ SQLite fallback performs this compatibility migration automatically when the old
 ## Try와 실제 일정의 명시적 연결
 
 기존 MySQL DB에 `sql/migration.retrospect_try_event_links.mysql.sql`을 적용한다. SQLite는 앱 시작 시 현재 스키마의 테이블을 보강하며, 수동 적용 시 `sql/migration.retrospect_try_event_links.sqlite.sql`을 사용한다. 두 스크립트는 테이블이 이미 있으면 기존 연결을 보존한다.
+
+## Saved locations
+
+Apply `sql/migration.saved_locations.mysql.sql` on existing MySQL installs for optional Todo/Actual places. It creates `saved_locations` if absent; both full schemas include it. SQLite schema-object bootstrap creates it automatically, or use the matching SQLite file. No existing location is inferred or backfilled. Local development table creation was applied. See `location-feature-implementation.md`.

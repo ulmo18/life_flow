@@ -180,7 +180,8 @@ final class CalendarService
         $sourceEventId = filter_var($input['source_event_id'] ?? null, FILTER_VALIDATE_INT);
         $energyValidation = $this->executionEnergyService->validateEventSetting($userId, $input);
         $wellnessValidation = $this->wellnessService->validateEventRecord($input);
-        $errors = [];
+        $location = (new LocationService())->validate($input['location_json'] ?? null);
+        $errors = $location['errors'];
 
         if ($requestedScheduleType !== 'timed') {
             $errors['time'] = '실제 일정은 시작시간과 종료시간을 선택해야 합니다.';
@@ -208,6 +209,7 @@ final class CalendarService
             'ok' => $errors === [],
             'errors' => $errors,
             'data' => [
+                'locationChange' => $location['change'],
                 'date' => $date,
                 'title' => $title,
                 'scheduleType' => $scheduleType,
@@ -241,7 +243,8 @@ final class CalendarService
         $routineIds = $this->normalizeRoutineIds($input['routine_ids'] ?? []);
         $energyValidation = $this->executionEnergyService->validateEventSetting($userId, $input);
         $wellnessValidation = $this->wellnessService->validateEventRecord($input);
-        $errors = [];
+        $location = (new LocationService())->validate($input['location_json'] ?? null);
+        $errors = $location['errors'];
 
         if ($eventId === false || $eventId <= 0) {
             $errors['general'] = '수정할 일정을 찾을 수 없습니다.';
@@ -268,6 +271,7 @@ final class CalendarService
             'ok' => $errors === [],
             'errors' => $errors,
             'data' => [
+                'locationChange' => $location['change'],
                 'date' => $date,
                 'eventId' => $eventId === false ? 0 : $eventId,
                 'title' => $title,
@@ -297,7 +301,8 @@ final class CalendarService
                 (int) $data['endIndex'],
                 $data['dailyPlanItemId'] === null ? null : (int) $data['dailyPlanItemId'],
                 $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
-                (string) $data['memo']
+                (string) $data['memo'],
+                locationChange: (array) ($data['locationChange'] ?? [])
             )
             : $this->calendarRepository->createActualEvent(
                 $userId,
@@ -308,7 +313,8 @@ final class CalendarService
                 $data['endIndex'] === null ? null : (int) $data['endIndex'],
                 $data['dailyPlanItemId'] === null ? null : (int) $data['dailyPlanItemId'],
                 $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
-                (string) $data['memo']
+                (string) $data['memo'],
+                locationChange: (array) ($data['locationChange'] ?? [])
             );
 
         if ($eventId !== null) {
@@ -340,7 +346,8 @@ final class CalendarService
             $data['endIndex'] === null ? null : (int) $data['endIndex'],
             $data['dailyPlanItemId'] === null ? null : (int) $data['dailyPlanItemId'],
             $data['calendarTagId'] === null ? null : (int) $data['calendarTagId'],
-            (string) $data['memo']
+            (string) $data['memo'],
+            locationChange: (array) ($data['locationChange'] ?? [])
         );
         if ($updated) {
             $this->executionEnergyService->saveEventSetting(
@@ -443,6 +450,11 @@ final class CalendarService
         return $deleted;
     }
 
+    public function convertActualEventToPlan(int $userId, int $eventId, ?array $targetRange = null): ?array
+    {
+        return $this->calendarRepository->convertActualEventToPlan($userId, $eventId, $targetRange);
+    }
+
     public function setDayPlanGroup(int $userId, string $date, ?int $planGroupId, bool $requireEmpty = false): bool
     {
         return $this->calendarRepository->setDayPlanGroup($userId, $this->normalizeDate($date), $planGroupId, $requireEmpty);
@@ -464,7 +476,8 @@ final class CalendarService
         $linkAction = in_array($linkActionInput, ['keep', 'sync', 'detach'], true)
             ? $linkActionInput
             : 'keep';
-        $errors = [];
+        $location = (new LocationService())->validate($input['location_json'] ?? null);
+        $errors = $location['errors'];
 
         if ($requireId && ($itemId === false || $itemId <= 0)) {
             $errors['general'] = '수정할 계획 일정을 찾을 수 없습니다.';
@@ -485,6 +498,7 @@ final class CalendarService
             'ok' => $errors === [],
             'errors' => $errors,
             'data' => [
+                'locationChange' => $location['change'],
                 'date' => $date,
                 'itemId' => $itemId === false ? 0 : (int) $itemId,
                 'title' => $title,
@@ -512,7 +526,8 @@ final class CalendarService
             $data['goalId'] === null ? null : (int) $data['goalId'],
             $data['startIndex'] === null ? null : (int) $data['startIndex'],
             $data['endIndex'] === null ? null : (int) $data['endIndex'],
-            $data['estimatedDurationMinutes'] === null ? null : (int) $data['estimatedDurationMinutes']
+            $data['estimatedDurationMinutes'] === null ? null : (int) $data['estimatedDurationMinutes'],
+            locationChange: (array) ($data['locationChange'] ?? [])
         );
     }
 
@@ -549,7 +564,8 @@ final class CalendarService
         $title = trim((string) ($input['title'] ?? ''));
         $importance = $this->normalizeImportance((string) ($input['importance'] ?? 'D'));
         $goalId = filter_var($input['goal_id'] ?? null, FILTER_VALIDATE_INT);
-        $errors = [];
+        $location = (new LocationService())->validate($input['location_json'] ?? null);
+        $errors = $location['errors'];
 
         if ($itemId === false || $itemId <= 0) {
             $errors['general'] = '수정할 활동을 찾을 수 없습니다.';
@@ -562,6 +578,7 @@ final class CalendarService
             'ok' => $errors === [],
             'errors' => $errors,
             'data' => [
+                'locationChange' => $location['change'],
                 'date' => $date,
                 'itemId' => $itemId === false ? 0 : (int) $itemId,
                 'title' => $title,
@@ -579,7 +596,8 @@ final class CalendarService
             (int) $data['itemId'],
             (string) $data['title'],
             (string) $data['importance'],
-            $data['goalId'] === null ? null : (int) $data['goalId']
+            $data['goalId'] === null ? null : (int) $data['goalId'],
+            locationChange: (array) ($data['locationChange'] ?? [])
         );
     }
 

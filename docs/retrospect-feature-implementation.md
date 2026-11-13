@@ -157,3 +157,15 @@ For live daily reviews, Plan achievement counts blocks whose stored state is `co
 - Published history places the existing month selector in the sticky date-header position; adjacent arrows move by month and the main content no longer repeats the selector.
 
 - Published report browsing keeps the session's selected daily date in the shared header. Previous/next report links change only the viewed report; date navigation in the header remains a separate daily action.
+
+## Empty review presentation
+
+The current empty-record guide (showEmptyGuide: today/editable yesterday) and empty published history share pages/retrospect/_empty-state.php with the published-history wrapper and centered muted 12px message style. The guide retains its dated Calendar action. Earlier unpublished/future notices keep their original designs; the mistaken restyling of those branches was reverted. Date/edit eligibility and notice text are unchanged. See dashboard-feature-implementation.md for changed files and manual checks.
+
+## Shared month picker (2026-11-13)
+
+Published history keeps its existing month navigation and dialog behavior, now shared with Routine management via `components/month-picker.js` and the common `ui-month-*` styles. Search parameters and pagination behavior remain unchanged.
+
+## Calendar published-preview layout (2026-11-13)
+
+Calendar’s published-preview popup still embeds report-content.php and uses the same adjacent-report endpoint. Its title/close row and equal previous/next row now form a fixed header above the separately scrolling report body, with consistent 16px internal padding. No report data, publishing or date-selection behavior changes.

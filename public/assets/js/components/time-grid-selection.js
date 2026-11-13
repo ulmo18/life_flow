@@ -128,7 +128,7 @@
       const cell = cellFromPoint(event.clientX, event.clientY);
       if (!cell) return;
 
-      const immediateSelection = event.pointerType !== 'touch';
+      const immediateSelection = event.pointerType !== 'touch' && !options.requireLongPress;
       if (immediateSelection) {
         beginSelection(event, cell);
         event.preventDefault();
@@ -217,6 +217,7 @@
       }
     });
 
+    window.addEventListener('scroll', () => { if (options.requireLongPress) resetSelection(); }, true);
     window.addEventListener('pagehide', resetSelection);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {

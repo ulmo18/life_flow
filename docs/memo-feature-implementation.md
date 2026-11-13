@@ -92,3 +92,7 @@ All POST routes require CSRF verification.
 - Add a memo to an Actual event and confirm Retrospect's Memo tab shows it in time order with an `일정 메모` source and schedule title; confirm its detail links back to that Calendar date.
 - Open a long Memo on mobile, add wrapped lines until the editor reaches its cap, and confirm the sheet stays within 80% of the visible viewport while only the textarea scrolls.
 - Confirm empty and no-search-result messages match the current short, long, or trash context.
+
+## Markdown feasibility review (2026-11-13)
+
+Current Memo editing stores the raw content string (maximum 10,000 characters); list display uses escaped text with line breaks, so Markdown syntax is stored but not rendered. Markdown display can be added without a database schema change by keeping the raw source and adding a safe renderer plus a write/preview toggle. Existing length classification/search/edit/restore should continue to use the raw source. HTML must remain escaped/disabled and link protocols validated. This turn only reviewed feasibility; no Markdown renderer or editor behavior was introduced.

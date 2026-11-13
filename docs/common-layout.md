@@ -2,7 +2,7 @@
 
 Frontend changes follow `docs/design-system-contract.md`. To-do Add owns the canonical sheet shell; `ui-choice-button`, `ui-delay-button` and `ui-disclosure` own selection, hold-action presentation and the Actual memo/life-record chevron. Calendar Plan/Actual create/edit reuse these classes. Avoid introducing page-specific alternatives for those roles. Reminder save spans its available width.
 
-Actual time controls reuse `_actual-time-range.php` in create/edit: visible start/end labels, equal-width native selects, clock icons and a live duration badge. Tag add belongs to the tag heading. Optional records use divider rows rather than cards; Actual edit places lower-emphasis Delete and Save in a fixed 1:4 footer with the same hold mechanism. Regular-weight labels and consistent section edges align its fields. Grid disclosure chevrons are centered in their reserved column so rotation does not create internal horizontal scrollbars.
+Actual time controls reuse `_actual-time-range.php` in create/edit: visible start/end labels, equal-width time controls backed by native selects, clock icons and a live duration badge. Tag add belongs to the tag heading. Optional records use divider rows rather than cards; Actual edit places lower-emphasis Delete and Save in a fixed 1:4 footer with the same hold mechanism. Regular-weight labels and consistent section edges align its fields. Grid disclosure chevrons are centered in their reserved column so rotation does not create internal horizontal scrollbars.
 
 ## Shared Plan reminder editor
 
@@ -35,7 +35,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 
 ## Header
 - The authenticated header is part of normal document flow rather than sticky. It contains the current top-level menu label, a search button, and a hamburger menu button. Public/authentication surfaces retain the `LifeFlow` brand.
-- The `/plan` header and aside use the same localized `반복 할 일` menu label.
+- The `/plan` header and aside use the same localized `하루 템플릿` menu label.
 - On mobile the four daily bottom-navigation pages (Retrospect, Routine, To-do, and Schedule) hide the shared header because each page owns a compact sticky context area. Those local contexts retain Search and aside-menu buttons; opening Search temporarily reveals only the shared header search form. Tablet and desktop keep the normal-flow header visible.
 - Their mobile date rows share 8px horizontal and 4px vertical padding (respecting the top safe area), a 4px gap between date and actions, vertically centered 44px controls, and the same date-picker caret width. Page-specific content below the row remains independent.
 - All four daily pages use the same date-navigation component, typography and localized date format. Saturdays are blue; Sundays and registered holidays or substitute holidays are red, with holidays taking precedence. Other dates use the normal text color. Calendar retains its current mode when changing dates.
@@ -52,7 +52,7 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - The aside header uses a settings gear link instead of a text brand.
 - The aside owns infrequent navigation:
   - Dashboard
-  - Management: Recurring To-dos (`반복 할 일`, `/plan`), Routine Management, Goal, Execution Energy Management
+  - Management: Day Templates (`하루 템플릿`, `/plan`), Routine Management, Goal, Execution Energy Management
   - Tools: Memo, Search, Schedule Tag Management
 - Use visible group labels for Management and Tools. Daily execution pages stay in the bottom navigator.
 - Logout lives inside the Settings page and must remain a POST form with a CSRF token.
@@ -173,3 +173,55 @@ Read this file before changing the header, aside menu, bottom navigator, shared 
 - On mobile, Recurring To-do, Routine Management, Goal, Execution Energy, Memo, Search and Schedule Tag Management use the shared compact sticky header with the menu label and 44px Search/menu controls; the date selector is not rendered.
 
 - On mobile Dashboard uses the same compact sticky menu header as management pages, without a date control.
+
+## Structured confirmation notices
+
+LifeFlowUI.confirm optionally accepts a plain-text question and noticeItems array. It creates a strong multiline question and an accessible trailing exclamation disclosure, with small bullet warnings in a surface-soft speech bubble. Tap/click pins it, mouse hover previews it, and Escape on the disclosure closes the bubble before the modal. The dialog uses a div body so structured content remains valid HTML; all supplied strings use textContent. Only this opt-in confirmation keeps equal-width Cancel/Confirm actions in one row below 479px. Plain confirmations reset the notice class/content and retain their existing layout. Native fallback callers must supply the complete question/warnings in message. Calendar Actual-to-Plan uses this presentation.
+
+## Main menu tab context
+
+To-do, Retrospect (including published reports), recurring Plan, Routine Management, Goal (including review) and Memo wrap their top-level ui-segmented-tabs in ui-menu-context. It owns Retrospect’s sticky layout, full-width context, 12px tab inset, 6px date/tab gap and 8px bottom padding. Date navigation, when present, stays in the same context with position:static. The context has no background; its date row explicitly uses background:none to override the standalone date bar. Memo keeps its existing visible header above the tabs; preceding error messages also keep their space. Feature filters, URLs and button/link semantics stay with their owners. See menu-tabs-unification.md for changed files and checks.
+
+Dashboard replaces its old quick-menu cards with a four-column app-icon card. Configured entries come from config/app.php; ORESEED opens the user-supplied /sub/oreseed.html in the same tab. See dashboard-feature-implementation.md for changed files and checks.
+
+## Menu labels and duplicate introductions (2026-11-13)
+
+Korean management labels are 실행력 and 루틴; the daily Routine header and bottom navigation use 일일루틴. Search, Execution Energy, Memo, and the recurring block tab omit duplicate visible introductions, retaining screen-reader headings. Memo navigation includes short notes, long notes, and trash. See `menu-tabs-unification.md` for top spacing.
+
+## Shared date/time dialogs (2026-11-13)
+
+All .lf-date-dialog sheets, including daily header dates and month selection, use width:min(100%,680px), no outer horizontal inset, bottom alignment and top-only 24px corners. Internal header/body padding remains. Search date filters call the same LifeFlowDatePicker.open API without daily-date auto-submit.
+
+components/time-picker.js exposes LifeFlowTimePicker.open(select, trigger), enhance(root) and sync(root). Opt-in select[data-time-picker] options must have HH:mm text; their original values and allowed choices remain authoritative. Enhancement replaces the visible select with a dialog trigger, retaining native select submission/fallback. Programmatic value changes call sync; Calendar's duration summary does so. Hour/minute choices are drafts until Apply; Cancel/Escape/backdrop preserves the value and restores focus. Existing option boundaries determine valid combinations, including end-only 24:00.
+
+## Sheet close icon parity (2026-11-13)
+
+All ui-close-button and lf-date-close controls use the Actual edit reference: 22px glyph, 400 weight, line-height 1, centered in a 44px square with zero padding. The shared --ui-sheet-close-icon-size token owns the icon size. Date-dialog font inheritance no longer overrides it; previous/next arrows retain their separate styles.
+
+## Routine management header month (2026-11-13 correction)
+
+On /manage/routines the left header label is replaced by components/routine-month-navigation.php: month picker plus previous/next month controls. Search and aside buttons stay in their original right-side slot. Search expansion hides the month control. Both status tabs preserve month/status query parameters; the body no longer repeats the month row. Other menu headers and daily session date handling are unchanged.
+
+## Bottom navigation (2026-11-13)
+
+The bottom menu shows 회고 / 오늘루틴 / 오늘할 일 / 일정 in four equal columns, centered within the full navigator. Dedicated nav.today_routine and nav.today_todo labels apply only to the bottom menu. The Execution Energy orb is omitted from footer rendering and its script is no longer loaded; the shell uses one column without a reserved orb slot. Execution Energy remains available through Management.
+
+Validation: PHP footer/I18n lint and whitespace checks. Manual check: compare all four item widths and center alignment on Android Chrome, confirm active states and destinations, and check both themes.
+
+## Settings header and return navigation (2026-11-13)
+
+Settings joins the same is-compact-menu-header scope as Memo, including the mobile sticky position and shared heading/Search/aside layout. Settings-related information/account views opt into headerBackToSettings. Their header adds a labelled /settings back link with explicit back/title/action grid columns, hides it while header Search is expanded, and retains native link navigation without depending on browser history. No other menu header changes.
+
+The shared time picker now enhances minute-resolution input[type=time] as well as Calendar selects. Its sync/enhance/open APIs are unchanged; the original field still owns submitted values. select-sheet.js provides a parallel searchable sheet for select[data-select-sheet], preserving the options, native fallback, descriptions and change events.
+
+## Header visual insets (2026-11-13)
+
+Shared authenticated headers now use the same 16px inline padding on both sides, respecting safe-area insets. The trailing action group compensates for whitespace inside its 44px menu hit area, and the optional back button compensates for its SVG inset. This aligns visible label/back and menu edges while preserving touch targets and the Memo/Settings sticky behavior. Routine management’s header month strip removes its extra internal 4px inset. Browser fixtures measured left label 16px and trailing menu glyph 16.5px on mobile (15px desktop); 15 settings-return header variants retain nonoverlapping back/title/actions.
+
+## Daily menu labels (2026-11-14)
+
+The bottom labels are 회고 / 루틴 / 할 일 / 일정. Korean daily Routine header naming also uses 루틴. Routes, selected-date handling and the aside’s current 루틴 label remain unchanged. To distinguish the two Routine destinations, the recommended follow-up is to label the aside entry 루틴 관리 (creation/period/reminder configuration) and retain 루틴 for daily execution; this naming proposal was not applied to the aside in this task.
+
+## Routine collection naming (2026-11-14)
+
+The aside and /manage/routines header now use 루틴 모음, while daily /routine and the bottom navigator retain 루틴. The daily Routine management link follows the same Korean collection label. English/Japanese management navigation uses Routine collection/ルーティン集. Routes, date state and routine data are unchanged. This applies the softer collection-name proposal instead of the earlier 루틴 관리 recommendation.

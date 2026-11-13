@@ -24,13 +24,9 @@ final class PlanController
         $this->render('pages/plan/index', [
             'title' => t('nav.recurring_plan'),
             'plans' => $this->planService()->getPlanList($this->userId()),
-            'blockTemplates' => $this->planService()->getBlockTemplates($this->userId()),
-            'goalOptions' => $this->goalService()->activeGoalOptions($this->userId()),
-            'activeView' => ($_GET['view'] ?? '') === 'days' ? 'days' : 'blocks',
             'csrfToken' => Csrf::token(),
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
-            'blockFormOld' => $_SESSION['block_form_old'] ?? [],
             'pageStyles' => [$this->versionedAsset('/assets/css/pages/plan.css')],
             'pageScripts' => [$this->versionedAsset('/assets/js/pages/plan-actions.js')],
         ]);
@@ -71,7 +67,7 @@ final class PlanController
             return;
         }
 
-        $this->renderEditor('계획 추가', '/plan', []);
+        $this->renderEditor('하루 템플릿 추가', '/plan', []);
     }
 
     public function edit(): void
@@ -88,7 +84,7 @@ final class PlanController
             return;
         }
 
-        $this->renderEditor('계획 수정', '/plan/update', [
+        $this->renderEditor('하루 템플릿 수정', '/plan/update', [
             'sourcePlan' => $plan,
             'old' => [
                 'name' => $_SESSION['old']['name'] ?? $plan['name'],
@@ -164,7 +160,7 @@ final class PlanController
             ]);
         }
 
-        $_SESSION['flash_success'] = '계획 템플릿이 수정되었습니다.';
+        $_SESSION['flash_success'] = '하루 템플릿이 수정되었습니다.';
         $this->redirect('/plan/show?id=' . $groupId);
     }
 
@@ -212,20 +208,20 @@ final class PlanController
     public function storeBlockTemplate(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
-            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            $this->redirectWithErrors('/todo?tab=recurring', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $validation = $this->planService()->validateBlockTemplateInput($this->userId(), $_POST);
         if (!$validation['ok'] || $this->planService()->createBlockTemplate($this->userId(), $validation['data']) === null) {
             $_SESSION['block_form_old'] = $this->blockTemplateFormState('create', null, $_POST);
             $this->redirectWithErrors(
-                '/plan?view=blocks',
+                '/todo?tab=recurring',
                 $validation['errors'] ?: ['general' => '할 일 블록을 저장하지 못했습니다.']
             );
         }
 
         $_SESSION['flash_success'] = '할 일 블록이 저장되었습니다.';
-        $this->redirect('/plan?view=blocks');
+        $this->redirect('/todo?tab=recurring');
     }
 
     public function updateBlockTemplate(): void
@@ -238,7 +234,7 @@ final class PlanController
                 echo json_encode(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            $this->redirectWithErrors('/todo?tab=recurring', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $templateId = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
@@ -259,7 +255,7 @@ final class PlanController
                 $_POST
             );
             $this->redirectWithErrors(
-                '/plan?view=blocks',
+                '/todo?tab=recurring',
                 $validation['errors'] ?: ['general' => '할 일 블록을 수정하지 못했습니다.']
             );
         }
@@ -270,7 +266,7 @@ final class PlanController
             return;
         }
         $_SESSION['flash_success'] = '할 일 블록이 수정되었습니다.';
-        $this->redirect('/plan?view=blocks');
+        $this->redirect('/todo?tab=recurring');
     }
 
     public function setBlockTemplateEnabled(): void
@@ -278,16 +274,16 @@ final class PlanController
         $wantsJson = stripos((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json') !== false;
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
             if ($wantsJson) { http_response_code(419); header('Content-Type: application/json; charset=utf-8'); echo json_encode(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], JSON_UNESCAPED_UNICODE); return; }
-            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            $this->redirectWithErrors('/todo?tab=recurring', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
         $id = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
         $enabled = $_POST['enabled'] ?? '';
         if ($id === false || $id <= 0 || !in_array($enabled, ['0', '1'], true) || !$this->planService()->setBlockTemplateEnabled($this->userId(), (int) $id, $enabled === '1')) {
             if ($wantsJson) { http_response_code(422); header('Content-Type: application/json; charset=utf-8'); echo json_encode(['ok' => false, 'message' => '사용 상태를 변경하지 못했습니다.'], JSON_UNESCAPED_UNICODE); return; }
-            $this->redirectWithErrors('/plan?view=blocks', ['general' => '사용 상태를 변경하지 못했습니다.']);
+            $this->redirectWithErrors('/todo?tab=recurring', ['general' => '사용 상태를 변경하지 못했습니다.']);
         }
         if ($wantsJson) { header('Content-Type: application/json; charset=utf-8'); echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE); return; }
-        $this->redirect('/plan?view=blocks');
+        $this->redirect('/todo?tab=recurring');
     }
 
     public function deleteBlockTemplate(): void
@@ -300,7 +296,7 @@ final class PlanController
                 echo json_encode(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $this->redirectWithErrors('/plan?view=blocks', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
+            $this->redirectWithErrors('/todo?tab=recurring', ['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
         }
 
         $templateId = filter_var($_POST['block_template_id'] ?? null, FILTER_VALIDATE_INT);
@@ -312,7 +308,7 @@ final class PlanController
                 echo json_encode(['ok' => false, 'message' => '반복 할 일을 삭제하지 못했습니다.'], JSON_UNESCAPED_UNICODE);
                 return;
             }
-            $this->redirectWithErrors('/plan?view=blocks', ['general' => '할 일 블록을 삭제하지 못했습니다.']);
+            $this->redirectWithErrors('/todo?tab=recurring', ['general' => '할 일 블록을 삭제하지 못했습니다.']);
         }
 
         if ($wantsJson) {
@@ -321,7 +317,7 @@ final class PlanController
             return;
         }
         $_SESSION['flash_success'] = '할 일 블록이 삭제되었습니다. 이미 복사한 일정은 유지됩니다.';
-        $this->redirect('/plan?view=blocks');
+        $this->redirect('/todo?tab=recurring');
     }
 
     /** @return array<int, mixed> */
@@ -349,7 +345,7 @@ final class PlanController
                 $this->versionedAsset('/assets/css/pages/plan.css'),
             ],
             'pageScripts' => [
-                '/assets/js/components/time-grid-selection.js',
+                $this->versionedAsset('/assets/js/components/time-grid-selection.js'),
                 $this->versionedAsset('/assets/js/pages/plan.js'),
             ],
         ], $extraData));

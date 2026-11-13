@@ -1,4 +1,4 @@
-.goal-page { display: grid; gap: 14px; padding-bottom: 40px; }
+.goal-page { display: grid; gap: var(--space-4); padding-bottom: 40px; }
 .goal-map-header h1, .goal-map-header p { margin: 0; }
 .goal-map-header > div { display: grid; gap: 5px; }
 .goal-map-header > div > p:last-child { color: var(--color-text-muted); font-size: .9rem; line-height: 1.5; }

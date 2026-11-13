@@ -32,7 +32,7 @@ final class CalendarTagRepository
     {
         $sql = 'SELECT ct.id, ct.user_id, ct.palette_id, ct.slug, ct.name, ct.color_hex,
                        ct.sort_order, ct.is_system,
-                       CASE WHEN ct.is_system = 1 THEN COALESCE(ctp.is_enabled, 1) ELSE 1 END AS is_enabled
+                       COALESCE(ctp.is_enabled, 1) AS is_enabled
                 FROM calendar_tags ct
                 LEFT JOIN calendar_tag_preferences ctp
                     ON ctp.tag_id = ct.id AND ctp.user_id = :preference_user_id
@@ -164,14 +164,14 @@ final class CalendarTagRepository
         }
     }
 
-    public function setSystemTagEnabled(int $userId, int $tagId, bool $enabled): bool
+    public function setTagEnabled(int $userId, int $tagId, bool $enabled): bool
     {
         $tagStmt = $this->db->prepare(
             'SELECT id FROM calendar_tags
-             WHERE id = :id AND is_system = 1 AND deleted_at IS NULL
+             WHERE id = :id AND (is_system = 1 OR user_id = :user_id) AND deleted_at IS NULL
              LIMIT 1'
         );
-        $tagStmt->execute(['id' => $tagId]);
+        $tagStmt->execute(['id' => $tagId, 'user_id' => $userId]);
         if ($tagStmt->fetchColumn() === false) {
             return false;
         }

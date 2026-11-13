@@ -53,11 +53,13 @@ $renderGoalBranch = static function (array $nodes, int $depth = 0, ?int $parentI
     <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
     <?php if (!empty($errors['general'])): ?><div class="msg msg-error"><?= e((string) $errors['general']) ?></div><?php endif; ?>
 
-    <nav class="ui-segmented-tabs goal-mode-switch" aria-label="목표 범위">
-        <a href="/goal" <?= $selectedMode === 'focus' ? 'aria-current="page"' : '' ?>>지금 집중</a>
-        <a href="/goal?mode=all" <?= $selectedMode === 'all' ? 'aria-current="page"' : '' ?>>전체 목표</a>
-        <a href="/goal/review">목표 회고</a>
-    </nav>
+    <div class="ui-menu-context">
+        <nav class="ui-segmented-tabs goal-mode-switch" aria-label="목표 범위">
+            <a href="/goal" <?= $selectedMode === 'focus' ? 'aria-current="page"' : '' ?>>지금 집중</a>
+            <a href="/goal?mode=all" <?= $selectedMode === 'all' ? 'aria-current="page"' : '' ?>>전체 목표</a>
+            <a href="/goal/review">목표 회고</a>
+        </nav>
+    </div>
     <?php $goalTabTitle = $selectedMode === 'all' ? '전체 목표' : '지금 집중'; $goalTabHelp = $selectedMode === 'all' ? '목표 이름을 눌러 상세를 보고, +로 하위 목표를 추가하세요. 이동 손잡이를 끌어 순서를 바꾸거나 다른 목표에 연결할 수 있어요.' : '집중 중인 목표를 모아 보여줍니다. 목표를 눌러 상세를 보거나 집중을 해제할 수 있어요.'; $showGoalToggle = $selectedMode === 'all' && !empty($goalTree); require __DIR__ . '/tab-heading.php'; ?>
 
     <section class="goal-map" aria-label="목표 지도" <?= !empty($goalTree) ? 'tabindex="0"' : '' ?>>

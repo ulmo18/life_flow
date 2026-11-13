@@ -2,26 +2,12 @@
   padding-bottom: 116px;
 }
 
-.plan-view-tabs {
-  margin-bottom: var(--space-4);
-}
 
 .plan-block-template-section,
 .plan-block-template-form,
 .plan-block-template-list {
   display: grid;
   gap: var(--space-3);
-}
-
-.plan-block-template-intro h2,
-.plan-block-template-intro p {
-  margin: 0;
-}
-
-.plan-block-template-intro p {
-  margin-top: 4px;
-  color: var(--color-text-muted);
-  font-size: 13px;
 }
 
 .plan-block-template-card {
@@ -519,3 +505,38 @@ body[data-theme='dark'] .plan-block-list li {
 .plan-delay-delete { position:relative; overflow:hidden; isolation:isolate; touch-action:pan-y; user-select:none; }
 .plan-delay-delete::before { content:''; position:absolute; inset:0; z-index:-1; background:var(--color-primary); opacity:.28; transform:scaleX(0); transform-origin:left; }
 .plan-delay-delete.is-holding::before { transform:scaleX(1); transition:transform 1.5s linear; }
+
+.plan-editor-guide{color:var(--color-text-muted);font-size:var(--font-size-sm);margin-block:var(--space-3)}
+.plan-schedule-dialog form{margin:0}.plan-schedule-body{display:grid;gap:var(--space-4);padding:var(--space-4)}
+.plan-schedule-dialog .lf-time-actions{display:flex;gap:var(--space-2);padding:var(--space-4)}.plan-schedule-dialog .lf-time-actions .btn{flex:1}
+.plan-editor-event{padding:0!important;display:flex!important;overflow:visible!important;pointer-events:auto}
+.plan-event-body{appearance:none;border:0;background:none;color:inherit;font:inherit;min-width:0;width:100%;height:100%;padding:0 15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;touch-action:pan-y}
+.plan-resize-handle{position:absolute;top:0;bottom:0;width:16px;padding:0;border:0;background:color-mix(in srgb,var(--color-text) 12%,transparent);color:inherit;z-index:2;touch-action:pan-y}
+.plan-resize-start{left:0;border-radius:4px 0 0 4px}.plan-resize-end{right:0;border-radius:0 4px 4px 0}
+.plan-drag-preview{pointer-events:none;border:2px dashed var(--color-primary)!important;background:color-mix(in srgb,var(--color-primary) 25%,transparent)!important;z-index:10}
+.is-plan-dragging{touch-action:none;user-select:none}
+
+.plan-schedule-dialog [hidden]{display:none!important}
+.plan-schedule-dialog[open]{display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.plan-schedule-dialog form{display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:0}
+.plan-schedule-body{min-height:0;overflow:auto;overscroll-behavior:contain}
+
+/* Match the Calendar's focused Plan timetable, with the hour axis on the right. */
+.calendar-page .plan-template-timetable .daygrid { min-width:0; }
+.calendar-page .plan-template-timetable .daygrid-row { grid-template-columns:minmax(0,1fr) 28px; }
+.calendar-page .plan-template-timetable .hour-label { display:flex; order:2; border-right:0; border-left:1px solid rgba(216,200,179,.58); justify-content:center; padding:0; }
+.calendar-page .plan-template-timetable .cells { order:1; }
+.calendar-page .plan-template-timetable .event-layer { left:0; right:28px; }
+.calendar-page .plan-template-timetable .plan-event { border:0; background:color-mix(in srgb,var(--color-primary) 11%,var(--color-surface)); color:var(--color-text); box-shadow:none; }
+.plan-event-body { display:flex; align-items:center; gap:6px; }
+.plan-event-body .event-title { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.plan-editor-page .plan-resize-handle { background:transparent; border-radius:0; }
+
+.plan-template-timetable .plan-template-event { display:flex; align-items:center; gap:6px; }
+.plan-editor-page .plan-template-update { color:var(--color-danger-text); border-color:var(--color-danger-text); background:var(--color-surface); box-shadow:var(--shadow-sm); }
+.plan-editor-page .plan-template-update:hover,
+.plan-editor-page .plan-template-update:active { background:color-mix(in srgb,var(--color-danger-text) 7%,var(--color-surface)); }
+
+/* Calendar work-mode visibility must not hide template-editor controls. */
+.calendar-page.plan-editor-page .calendar-timetable-panel.is-plan .plan-resize-handle { display:block; }
+.calendar-page.plan-editor-page .calendar-timetable-panel.is-plan .plan-resize-handle::after { display:block; background:currentColor; opacity:.8; height:16px; box-shadow:none; }

@@ -153,7 +153,59 @@
   function confirm(options = {}) {
     return new Promise(resolve => {
       modalTitle.textContent = options.title || '확인';
-      modalBody.textContent = options.message || '';
+      const notices = Array.isArray(options.noticeItems) ? options.noticeItems.filter(item => typeof item === 'string' && item.trim()) : [];
+      const hasNotices = typeof options.question === 'string' && options.question.trim() && notices.length > 0;
+      modal.classList.toggle('ui-confirm-with-notices', Boolean(hasNotices));
+      modalBody.replaceChildren();
+      if (hasNotices) {
+        const question = document.createElement('div');
+        question.className = 'ui-confirm-question';
+        const text = document.createElement('strong');
+        text.textContent = options.question;
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'ui-confirm-notice-toggle';
+        toggle.setAttribute('aria-label', '전환 시 주의사항 보기');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-controls', 'lifeFlowModalNotice');
+        const icon = document.createElement('span');
+        icon.textContent = '!';
+        icon.setAttribute('aria-hidden', 'true');
+        toggle.append(icon);
+        const bubble = document.createElement('div');
+        bubble.id = 'lifeFlowModalNotice';
+        bubble.className = 'ui-confirm-notice';
+        bubble.hidden = true;
+        bubble.setAttribute('role', 'note');
+        const list = document.createElement('ul');
+        notices.forEach(notice => {
+          const item = document.createElement('li');
+          item.textContent = notice;
+          list.append(item);
+        });
+        bubble.append(list);
+        let pinned = false;
+        const show = open => { bubble.hidden = !open; toggle.setAttribute('aria-expanded', String(open)); };
+        toggle.addEventListener('click', () => { pinned = !pinned; show(pinned); });
+        toggle.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') show(true); });
+        toggle.addEventListener('pointerleave', () => { if (!pinned) show(false); });
+        toggle.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && !bubble.hidden) {
+            event.preventDefault(); event.stopPropagation(); pinned = false; show(false);
+          }
+        });
+        question.append(text, toggle);
+        modalBody.append(question);
+        if (typeof options.warning === 'string' && options.warning.trim()) {
+          const warning = document.createElement('p');
+          warning.className = 'ui-confirm-warning';
+          warning.textContent = options.warning;
+          modalBody.append(warning);
+        }
+        modalBody.append(bubble);
+      } else {
+        modalBody.textContent = options.message || '';
+      }
       modalConfirm.textContent = options.confirmText || '확인';
       modalCancel.textContent = options.cancelText || '취소';
       activeResolve = resolve;

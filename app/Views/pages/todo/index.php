@@ -54,6 +54,7 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
 ?>
 
 <main class="page todo-page" data-todo-page data-message-fallback="<?= e(t('todo.invalid')) ?>">
+    <div class="ui-menu-context">
     <?php $dailyDateContext = ['title' => t('todo.title'), 'path' => '/todo', 'date' => $todo['date'], 'prevDate' => $prevDate, 'nextDate' => $nextDate, 'todayDate' => $todayDate, 'isToday' => $isToday, 'inputId' => 'todoDate']; require __DIR__ . '/../../components/daily-date-navigation.php'; ?>
 
     <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
@@ -63,28 +64,14 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
         <button type="button" role="tab" id="todoItemsTab" aria-selected="<?= $isRecurringTab ? 'false' : 'true' ?>" aria-controls="todoItemsPanel" <?= $isRecurringTab ? 'tabindex="-1"' : '' ?> data-todo-list-tab="items">할 일 <span><?= count($activityItems) ?></span></button>
         <button type="button" role="tab" id="todoRecurringTab" aria-selected="<?= $isRecurringTab ? 'true' : 'false' ?>" aria-controls="todoRecurringPanel" <?= !$isRecurringTab ? 'tabindex="-1"' : '' ?> data-todo-list-tab="recurring">반복 할 일 <span><?= count($enabledTemplates) ?></span></button>
     </div>
+    </div>
     <section class="todo-group" id="todoItemsPanel" role="tabpanel" aria-labelledby="todoItemsTab" data-todo-list-panel="items" <?= $isRecurringTab ? 'hidden' : '' ?>>
         <?php if ($isToday && !empty($todo['carryovers'])): ?>
-        <details class="todo-carryovers ui-disclosure">
-            <summary><strong>어제 진행 중·연기한 할 일 <?= count($todo['carryovers']) ?>개를 확인해 보세요.</strong></summary>
-            <p class="form-hint">내용을 확인한 뒤 오늘 할 일로 등록할지 선택해 주세요. 어제 기록은 그대로 유지됩니다.</p>
-            <ul class="todo-carryover-list">
-                <?php foreach ($todo['carryovers'] as $carryover): ?>
-                <li data-todo-carryover="<?= e((string) $carryover['id']) ?>">
-                    <a href="/todo?date=<?= e(rawurlencode($carryover['calendar_date'])) ?>&amp;item_id=<?= e((string) $carryover['id']) ?>"><span class="todo-importance"><?= e($carryover['importance']) ?></span><strong><?= e($carryover['title']) ?></strong><span aria-hidden="true">↗</span></a>
-                    <small>어제 <?= e($carryover['calendar_date']) ?> · <?= e($planStatuses[$carryover['todo_status']] ?? '') ?></small>
-                    <?php if (trim((string) ($carryover['followup_note'] ?? '')) !== ''): ?><p><?= e($carryover['followup_note']) ?></p><?php else: ?><p class="form-hint">원본에서 연기 사유와 다음 행동을 확인해 보세요.</p><?php endif; ?>
-                    <form method="post" action="/todo/carryover" data-todo-carryover-form>
-                        <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-                        <input type="hidden" name="source_item_id" value="<?= e((string) $carryover['id']) ?>">
-                        <button class="btn btn-secondary" type="submit" <?= !empty($carryover['registered_item_id']) || empty($todo['carryoverSupported']) ? 'disabled' : '' ?>><?= !empty($carryover['registered_item_id']) ? '오늘 등록됨' : '오늘 할 일로 등록' ?></button>
-                    </form>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-        </details>
+        <aside class="todo-yesterday-notice" aria-labelledby="todoYesterdayTitle">
+            <button type="button" class="todo-yesterday-open" data-todo-carryovers-open aria-haspopup="dialog" aria-controls="todoCarryoverSheet"><strong id="todoYesterdayTitle">어제 진행 중·연기한 할 일 <?= count($todo['carryovers']) ?>개를 확인해 보세요.</strong><span aria-hidden="true">›</span></button>
+        </aside>
         <?php endif; ?>
-        <header class="todo-group-heading"><h2>할 일</h2><span><?= count($activityItems) ?>개</span></header>
+        <header class="todo-group-heading"><h2><?= $isToday ? '오늘 할 일' : '할 일' ?></h2><span><?= count($activityItems) ?>개</span></header>
         <div class="todo-sort" role="group" aria-label="할 일 정렬">
             <button type="button" data-todo-sort="importance" aria-pressed="true">중요도순</button>
             <button type="button" data-todo-sort="status" aria-pressed="false">상태순</button>
@@ -135,6 +122,31 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
 <button class="btn btn-primary daily-floating-action" type="button" data-todo-create-open data-todo-add-tab="items" <?= $isRecurringTab ? 'hidden' : '' ?>>할 일 추가</button>
 <button class="btn btn-primary daily-floating-action" type="button" data-todo-recurring-open data-todo-add-tab="recurring" <?= !$isRecurringTab ? 'hidden' : '' ?>>반복 할 일 추가</button>
 
+<?php if ($isToday && !empty($todo['carryovers'])): ?>
+<div class="todo-layer" data-todo-carryovers-layer hidden>
+    <button type="button" class="todo-overlay" data-todo-carryovers-close aria-label="닫기"></button>
+    <section class="todo-sheet todo-carryover-sheet ui-form-sheet ui-standard-sheet" id="todoCarryoverSheet" role="dialog" aria-modal="true" aria-labelledby="todoCarryoverTitle">
+        <div class="todo-sheet-header ui-form-sheet-header"><strong id="todoCarryoverTitle">어제의 할 일</strong><button class="ui-close-button" type="button" data-todo-carryovers-close aria-label="닫기">×</button></div>
+            <p class="form-hint">오늘 할 일 목록과 별개인 어제 기록입니다. 자동으로 추가되지 않으며, 확인 후 오늘 이어 할 항목만 등록할 수 있어요.</p>
+            <ul class="todo-carryover-list">
+                <?php foreach ($todo['carryovers'] as $carryover): ?>
+                <li data-todo-carryover="<?= e((string) $carryover['id']) ?>">
+                    <a href="/todo?date=<?= e(rawurlencode($carryover['calendar_date'])) ?>&amp;item_id=<?= e((string) $carryover['id']) ?>"><span class="todo-importance"><?= e($carryover['importance']) ?></span><strong><?= e($carryover['title']) ?></strong><span aria-hidden="true">↗</span></a>
+                    <small>어제 <?= e($carryover['calendar_date']) ?> · <?= e($planStatuses[$carryover['todo_status']] ?? '') ?></small>
+                    <?php if (trim((string) ($carryover['followup_note'] ?? '')) !== ''): ?><p><?= e($carryover['followup_note']) ?></p><?php else: ?><p class="form-hint">어제의 상태를 확인하고 오늘 이어 할지 선택해 주세요.</p><?php endif; ?>
+                    <form method="post" action="/todo/carryover" data-todo-carryover-form>
+                        <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                        <input type="hidden" name="source_item_id" value="<?= e((string) $carryover['id']) ?>">
+                        <button class="btn btn-secondary" type="submit" aria-describedby="carryoverReason<?= e((string) $carryover['id']) ?>" <?= !empty($carryover['registered_item_id']) || empty($todo['carryoverSupported']) ? 'disabled' : '' ?>><?= !empty($carryover['registered_item_id']) ? '오늘 등록됨' : '오늘 할 일로 등록' ?></button>
+                        <p class="form-hint" id="carryoverReason<?= e((string) $carryover['id']) ?>"><?php if (!empty($carryover['registered_item_id'])): ?>이미 오늘 할 일에 등록되어 있어요.<?php elseif (empty($todo['carryoverSupported'])): ?>오늘 등록 기능에 필요한 업데이트가 아직 적용되지 않았어요. 어제 기록은 확인할 수 있어요.<?php else: ?>등록하면 어제 기록을 유지하고 오늘 할 일에 추가해요.<?php endif; ?></p>
+                    </form>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+    </section>
+</div>
+<?php endif; ?>
+
 <div class="todo-layer" data-todo-status-layer hidden>
     <button type="button" class="todo-overlay" data-todo-status-close aria-label="닫기"></button>
     <section class="todo-sheet ui-form-sheet ui-standard-sheet" role="dialog" aria-modal="true" aria-labelledby="todoStatusTitle">
@@ -146,7 +158,12 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
             <?php endforeach; ?>
         </div>
         <p class="todo-status-note" data-todo-status-note>이 할 일의 상태를 변경합니다.</p>
-        <?php $followupPrefix = 'todoFollowup'; require __DIR__ . '/../../components/todo-followup-fields.php'; ?>
+        <section class="todo-status-followup" data-status-followup hidden>
+            <label class="form-label" for="todoStatusFollowup" data-status-followup-label>다음에 할 행동</label>
+            <textarea class="input" id="todoStatusFollowup" maxlength="500" rows="3" placeholder="선택 사항 · 메모 없이도 저장할 수 있어요." data-status-followup-note></textarea>
+            <p class="form-hint" role="status" data-status-followup-message></p>
+        </section>
+        <div class="ui-form-sheet-actions" data-status-save-actions hidden><button type="button" class="btn btn-primary" data-status-save>상태 저장</button></div>
         <section class="todo-status-record" aria-labelledby="todoStatusRecordTitle"><h3 id="todoStatusRecordTitle">연결 기록</h3><div data-todo-status-record></div></section>
     </section>
 </div>
@@ -161,6 +178,7 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <input type="hidden" name="date" value="<?= e((string) $todo['date']) ?>">
             <?php $activityFieldPrefix = 'todoCreate'; $activityGoalOptions = $todo['goalOptions'] ?? []; $activityPlaceholder = '할 일을 입력하세요'; $activityHelp = '선택한 날짜에 시간 미정인 할 일로 등록됩니다.'; require __DIR__ . '/../../components/activity-create-fields.php'; ?>
+            <?php $locationPrefix = 'todoCreateLocation'; require __DIR__ . '/../../components/location-fields.php'; ?>
             <div class="ui-form-sheet-actions"><button class="btn btn-primary" type="submit">할 일 추가</button></div>
         </form>
     </section>
@@ -215,6 +233,7 @@ $renderTodoItems = static function (array $items) use ($canEdit, $planStatuses, 
                     <?php endforeach; ?>
                 </fieldset>
             </details>
+            <?php $locationPrefix = 'todoEditLocation'; require __DIR__ . '/../../components/location-fields.php'; ?>
             <div class="ui-form-sheet-actions todo-edit-actions"><button type="button" class="btn btn-ghost todo-delay-button ui-delay-button" data-todo-delete aria-describedby="todoDeleteHoldHelp"><span>할 일 삭제</span></button><button class="btn btn-primary" type="submit">수정 저장</button><span class="sr-only" id="todoDeleteHoldHelp">삭제하려면 버튼을 1.5초 이상 누르세요. 키보드는 스페이스 또는 엔터를 길게 누르세요.</span></div>
         </form>
     </section>

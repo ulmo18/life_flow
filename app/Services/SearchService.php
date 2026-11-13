@@ -50,6 +50,7 @@ final class SearchService
                 'typeLabel' => self::LABELS[$rowType] ?? $rowType,
                 'title' => $this->title($rowType, (string) $row['title']),
                 'snippet' => $this->snippet($body, $query),
+                'details' => $this->details($rowType, $row),
                 'date' => substr((string) ($row['record_date'] ?: $row['occurred_at']), 0, 10),
                 'href' => $this->href($rowType, (string) ($row['record_date'] ?? '')),
             ];
@@ -57,7 +58,15 @@ final class SearchService
         usort($items, static fn(array $a, array $b): int => strcmp($b['date'], $a['date']));
 
         return ['query' => $query, 'selectedType' => $selectedType, 'types' => self::LABELS,
+            'filterSummary' => $this->filterSummary($selectedType, $fromDate, $toDate),
             'from' => $fromDate ?? '', 'to' => $toDate ?? '', 'error' => $error, 'items' => array_slice($items, 0, 60)];
+    }
+
+    private function filterSummary(string $type, ?string $from, ?string $to): string
+    {
+        $period = $from === null && $to === null ? '전체 기간'
+            : str_replace('-', '.', $from ?? '시작일 미지정') . ' ~ ' . str_replace('-', '.', $to ?? '종료일 미지정');
+        return (self::LABELS[$type] ?? '전체') . ' · ' . $period;
     }
 
     private function dateOrNull(mixed $value): ?string
@@ -65,6 +74,30 @@ final class SearchService
         $value = trim((string) $value);
         $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
         return $parsed instanceof DateTimeImmutable && $parsed->format('Y-m-d') === $value ? $value : null;
+    }
+
+    /** @return array<int, array{label:string, value:string}> */
+    private function details(string $type, array $row): array
+    {
+        $labels = match ($type) {
+            'goal' => ['body' => '어떻게', 'body_alt' => '언제', 'body_alt2' => '어디서', 'period_start_date' => '시작일', 'period_end_date' => '마감일'],
+            'retrospect' => ['body' => '오늘의 회고', 'body_alt' => '오늘의 생각', 'body_alt2' => '내일의 계획'],
+            'routine' => ['record_date' => '시작일', 'duration_days' => '기간(일)'],
+            'schedule' => ['body' => '메모'],
+            'wellness' => ['body' => '상세 내용', 'body_alt' => '메모'],
+            default => ['body' => '내용', 'importance' => '중요도'],
+        };
+        $details = [];
+        foreach ($labels as $key => $label) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') $details[] = ['label' => $label, 'value' => $value];
+        }
+        if ($type === 'schedule') {
+            $clock = static fn(int $index): string => sprintf('%02d:%02d', intdiv($index, 6), ($index % 6) * 10);
+            array_unshift($details, ['label' => '시간', 'value' => isset($row['start_index'], $row['end_index'])
+                ? $clock((int) $row['start_index']) . ' – ' . $clock((int) $row['end_index']) : '시간 미설정']);
+        }
+        return $details;
     }
 
     private function title(string $type, string $title): string

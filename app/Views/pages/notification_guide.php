@@ -1,5 +1,5 @@
 <?php $title = '알림 권한 안내'; ?>
-<?php require __DIR__ . '/../layouts/header.php'; ?>
+<?php $headerBackToSettings = true; require __DIR__ . '/../layouts/header.php'; ?>
 
 <main class="page">
     <h1 class="page-title">알림 권한 안내</h1>

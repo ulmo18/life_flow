@@ -364,6 +364,7 @@
       input.checked = false;
     });
     energyControllers.get(eventForm)?.reset();
+    window.LifeFlowLocation?.open(eventForm, 'actual', null);
     setWellnessFields(createWellnessFields, {}, !isUnscheduled);
     updatePlanRecommendations(eventForm, selectedStart, selectedEnd);
     resetActualDisclosures(eventForm);
@@ -406,6 +407,7 @@
   }
 
   function syncActualDuration(form) {
+    window.LifeFlowTimePicker?.sync(form);
     const output = form.querySelector('[data-actual-duration]');
     if (!output) return;
     const start = Number.parseInt(form.querySelector('select[name="start_index"]')?.value || '', 10);
@@ -569,6 +571,7 @@
     const eventId = button.dataset.eventId || '';
     const scheduleType = button.dataset.eventScheduleType === 'unscheduled' ? 'unscheduled' : 'timed';
     editEventId.value = eventId;
+    window.LifeFlowLocation?.open(form, 'actual', eventId);
     editScheduleTypeInput.value = scheduleType;
     deleteEventId.value = eventId;
     const editStart = Number.parseInt(button.dataset.eventStartIndex || '', 10);
@@ -675,12 +678,12 @@
     });
   }
 
-  // A quick horizontal touch on empty grid space switches one step. Long
+  // A quick horizontal drag on empty grid space switches one step. Long
   // presses and touches on blocks remain reserved for selection and editing.
   const timetablePair = document.querySelector('[data-calendar-timetable-pair]');
   let viewSwipe = null;
   timetablePair?.addEventListener('pointerdown', event => {
-    if (event.pointerType !== 'touch' || event.isPrimary === false || !window.matchMedia('(max-width: 767px)').matches || calendarWorkMode !== 'normal' || event.target.closest('button, a, input, select, textarea')) return;
+    if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0) || !window.matchMedia('(max-width: 767px)').matches || calendarWorkMode !== 'normal' || event.target.closest('button, a, input, select, textarea')) return;
     viewSwipe = { id: event.pointerId, x: event.clientX, y: event.clientY, started: performance.now(), moving: false };
   });
   timetablePair?.addEventListener('pointermove', event => {
@@ -689,6 +692,9 @@
     if (!viewSwipe.moving && Math.max(dx, dy) >= 8) {
       if (performance.now() - viewSwipe.started >= 360 || dy >= dx) { viewSwipe = null; return; }
       viewSwipe.moving = true;
+      clearActualPointerSelection();
+      clearActualTouchSelection();
+      try { timetablePair.setPointerCapture(event.pointerId); } catch (error) { /* Capture may be unavailable. */ }
     }
   });
   const finishViewSwipe = event => {
@@ -984,6 +990,66 @@
   const planBlockDeleteForm = document.getElementById('calendarPlanBlockDeleteForm');
   const actualEventDeleteButton = eventEditSheet?.querySelector('[data-actual-event-delete]');
   const actualEventDeleteForm = document.getElementById('calendarEventDeleteForm');
+  const actualToPlanButton = eventEditSheet?.querySelector('[data-actual-to-plan]');
+  let actualConversionPending = false;
+  async function requestActualToPlanConversion(eventId, targetRange = null, fromSheet = false) {
+    const form = document.getElementById('calendarEventEditForm');
+    if (!form || !eventId || actualConversionPending || actualEventDeleteSubmitting) return;
+    actualConversionPending = true;
+    if (actualToPlanButton) actualToPlanButton.disabled = true;
+    let navigating = false;
+    const disabledStates = new Map();
+    try {
+      const question = targetRange
+        ? `${formatGridTime(targetRange[0])}~${formatGridTime(targetRange[1])}\n계획 일정으로 전환할까요?`
+        : '저장된 실제 일정을\n계획 일정으로 전환할까요?';
+      const noticeItems = [
+        '실행력·생활 기록·메모·태그가 삭제됩니다.',
+        targetRange ? '연결된 계획이 있으면 해당 계획을 선택한 시간으로 옮깁니다.' : '연결된 계획이 있으면 해당 계획을 유지합니다.',
+        '새 계획은 저장된 제목·위치를 사용합니다.',
+      ];
+      if (fromSheet) noticeItems.push('저장하지 않은 수정 사항은 반영되지 않습니다.');
+      const warning = '전환하기 전에 ! 아이콘을 눌러 주의사항을 꼭 확인해 주세요.';
+      const confirmationMessage = question + '\n\n' + warning + '\n' + noticeItems.map(notice => '• ' + notice).join('\n');
+      const confirmed = window.LifeFlowUI?.confirm
+        ? await window.LifeFlowUI.confirm({title:'계획 일정으로 전환', question, noticeItems, warning, message:confirmationMessage, confirmText:'전환', cancelText:'취소'})
+        : window.confirm(confirmationMessage);
+      if (!confirmed || (fromSheet && (editEventId.value !== eventId || eventEditSheet.hidden))) return;
+      const body = new FormData();
+      body.set('_csrf_token', form.querySelector('[name="_csrf_token"]').value);
+      body.set('event_id', eventId);
+      body.set('discard_actual', '1');
+      if (targetRange) {
+        body.set('start_index', String(targetRange[0]));
+        body.set('end_index', String(targetRange[1]));
+      }
+      cancelCalendarDelayHold();
+      form.querySelectorAll('button, input, select, textarea').forEach(control => {
+        disabledStates.set(control, control.disabled);
+        control.disabled = true;
+      });
+      const response = await fetch('/calendar/event/to-plan', {method:'POST', body, headers:{Accept:'application/json'}});
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || '계획으로 전환하지 못했습니다.');
+      preserveCalendarScroll();
+      navigating = true;
+      window.location.assign(result.redirect);
+    } catch (error) {
+      showCalendarToast(error instanceof TypeError || error instanceof SyntaxError
+        ? '전환 결과를 확인하지 못했습니다. 새로고침 후 확인해주세요.'
+        : (error.message || '계획으로 전환하지 못했습니다.'));
+    } finally {
+      if (!navigating) {
+        disabledStates.forEach((disabled, control) => { control.disabled = disabled; });
+        if (actualToPlanButton) actualToPlanButton.disabled = false;
+        actualConversionPending = false;
+      }
+    }
+  }
+  actualToPlanButton?.addEventListener('click', () => requestActualToPlanConversion(editEventId?.value, null, true));
+  document.getElementById('calendarEventEditForm')?.addEventListener('submit', event => {
+    if (actualConversionPending) event.preventDefault();
+  });
 
   function cancelCalendarDelayHold() {
     if (!calendarDelayHold) return;
@@ -1106,6 +1172,7 @@
     if (management) management.open = false;
     if (!itemId || !blockId || !deleteId || !start || !end) return;
     itemId.value = button.dataset.planItemId || '';
+    window.LifeFlowLocation?.open(planBlockEditSheet.querySelector('form'), 'todo', itemId.value);
     blockId.value = button.dataset.planBlockId || '';
     deleteId.value = button.dataset.planBlockId || '';
     start.value = button.dataset.planItemStartIndex || '0';
@@ -2071,20 +2138,36 @@
     if (actualTouchSelection && Array.from(event.changedTouches).some(item => item.identifier === actualTouchSelection.identifier)) clearActualTouchSelection();
   }, { passive:true });
 
+  function clearActualPointerSelection() {
+    if (actualSelection) {
+      window.clearTimeout(actualSelection.timer);
+      try { actualDaygrid.releasePointerCapture(actualSelection.pointerId); } catch (error) { /* Capture may already be released. */ }
+    }
+    actualSelection = null;
+    clearActualPreview();
+  }
   actualDaygrid?.addEventListener('pointerdown', event => {
-    if (calendarWorkMode !== 'normal') return;
-    if (event.pointerType === 'touch') return;
+    if (calendarWorkMode !== 'normal' || actualSelection || event.pointerType === 'touch') return;
     if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
     if (event.target.closest('[data-event-open], [data-actual-block-resize], button, input, select, textarea, a')) return;
     const index = actualGridIndexFromPoint(event.clientX, event.clientY);
     if (index === null) return;
-    event.preventDefault();
-    actualSelection = { pointerId: event.pointerId, startIndex: index, currentIndex: index };
-    previewActualRange(index, index + 1, 'actual-selection-preview');
-    try { actualDaygrid.setPointerCapture(event.pointerId); } catch (error) { /* Native capture may be unavailable. */ }
+    const selection = {pointerId:event.pointerId, startIndex:index, currentIndex:index, x:event.clientX, y:event.clientY, active:false};
+    actualSelection = selection;
+    selection.timer = window.setTimeout(() => {
+      if (actualSelection !== selection || calendarWorkMode !== 'normal') return;
+      selection.active = true;
+      previewActualRange(index, index + 1, 'actual-selection-preview');
+      try { actualDaygrid.setPointerCapture(event.pointerId); } catch (error) { /* Native capture may be unavailable. */ }
+    }, 360);
   });
   actualDaygrid?.addEventListener('pointermove', event => {
     if (!actualSelection || actualSelection.pointerId !== event.pointerId) return;
+    if (!actualSelection.active) {
+      if (Math.max(Math.abs(event.clientX - actualSelection.x), Math.abs(event.clientY - actualSelection.y)) >= 8) clearActualPointerSelection();
+      return;
+    }
+    event.preventDefault();
     const index = actualGridIndexFromPoint(event.clientX, event.clientY);
     if (index === null) return;
     actualSelection.currentIndex = index;
@@ -2094,21 +2177,26 @@
   actualDaygrid?.addEventListener('pointerup', event => {
     if (!actualSelection || actualSelection.pointerId !== event.pointerId) return;
     const selection = actualSelection;
-    actualSelection = null;
-    try { actualDaygrid.releasePointerCapture(event.pointerId); } catch (error) { /* Capture may already be released. */ }
+    clearActualPointerSelection();
+    if (!selection.active || calendarWorkMode !== 'normal') return;
+    event.preventDefault();
     const index = actualGridIndexFromPoint(event.clientX, event.clientY);
     const range = actualRangeFromStartAndPointer(selection.startIndex, index === null ? selection.currentIndex : index);
-    clearActualPreview();
     if (hasActualConflict(range.start, range.end)) {
       showCalendarToast('이미 등록된 실제 일정과 시간이 겹칩니다.');
       return;
     }
     openEventSheet(range.start, range.end);
   });
-  actualDaygrid?.addEventListener('pointercancel', () => {
-    actualSelection = null;
-    clearActualPreview();
+  actualDaygrid?.addEventListener('pointercancel', clearActualPointerSelection);
+  window.addEventListener('pointerup', event => {
+    if (actualSelection?.pointerId === event.pointerId && !actualSelection.active) clearActualPointerSelection();
   });
+  actualDaygrid?.addEventListener('contextmenu', event => {
+    if (actualSelection?.active || actualTouchSelection?.active) event.preventDefault();
+  });
+  window.addEventListener('scroll', () => { clearActualPointerSelection(); clearActualTouchSelection(); }, true);
+  window.addEventListener('pagehide', () => { clearActualPointerSelection(); clearActualTouchSelection(); });
 
   window.LifeFlowCalendarResizeHold(actualLayer, {
     selector:'[data-actual-block-resize]', blockSelector:'[data-event-open]',
@@ -2151,89 +2239,97 @@
     event.preventDefault(); event.stopImmediatePropagation();
   }, true);
 
-  actualLayer.addEventListener('pointerdown', event => {
-    if (rangeSavePending) return;
-    if (calendarWorkMode !== 'normal') return;
-    if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    if (event.target.closest('[data-actual-block-resize]')) return;
-    const block = event.target.closest('[data-event-open]');
-    const start = Number.parseInt(block?.dataset.eventStartIndex || '', 10);
-    const end = Number.parseInt(block?.dataset.eventEndIndex || '', 10);
-    if (!block || !block.dataset.eventId || !Number.isInteger(start) || !Number.isInteger(end) || end <= start) return;
-    const grabbedIndex = actualGridIndexFromPoint(event.clientX, event.clientY);
-    actualMove = {
-      pointerId: event.pointerId,
-      block,
-      eventId: block.dataset.eventId,
-      start,
-      duration: end - start,
-      offset: Number.isInteger(grabbedIndex) ? Math.max(0, grabbedIndex - start) : 0,
-      targetStart: null,
-    };
-    try { block.setPointerCapture(event.pointerId); } catch (error) { /* Document listeners remain the fallback. */ }
-  });
-  document.addEventListener('pointermove', event => {
-    if (!actualMove || actualMove.pointerId !== event.pointerId) return;
-    const index = actualGridIndexFromPoint(event.clientX, event.clientY);
-    const targetStart = index === null ? null : index - actualMove.offset;
-    if (targetStart === null || targetStart < 0 || targetStart + actualMove.duration > 144) {
-      actualMove.targetStart = null;
-      clearActualPreview();
-      return;
+  function clearActualMove() {
+    if (actualMove?.pullRefreshSuspended) window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(true);
+    if (actualMove) {
+      suppressActualEventClick = true;
+      window.setTimeout(() => { suppressActualEventClick = false; }, 400);
     }
-    actualMove.targetStart = targetStart;
-    previewActualRange(targetStart, targetStart + actualMove.duration, 'actual-copy-preview');
-  });
-  document.addEventListener('pointerup', event => {
-    if (!actualMove || actualMove.pointerId !== event.pointerId) return;
-    const move = actualMove;
     actualMove = null;
     clearActualPreview();
-    try { move.block.releasePointerCapture(event.pointerId); } catch (error) { /* Capture may already be released. */ }
-    if (move.targetStart === null || move.targetStart === move.start) return;
-    suppressActualEventClick = true;
-    window.setTimeout(() => { suppressActualEventClick = false; }, 0);
+    clearPlanMovePreview();
+  }
+  function hasActualToPlanConflict(move, start, end) {
+    const linkedBlockId = move.block.dataset.eventPlanBlockId || '';
+    return hasOccupiedRange(start, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex', linkedBlockId ? 'planBlockId' : '', linkedBlockId);
+  }
+  function updateActualMoveTarget(move, x, y) {
+    const planIndex = gridIndexFromPoint(x, y);
+    const actualIndex = planIndex === null ? actualGridIndexFromPoint(x, y) : null;
+    const index = planIndex === null ? actualIndex : planIndex;
+    const targetStart = index === null ? null : index - move.offset;
+    clearActualPreview();
+    clearPlanMovePreview();
+    if (targetStart === null || targetStart < 0 || targetStart + move.duration > 144) {
+      move.targetStart = null;
+      move.mode = '';
+      return;
+    }
+    move.targetStart = targetStart;
+    move.mode = planIndex === null ? 'move' : 'convert';
+    if (move.mode === 'convert') {
+      if (!hasActualToPlanConflict(move, targetStart, targetStart + move.duration)) previewPlanMove(targetStart, targetStart + move.duration);
+    }
+    else previewActualRange(targetStart, targetStart + move.duration, 'actual-copy-preview');
+  }
+  function finishActualMove(x, y) {
+    if (!actualMove) return;
+    const move = actualMove;
+    if (Number.isFinite(x) && Number.isFinite(y)) updateActualMoveTarget(move, x, y);
+    clearActualMove();
+    if (move.targetStart === null) return;
+    if (move.mode === 'move' && move.targetStart === move.start) return;
     const end = move.targetStart + move.duration;
+    if (move.mode === 'convert') {
+      if (hasActualToPlanConflict(move, move.targetStart, end)) {
+        showCalendarToast('다른 계획 블록과 시간이 겹쳐 전환하지 않았습니다.');
+        return;
+      }
+      requestActualToPlanConversion(move.eventId, [move.targetStart, end]);
+      return;
+    }
     if (hasActualConflict(move.targetStart, end, move.eventId)) {
       showCalendarToast('다른 실제 일정과 시간이 겹쳐 이동하지 않았습니다.');
       return;
     }
     submitActualRangeUpdate(move.eventId, move.targetStart, end);
-  });
-  document.addEventListener('pointercancel', event => {
-    if (actualMove?.pointerId !== event.pointerId) return;
-    actualMove = null;
-    clearActualPreview();
+  }
+  window.LifeFlowCalendarResizeHold(actualLayer, {
+    selector:'[data-event-open]', blockSelector:'[data-event-open]',
+    ignoreSelector:'[data-actual-block-resize]',
+    allowed:() => !rangeSavePending && !actualConversionPending && calendarWorkMode === 'normal',
+    begin(block, handle, point) {
+      const start = Number.parseInt(block.dataset.eventStartIndex || '', 10);
+      const end = Number.parseInt(block.dataset.eventEndIndex || '', 10);
+      if (!block.dataset.eventId || !Number.isInteger(start) || !Number.isInteger(end) || end <= start) return false;
+      const grabbedIndex = actualGridIndexFromPoint(point.clientX, point.clientY);
+      actualMove = {
+        block, eventId:block.dataset.eventId, start, duration:end-start,
+        offset:Number.isInteger(grabbedIndex) ? Math.max(0, grabbedIndex-start) : 0,
+        targetStart:null, mode:'',
+        pullRefreshSuspended:point.identifier !== undefined && Boolean(window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(false)),
+      };
+      return true;
+    },
+    move:(x, y) => { if (actualMove) updateActualMoveTarget(actualMove, x, y); },
+    finish:finishActualMove,
+    cancel:clearActualMove,
   });
 
-  planLayer.addEventListener('pointerdown', event => {
-    if (rangeSavePending) return;
-    if (calendarWorkMode !== 'normal') return;
-    if (event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
-    if (event.target.closest('[data-plan-block-resize]')) return;
-    const block = event.target.closest('[data-plan-block-id]');
-    const blockId = block?.dataset.planBlockId || '';
-    const start = Number.parseInt(block?.dataset.planItemStartIndex || '', 10);
-    const end = Number.parseInt(block?.dataset.planItemEndIndex || '', 10);
-    if (!block || !blockId || !Number.isInteger(start) || !Number.isInteger(end) || end <= start) return;
-    const grabbedIndex = gridIndexFromPoint(event.clientX, event.clientY);
-    planCopyDrag = {
-      pointerId: event.pointerId,
-      block,
-      blockId,
-      itemId: block.dataset.planItemId || '',
-      start,
-      duration: end - start,
-      offset: Number.isInteger(grabbedIndex) ? Math.max(0, grabbedIndex - start) : 0,
-      mode: '',
-      lastStart: null,
-    };
-    page.classList.add('is-plan-copy-dragging');
-    try { block.setPointerCapture(event.pointerId); } catch (error) { /* Document listeners remain the fallback. */ }
-  });
-  document.addEventListener('pointermove', event => {
-    if (!planCopyDrag || planCopyDrag.pointerId !== event.pointerId) return;
-    const actualIndex = actualGridIndexFromPoint(event.clientX, event.clientY);
+  function clearPlanCopyDrag() {
+    if (planCopyDrag?.pullRefreshSuspended) window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(true);
+    if (planCopyDrag) {
+      suppressPlanBlockClick = true;
+      window.setTimeout(() => { suppressPlanBlockClick = false; }, 400);
+    }
+    planCopyDrag = null;
+    page.classList.remove('is-plan-copy-dragging');
+    clearActualPreview();
+    clearPlanMovePreview();
+  }
+  function movePlanCopyDrag(x, y) {
+    if (!planCopyDrag) return;
+    const actualIndex = actualGridIndexFromPoint(x, y);
     if (actualIndex !== null) {
       if (actualIndex + planCopyDrag.duration > 144) {
         planCopyDrag.lastStart = null;
@@ -2256,7 +2352,7 @@
       clearPlanMovePreview();
       return;
     }
-    const planIndex = gridIndexFromPoint(event.clientX, event.clientY);
+    const planIndex = gridIndexFromPoint(x, y);
     const targetStart = planIndex === null ? null : planIndex - planCopyDrag.offset;
     if (targetStart === null || targetStart < 0 || targetStart + planCopyDrag.duration > 144) {
       planCopyDrag.lastStart = null;
@@ -2269,19 +2365,13 @@
     planCopyDrag.lastStart = targetStart;
     clearActualPreview();
     previewPlanMove(targetStart, targetStart + planCopyDrag.duration);
-  });
-  document.addEventListener('pointerup', event => {
-    if (!planCopyDrag || planCopyDrag.pointerId !== event.pointerId) return;
+  }
+  function finishPlanCopyDrag() {
+    if (!planCopyDrag) return;
     const copy = planCopyDrag;
-    planCopyDrag = null;
-    page.classList.remove('is-plan-copy-dragging');
-    clearActualPreview();
-    clearPlanMovePreview();
-    try { copy.block.releasePointerCapture(event.pointerId); } catch (error) { /* Capture may already be released. */ }
+    clearPlanCopyDrag();
     if (copy.lastStart === null) return;
     const end = copy.lastStart + copy.duration;
-    suppressPlanBlockClick = true;
-    window.setTimeout(() => { suppressPlanBlockClick = false; }, 0);
     if (copy.mode === 'move') {
       if (copy.lastStart === copy.start) return;
       if (hasOccupiedRange(copy.lastStart, end, '[data-plan-item-open]', 'planItemStartIndex', 'planItemEndIndex', 'planBlockId', copy.blockId)) {
@@ -2296,14 +2386,29 @@
       return;
     }
     submitPlanBlockCopy(copy.blockId, copy.lastStart, end);
-  });
-  document.addEventListener('pointercancel', event => {
-    if (planCopyDrag?.pointerId === event.pointerId) {
-      planCopyDrag = null;
-      page.classList.remove('is-plan-copy-dragging');
-      clearActualPreview();
-      clearPlanMovePreview();
-    }
+  }
+  window.LifeFlowCalendarResizeHold(planLayer, {
+    selector:'[data-plan-block-id]', blockSelector:'[data-plan-block-id]',
+    ignoreSelector:'[data-plan-block-resize]',
+    allowed:() => !rangeSavePending && calendarWorkMode === 'normal',
+    begin(block, handle, point) {
+      const blockId = block.dataset.planBlockId || '';
+      const start = Number.parseInt(block.dataset.planItemStartIndex || '', 10);
+      const end = Number.parseInt(block.dataset.planItemEndIndex || '', 10);
+      if (!blockId || !Number.isInteger(start) || !Number.isInteger(end) || end <= start) return false;
+      const grabbedIndex = gridIndexFromPoint(point.clientX, point.clientY);
+      planCopyDrag = {
+        block, blockId, itemId:block.dataset.planItemId || '', start, duration:end-start,
+        offset:Number.isInteger(grabbedIndex) ? Math.max(0, grabbedIndex-start) : 0,
+        mode:'', lastStart:null,
+        pullRefreshSuspended:point.identifier !== undefined && Boolean(window.LifeFlowAndroidBridge?.setPullToRefreshEnabled(false)),
+      };
+      page.classList.add('is-plan-copy-dragging');
+      return true;
+    },
+    move:movePlanCopyDrag,
+    finish:finishPlanCopyDrag,
+    cancel:clearPlanCopyDrag,
   });
 
   function setPlanEditScheduleType(scheduleType) {
@@ -2409,52 +2514,6 @@
     window.setTimeout(() => document.getElementById('calendarTodoCreateInputTitle')?.focus(), 0);
   }
   document.querySelectorAll('[data-calendar-todo-create-open]').forEach(button => button.addEventListener('click', () => openCalendarPlanCreate()));
-  document.querySelector('[data-calendar-day-template]')?.addEventListener('submit', async event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const body = new FormData(form);
-    body.set('_csrf_token', document.querySelector('input[name="_csrf_token"]')?.value || '');
-    body.set('date', page.dataset.calendarDate || '');
-    const submit = form.querySelector('button[type="submit"]');
-    if (submit) submit.disabled = true;
-    try {
-      const response = await fetch('/calendar/day-plan', { method:'POST', body, headers:{ Accept:'application/json', 'X-Requested-With':'XMLHttpRequest' } });
-      const data = await response.json();
-      if (!response.ok || !data.ok) throw new Error(data.message || '템플릿을 적용하지 못했습니다.');
-      const list = document.querySelector('.calendar-plan-source-list');
-      const sources = new Map();
-      (data.items || []).forEach(item => {
-        const source = document.createElement('div');
-        source.className = 'calendar-plan-source';
-        source.dataset.planBlockSource = '';
-        source.dataset.planItemId = String(item.itemId);
-        source.dataset.planTitle = item.title;
-        source.dataset.planItemImportance = item.importance;
-        source.dataset.planCreatedAt = item.createdAt || '';
-        source.dataset.planItemGoalId = item.goalId == null ? '' : String(item.goalId);
-        source.innerHTML = '<span class="calendar-importance-badge"></span><button type="button" class="calendar-plan-source-title" data-plan-block-source-select aria-pressed="false"></button><button type="button" class="calendar-plan-source-edit" data-plan-source-edit aria-label="할 일 옵션 수정">⋯</button>';
-        source.firstElementChild.textContent = item.importance;
-        source.querySelector('[data-plan-block-source-select]').textContent = item.title;
-        source.querySelector('[data-plan-block-source-select]').title = item.title;
-        sources.set(String(item.itemId), source);
-        list?.prepend(source);
-      });
-      const rendered = new Set();
-      (data.segments || []).forEach(segment => {
-        const id = String(segment.blockId || '');
-        if (!id || rendered.has(id)) return;
-        rendered.add(id);
-        appendPlanBlock(segment.itemId, segment.blockId, Number(segment.startIndex), Number(segment.endIndex), sources.get(String(segment.itemId)));
-      });
-      list?.querySelector('.calendar-plan-source-empty')?.remove();
-      sortPlanSources();
-      form.remove();
-      showCalendarToast('하루 템플릿을 적용했습니다.');
-    } catch (error) {
-      showCalendarToast(error.message || '템플릿을 적용하지 못했습니다.');
-      if (submit) submit.disabled = false;
-    }
-  });
   function closeCalendarPlanCreate() {
     if (!calendarTodoCreateLayer) return;
     calendarTodoCreateLayer.hidden = true;
@@ -2959,9 +3018,6 @@
     button.addEventListener('click', () => loadRetrospectPreview(button.dataset.reportDate || ''));
   });
 
-  document.querySelectorAll('[data-plan-settings-open]').forEach(button => {
-    button.addEventListener('click', () => openPanel(planSettingsSheet));
-  });
 
   document.querySelectorAll('[data-actual-event-open]').forEach(button => {
     button.addEventListener('click', () => {
@@ -3011,10 +3067,23 @@
     });
   });
 
+  conditionSheet.querySelectorAll('[data-condition-range]').forEach(input => {
+    const output = input.closest('.calendar-condition-gauge').querySelector('[data-condition-output]');
+    const labels = JSON.parse(input.dataset.conditionLabels);
+    const sync = () => {
+      const label = labels[input.value];
+      output.textContent = label + ' · ' + input.value + '/5';
+      input.setAttribute('aria-valuetext', label);
+    };
+    input.addEventListener('input', sync);
+    input.addEventListener('change', sync);
+    sync();
+  });
+
   document.querySelectorAll('[data-condition-open]').forEach(button => {
     button.addEventListener('click', () => {
       openPanel(conditionSheet);
-      focusSheetInput(conditionSheet.querySelector('input[type="radio"]'));
+      focusSheetInput(conditionSheet.querySelector('input[type="range"]'));
     });
   });
 
@@ -3367,38 +3436,27 @@
       openEditSheet(button);
   });
 
-  if (planPicker) {
-    const select = planPicker.querySelector('select[name="plan_group_id"]');
-    let allowSubmit = false;
-
-    select?.addEventListener('change', async () => {
-      if (allowSubmit) {
-        return;
-      }
-
-      if (planPicker.dataset.hasDailyPlan === '1') {
-        const hasLinks = planPicker.dataset.hasLinkedEvents === '1';
-        const confirmed = ui && typeof ui.confirm === 'function'
-          ? await ui.confirm({
-              title: '계획 일정 변경',
-              message: hasLinks
-                ? '새 템플릿을 연결하면 현재 오늘의 계획이 교체되고 기존 실제 일정의 연결도 해제됩니다. 계속할까요?'
-                : '새 템플릿을 연결하면 현재 오늘의 계획이 교체됩니다. 계속할까요?',
-              confirmText: '변경',
-              cancelText: '취소',
-            })
-          : confirm(hasLinks
-              ? '현재 오늘의 계획을 교체하고 실제 일정 연결을 해제할까요?'
-              : '현재 오늘의 계획을 새 템플릿으로 교체할까요?');
-
-        if (!confirmed) {
-          window.location.reload();
-          return;
-        }
-      }
-
-      allowSubmit = true;
-      planPicker.requestSubmit();
+  if (planPicker && planSettingsSheet instanceof HTMLDialogElement) {
+    let opener = null;
+    document.querySelectorAll('[data-calendar-template-open]').forEach(button => {
+      button.addEventListener('click', () => {
+        opener = button;
+        planSettingsSheet.hidden = false;
+        planPicker.reset();
+        planSettingsSheet.showModal();
+      });
+    });
+    planSettingsSheet.querySelectorAll('[data-calendar-template-close]').forEach(button => button.addEventListener('click', () => planSettingsSheet.close()));
+    planSettingsSheet.addEventListener('close', () => opener?.focus());
+    planSettingsSheet.addEventListener('click', event => {
+      const rect = planSettingsSheet.getBoundingClientRect();
+      if (event.target === planSettingsSheet && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) planSettingsSheet.close();
+    });
+    planPicker.addEventListener('submit', () => {
+      setCalendarWorkMode('normal', true);
+      planSettingsSheet.close();
+      close();
+      planPicker.querySelector('[type="submit"]').disabled = true;
     });
   }
 
@@ -3445,7 +3503,7 @@
   });
 
   document.addEventListener('keydown', event => {
-    if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
+    if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open], .lf-time-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
     const createOpen = calendarTodoCreateLayer && !calendarTodoCreateLayer.hidden;
     if (event.key === 'Tab') {
       const panel = createOpen

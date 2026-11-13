@@ -8,7 +8,7 @@ Today's To-do list starts with a collapsed notice when yesterday contains owned,
 
 `POST /todo/carryover` requires CSRF and validates source ownership, yesterday's date and its current state. The target is the user's current local date; posted target dates are ignored. Explicit registration creates one untimed pending To-do with title, importance, an available owned Goal and the previous note. Yesterday's status, blocks, Actuals and alarms are unchanged; time blocks, Actual records and alarm settings are not copied. `source_carryover_item_id` preserves provenance, and a unique daily-plan/source pair makes repeated requests idempotent. The notice marks an already registered source.
 
-`GET/POST /todo/followup` reads/saves an optional 500-character note on the owned source. Both Schedule Plan details and To-do state details use the shared editor. Selecting progress/postponed keeps the sheet open for its reason/next-action note; other states retain their close behavior. Registered pending tasks also expose their inherited note. Note saves never implicitly change state. The original-detail URL includes `item_id` so the source sheet opens directly.
+`GET/POST /todo/followup` reads/saves an optional 500-character note on the owned source. Schedule Plan details and historical To-do state details can use the shared editor. Progress/postponed selections now reveal an optional next-action editor in the To-do state sheet and wait for the explicit 상태 저장 action. Other states retain immediate saving. The state and optional note share one owned update. The optional historical note remains available for reviewing yesterday’s original. Note saves never implicitly change state. The original-detail URL includes `item_id` so the source sheet opens directly.
 
 State choices in both sheets use one six-option row, in pending/progress/completed/postponed/delegated/cancelled order. Compact gaps retain 44px minimum targets; exceptionally narrow sheets may scroll horizontally. Existing MySQL installs require the follow-up and carryover migrations in `database-migrations.md`; SQLite upgrades automatically.
 
@@ -96,3 +96,43 @@ Timed and time-unspecified intentions share `daily_plan_items`. `todo_status` st
 - Open the edit sheet by selecting a name, press Escape or close it, and confirm focus returns to the name.
 - In the edit sheet, release `할 일 삭제` before 1.5 seconds and confirm the toast and unchanged data. Hold for 1.5 seconds and confirm deletion, retained plan and Actual records, and no duplicate request. Verify pointer cancellation, keyboard hold and a failed request.
 - Confirm the edit sheet contains no time or Actual-link controls. Edit a timed item linked to Actual events and confirm its time, Plan blocks and Actual links remain unchanged after saving and reloading.
+
+## Optional location
+
+Dated To-do Add/Edit share the optional location section with Actual schedules. Search/select a place to draft its map card; normal form save persists/removes it atomically with the owned To-do. Existing dates retain their established edit permissions. See `location-feature-implementation.md` for migration, Kakao domain setup and verification. Recurring templates are outside this addition.
+
+## Dashboard data reuse (2026-11-13)
+
+Dashboard uses getDateData items/completedItems for the same today counts as To-do. planItems now additionally expose endIndex for nearest-event interval comparison, in both placement-backed and legacy paths. No To-do state, visibility, completion, copy or persistence behavior changes.
+
+## Yesterday notice and immediate status correction (2026-11-13)
+
+The current-date tab shows yesterday’s in_progress/postponed records in a separate aside above the “오늘 할 일” list. The notice explicitly states that yesterday’s records are not automatically added. Current-day counts and rows remain unchanged until the user explicitly registers an item; the original date/state remains unchanged. Older records, other users, deleted records and other states are excluded. Template-backed owned source items are included in the notice and source lookup instead of being silently excluded. The notice still renders on databases without optional follow-up/carryover columns; registration remains disabled when unsupported.
+
+The progress/postponed bug left status buttons disabled after a successful save while keeping the sheet open for followup input. The handler now refreshes selected/enabled states and closes consistently for every successful state. Opening another item during an in-flight status save is blocked. The earlier immediate-close correction is superseded by the explicit progress/postponed draft-and-save flow below; optional notes are retained.
+
+Validation: todo_status_sheet.test.js now covers progress → reopen → postponed → reopen and confirms enabled controls/selected state/closure. Isolated SQLite todo_yesterday_notice.php covers yesterday-only filtering, template sources, ownership, no automatic copy, explicit/idempotent registration, original-state retention, separate today view, no today followup and legacy-schema display. Manual: change today’s task to progress/postponed, reopen and change again; verify yesterday’s notice above today’s list, then review/register one item and compare counts and original state.
+
+## Yesterday review sheet (2026-11-14)
+
+The current-day notice is now a button opening todoCarryoverSheet, rather than an inline details disclosure. The shared todo-layer/todo-sheet/ui-standard-sheet shell provides a fixed overlay, internal scrolling, close/overlay/Escape handling, focus return and the existing Tab trap. Original-item links and explicit registration forms move into the sheet; reviewing still never copies tasks automatically.
+
+Disabled register buttons now expose a visible associated reason: already registered today, or the required application database update is not yet applied. The connected MySQL instance was inspected read-only and reported follow-up/carryover support unavailable. No database migrations were executed in this task. Existing sql/migration.todo_followup.mysql.sql and sql/migration.todo_carryover.mysql.sql are the documented upgrades; the button remains gated until support is available.
+
+Validation: PHP view/model regression for separate notice, sheet structure and registered explanation; JS 34 files including shared focus handling; Chrome 320/390/1024px × two themes verifies opening, initial hidden state, scroll lock, viewport fit, reasons, close button/overlay/Escape, no overflow and the new bottom labels. The sheet was visually inspected. Manual: open the notice, inspect the disabled reason, visit yesterday’s original, close via all controls and verify focus return. Registration requires the existing schema support and must preserve yesterday’s state.
+
+## State and optional note in one flow (2026-11-14)
+
+Selecting in_progress or postponed updates the selected draft and reveals an optional textarea labelled 다음에 할 행동 or 미룬 이유 · 다음 행동. The existing note is loaded when opening the state sheet; Save is unavailable until that read finishes, avoiding accidental blank overwrites. The dedicated 상태 저장 button sends the selected state and note together to /todo/status. An empty note is valid. Other states still save immediately without modifying notes. Close/overlay/Escape discards the unsaved selection/note; a failed POST leaves both drafts intact for retry.
+
+The service validates the optional 500-character note and allowed state before writing. CalendarRepository updates todo_status and optional followup_note in one prepared, owner-scoped UPDATE; invalid/unsupported notes never leave a partially changed state. Omitting note preserves the existing note. Calendar Plan editing and the existing follow-up endpoint remain compatible. A native capability check found followup_note already present in the configured MySQL database, so the prepared migration was skipped and no DB schema change was executed.
+
+Validation: todo_status_note.php covers atomic persistence, invalid length, ownership, optional clearing, same-state note edits, state-only preservation and legacy capability fallback. todo_status_sheet.test.js covers draft-only selection, one combined request, optional empty note, failed-save retry and fast saving for other states. Chrome 320/390/1024px in both themes verifies load/reopen, labels, draft cancellation, combined save, optional note, failure retention, aside naming and no overflow; the sheet was visually inspected. Manual: select progress/postponed, edit/omit the note and save/reopen; close without saving; confirm failed saves preserve drafts and another state still saves quickly.
+
+## Carryover re-registration after deletion (2026-11-14)
+
+Registration lookups and the yesterday notice count only non-deleted current-day copies. Soft-deleting a copy clears its optional source_carryover_item_id in the same transaction, releasing the daily-plan/source unique key without restoring the deleted task. Re-registration creates a fresh untimed pending copy from yesterday’s current source data.
+
+Older deleted copies may still hold their unique key. The registration transaction now clears that key only on deleted rows for the same daily plan and source before inserting. Active copies are untouched and repeated registration remains idempotent; unique-key conflict fallback also returns active copies only. Yesterday’s source state and records are unchanged. No schema migration or bulk data rewrite is required.
+
+Validation: isolated SQLite tests cover delete → notice re-enabled → fresh registration, repeated registration, an older soft-delete retaining its key, other-user delete rejection and original-state retention. The same delete/re-register/legacy-key sequence passed against configured MySQL using a temporary fixture account, which was removed afterward. Manual: register yesterday’s progress/postponed item, delete today’s copy, reopen yesterday’s sheet and register again; confirm exactly one active copy and yesterday’s status unchanged.

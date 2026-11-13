@@ -24,3 +24,13 @@
 - Time zone controls date boundaries and scheduling, not translated wording.
 - Persist calendar dates as date values and event ranges as the existing 10-minute indexes. Interpret Today using the request's user-selected time zone.
 - A later regional-format preference may own date order, number formatting, or first weekday without changing either `locale` or `timezone`.
+
+## Settings reference layout (2026-11-13)
+
+Settings now uses five scoped sections: General, Appearance, Notifications, Information/support and Account. The duplicate visible page title is omitted; the screen-reader heading remains. General preferences use icon/label/value rows with native selects and one explicit save. Appearance uses two horizontal radio choices and retains immediate optimistic persistence/rollback. New labels, hints, statuses and notification request feedback are translated into Korean/English/Japanese. Page-only settings.css contains the visual rules; shared shell styles are unchanged.
+
+Validation errors retain valid draft changes in the settings_draft session namespace for one render. Invalid locale/timezone values fall back to persisted valid choices; valid notification fields/toggles remain editable, and the form is marked unsaved. Successful saves clear their draft.
+
+## Selection sheets (2026-11-13)
+
+Settings language/timezone keep the same native backing selects and saved values but use labelled bottom-sheet triggers when JavaScript/dialog support is available. The timezone options can be searched without changing the current value; only a selected option updates the draft. Explicit localization save remains. Sheet title/search/empty/close and settings return navigation use translated labels.

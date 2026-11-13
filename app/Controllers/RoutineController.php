@@ -86,7 +86,7 @@ final class RoutineController
             ],
             'pageScripts' => [
                 '/assets/js/components/routine-state.js',
-                $this->versionedAsset('/assets/js/pages/routine.js'),
+                $this->versionedAsset('/assets/js/components/month-picker.js'), $this->versionedAsset('/assets/js/pages/routine.js'),
             ],
         ]);
 

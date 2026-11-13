@@ -2,7 +2,7 @@
 <?php $report = $publishedReport; $adjacent = $report['adjacent']; $embeddedReport = false; ?>
 <main class="page retrospect-report-page">
     <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
-    <div class="retrospect-primary-context">
+    <div class="retrospect-primary-context ui-menu-context">
         <?php $todayDate = date('Y-m-d'); $todayContext = new DateTimeImmutable($todayDate); $dailyDateClass = ''; $dailyDateContext = ['title' => '회고', 'path' => '/retrospect', 'date' => $todayDate, 'prevDate' => $todayContext->modify('-1 day')->format('Y-m-d'), 'nextDate' => $todayContext->modify('+1 day')->format('Y-m-d'), 'todayDate' => $todayDate, 'isToday' => true, 'preserveSessionDate' => true, 'inputId' => 'reportContextDate', 'view' => 'history']; require __DIR__ . '/../../components/daily-date-navigation.php'; ?>
         <nav class="ui-segmented-tabs retrospect-view-switch" aria-label="회고 보기">
             <a href="/retrospect" data-report-context-link>일일 회고</a>

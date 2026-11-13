@@ -22,6 +22,7 @@ final class SearchController
             'search' => $this->service->search(
                 $this->userId(), $_GET['q'] ?? '', $_GET['type'] ?? 'all', $_GET['from'] ?? '', $_GET['to'] ?? ''
             ),
+            'pageScripts' => [$this->versionedAsset('/assets/js/pages/search.js')],
             'pageStyles' => [$this->versionedAsset('/assets/css/pages/search.css')],
         ]);
     }
