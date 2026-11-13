@@ -25,7 +25,10 @@ final class CalendarTagController
             'errors' => $_SESSION['errors'] ?? [],
             'old' => $_SESSION['old'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
-            'pageStyles' => [$this->versionedAsset('/assets/css/pages/tags.css')],
+            'pageStyles' => [
+                $this->versionedAsset('/assets/css/components/todo-sheet.css'),
+                $this->versionedAsset('/assets/css/pages/tags.css'),
+            ],
         ]);
 
         unset($_SESSION['errors'], $_SESSION['old'], $_SESSION['flash_success']);
@@ -113,7 +116,7 @@ final class CalendarTagController
         $this->redirect('/tags');
     }
 
-    public function toggleSystem(): void
+    public function toggle(): void
     {
         if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
             $this->redirectWithErrors(['general' => '요청이 만료되었습니다. 다시 시도해주세요.']);
@@ -121,13 +124,13 @@ final class CalendarTagController
 
         $tagId = (int) ($_POST['tag_id'] ?? 0);
         $enabled = (string) ($_POST['enabled'] ?? '0') === '1';
-        if ($tagId <= 0 || !$this->tagService->setSystemTagEnabled($this->userId(), $tagId, $enabled)) {
-            $this->redirectWithErrors(['general' => '기본 태그 상태를 변경하지 못했습니다.']);
+        if ($tagId <= 0 || !$this->tagService->setTagEnabled($this->userId(), $tagId, $enabled)) {
+            $this->redirectWithErrors(['general' => '태그 상태를 변경하지 못했습니다.']);
         }
 
         $_SESSION['flash_success'] = $enabled
-            ? '기본 태그를 다시 표시합니다.'
-            : '기본 태그를 일정 등록 목록에서 숨겼습니다.';
+            ? '태그를 다시 표시합니다.'
+            : '태그를 일정 등록 목록에서 숨겼습니다.';
         $this->redirect('/tags');
     }
 

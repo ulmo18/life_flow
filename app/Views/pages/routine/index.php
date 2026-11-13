@@ -30,16 +30,21 @@ $selectedGoalId = (int) ($old['goal_id'] ?? 0);
         <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
     <?php endif; ?>
 
-    <nav class="ui-segmented-tabs routine-management-tabs" aria-label="루틴 상태">
-        <a class="<?= $selectedStatus === 'active' ? 'is-active' : '' ?>" href="/manage/routines?status=active&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'active' ? 'aria-current="page"' : '' ?>>활성 루틴</a>
-        <a class="<?= $selectedStatus === 'completed' ? 'is-active' : '' ?>" href="/manage/routines?status=completed&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'completed' ? 'aria-current="page"' : '' ?>>완료·종료 루틴</a>
-    </nav>
-
-    <div class="routine-month-navigation" aria-label="기록 월 선택">
-        <a class="btn btn-ghost" href="/manage/routines?status=<?= e((string) $selectedStatus) ?>&amp;month=<?= e((string) $previousMonth) ?>" aria-label="이전 달">‹</a>
-        <strong><?= e((string) $monthLabel) ?></strong>
-        <a class="btn btn-ghost" href="/manage/routines?status=<?= e((string) $selectedStatus) ?>&amp;month=<?= e((string) $nextMonth) ?>" aria-label="다음 달">›</a>
+    <div class="ui-menu-context">
+        <nav class="ui-segmented-tabs routine-management-tabs" aria-label="루틴 상태">
+            <a class="<?= $selectedStatus === 'active' ? 'is-active' : '' ?>" href="/manage/routines?status=active&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'active' ? 'aria-current="page"' : '' ?>>활성 루틴</a>
+            <a class="<?= $selectedStatus === 'completed' ? 'is-active' : '' ?>" href="/manage/routines?status=completed&amp;month=<?= e((string) $selectedMonth) ?>" <?= $selectedStatus === 'completed' ? 'aria-current="page"' : '' ?>>완료·종료 루틴</a>
+        </nav>
     </div>
+
+
+            <dialog id="historyMonthDialog" class="lf-date-dialog ui-month-dialog" aria-labelledby="historyMonthTitle">
+                <header class="lf-date-header"><strong id="historyMonthTitle">연·월 선택</strong><button type="button" class="lf-date-close" data-history-month-close aria-label="닫기">×</button></header>
+                <div class="lf-date-body">
+                    <div class="lf-date-navigation"><button type="button" data-history-year-prev aria-label="이전 연도">‹</button><strong data-history-year></strong><button type="button" data-history-year-next aria-label="다음 연도">›</button></div>
+                    <div class="lf-date-grid ui-month-grid" data-history-month-grid></div>
+                </div>
+            </dialog>
 
     <section class="routine-list-section" aria-label="<?= $selectedStatus === 'active' ? '활성 루틴' : '완료 및 종료 루틴' ?> 목록">
         <?php if (empty($routines)): ?>

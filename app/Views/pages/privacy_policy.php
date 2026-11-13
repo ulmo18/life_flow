@@ -1,5 +1,5 @@
 <?php $title = '개인정보처리방침'; ?>
-<?php require __DIR__ . '/../layouts/header.php'; ?>
+<?php $headerBackToSettings = true; require __DIR__ . '/../layouts/header.php'; ?>
 <main class="page">
     <h1 class="page-title">개인정보처리방침</h1>
 

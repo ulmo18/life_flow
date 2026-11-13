@@ -7,11 +7,12 @@ const start = source.indexOf('  let actualTouchSelection = null;');
 const end = source.indexOf("  actualDaygrid?.addEventListener('pointerdown'", start);
 assert.ok(start >= 0 && end > start);
 const listeners = {}, gridListeners = {};
+const windowListeners = {};
 let timer, opened = [], previews = [], bridgeCalls = [], conflict = false, prevented = false;
 const context = {
   actualDaygrid:{addEventListener(type, fn){gridListeners[type] = fn;}, classList:{add(){}, remove(){}}},
   document:{addEventListener(type, fn){listeners[type] = fn;}},
-  window:{setTimeout(fn){timer = fn; return 1;}, clearTimeout(){timer = null;}, LifeFlowAndroidBridge:{setPullToRefreshEnabled(value){bridgeCalls.push(value); return true;}}},
+  window:{addEventListener(type, fn){windowListeners[type]=fn;}, setTimeout(fn){timer = fn; return 1;}, clearTimeout(){timer = null;}, LifeFlowAndroidBridge:{setPullToRefreshEnabled(value){bridgeCalls.push(value); return true;}}},
   navigator:{}, calendarWorkMode:'normal', actualGridIndexFromPoint(x){return x;},
   updateWorkStatus(){}, clearActualPreview(){}, previewActualRange(start, end){previews.push([start, end]);},
   actualRangeFromStartAndPointer(start, end){return {start:Math.min(start, end), end:Math.max(start, end) + 1};},
@@ -39,9 +40,15 @@ assert.ok(pointerEnd > end);
 vm.runInNewContext('let actualSelection = null;\n' + source.slice(end, pointerEnd), context);
 function pointer(type, x){return {pointerType:type, pointerId:2, isPrimary:true, button:0, clientX:x, clientY:0, target:{closest(){return null;}}, preventDefault(){}};}
 gridListeners.pointerdown(pointer('mouse', 42)); gridListeners.pointerup(pointer('mouse', 42));
-assert.deepEqual(opened.pop(), [42, 43], 'Mouse click keeps its existing 10-minute entry');
+assert.equal(opened.length, 0, 'Short mouse click must not register');
+gridListeners.pointerdown(pointer('mouse',42)); timer(); gridListeners.pointerup(pointer('mouse',42));
+assert.deepEqual(opened.pop(), [42,43], 'Long mouse click registers a single cell');
 gridListeners.pointerdown(pointer('mouse', 42)); gridListeners.pointermove(pointer('mouse', 44)); gridListeners.pointerup(pointer('mouse', 44));
-assert.deepEqual(opened.pop(), [42, 45], 'Mouse drag keeps its existing range entry');
+assert.equal(opened.length,0,'Immediate mouse drag must not register');
+gridListeners.pointerdown(pointer('mouse',42)); timer(); gridListeners.pointermove(pointer('mouse',44)); gridListeners.pointerup(pointer('mouse',44));
+assert.deepEqual(opened.pop(),[42,45],'Drag after long mouse hold registers a range');
+gridListeners.pointerdown(pointer('mouse',42)); windowListeners.scroll(); gridListeners.pointerup(pointer('mouse',42)); assert.equal(opened.length,0,'Scroll cancels mouse entry');
+gridListeners.pointerdown(pointer('mouse',42)); timer(); gridListeners.pointercancel(pointer('mouse',42)); gridListeners.pointerup(pointer('mouse',42)); assert.equal(opened.length,0,'Pointer cancellation never registers');
 gridListeners.pointerdown(pointer('touch', 42)); gridListeners.pointerup(pointer('touch', 42));
 assert.equal(opened.length, 0, 'Touch pointer compatibility events must not create entries');
 process.stdout.write('PASS actual grid short touch, scroll, single-cell and range long press, cancellation and conflict\n');

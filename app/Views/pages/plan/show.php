@@ -16,11 +16,11 @@
         <a class="btn btn-secondary" href="/plan/edit?id=<?= e((string) $plan['id']) ?>">템플릿 수정</a>
     </div>
 
-    <section class="daygrid-wrap" aria-label="계획 상세 그리드">
+    <section class="daygrid-wrap calendar-timetable-panel is-plan plan-template-timetable" aria-label="하루 템플릿 시간표">
         <div class="daygrid">
             <?php for ($hour = 0; $hour < 24; $hour++): ?>
                 <div class="daygrid-row">
-                    <div class="hour-label"><?= sprintf('%02d:00', $hour) ?></div>
+                    <div class="hour-label"><?= sprintf('%02d', $hour) ?></div>
                     <div class="cells">
                         <?php for ($i = 0; $i < 6; $i++): ?>
                             <div class="cell"></div>
@@ -40,12 +40,12 @@
                         $span = min(6 - $col, $end - $i);
                     ?>
                         <div
-                            class="event plan-editor-event importance-<?= e(strtolower((string) $block['importance'])) ?>"
+                            class="event plan-event plan-template-event importance-<?= e(strtolower((string) $block['importance'])) ?>"
                             style="--row: <?= e((string) $row) ?>; --col: <?= e((string) $col) ?>; --span: <?= e((string) $span) ?>;"
                             data-ui-tooltip="<?= e((string) $block['title']) ?>"
                             aria-label="<?= e((string) $block['title']) ?> <?= e((string) $block['timeRange']) ?>"
                         >
-                            <span class="importance-badge"><?= e((string) $block['importanceBadge']) ?></span>
+                            <span class="calendar-importance-badge is-neutral"><?= e((string) $block['importanceBadge']) ?></span>
                             <span class="event-title"><?= e((string) $block['title']) ?></span>
                         </div>
                     <?php

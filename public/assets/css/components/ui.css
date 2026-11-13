@@ -146,7 +146,7 @@ body[data-theme='dark'] .ui-panel-header > .ui-close-button {
   color: var(--color-text);
   cursor: pointer;
   font-family: inherit;
-  font-size: 22px;
+  font-size: var(--ui-sheet-close-icon-size, 22px);
   line-height: 1;
 }
 
@@ -440,3 +440,32 @@ body[data-theme='dark'] .calendar-sheet.ui-standard-sheet.ui-form-sheet,
 
 .ui-form-sheet-header > .ui-close-button:focus-visible { outline-offset:-3px; }
 .calendar-local-layer:has(.ui-standard-sheet:not([hidden])) .calendar-local-overlay { backdrop-filter:none; }
+
+/* Structured confirmation keeps the question primary and details on demand. */
+.ui-confirm-question { display:grid; grid-template-columns:minmax(0,1fr) 44px; align-items:end; gap:4px; }
+.ui-confirm-question > strong { color:var(--color-text); font-size:14px; font-weight:700; line-height:1.65; white-space:pre-line; }
+.ui-confirm-notice-toggle { display:grid; place-items:center; width:44px; min-height:44px; padding:0; border:0; border-radius:var(--radius-sm); background:transparent; color:var(--color-text-muted); cursor:pointer; }
+.ui-confirm-notice-toggle > span { display:grid; place-items:center; width:19px; height:19px; border:1px solid currentColor; border-radius:50%; font-size:12px; font-weight:600; line-height:1; }
+.ui-confirm-notice-toggle:focus-visible { outline:3px solid var(--color-focus); outline-offset:-2px; }
+.ui-confirm-notice { position:relative; margin-top:10px; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--color-surface-soft); color:var(--color-text-muted); font-size:12px; line-height:1.6; }
+.ui-confirm-notice[hidden] { display:none; }
+.ui-confirm-notice::before { content:''; position:absolute; right:16px; top:-5px; width:8px; height:8px; border-top:1px solid var(--border); border-left:1px solid var(--border); background:var(--color-surface-soft); transform:rotate(45deg); }
+.ui-confirm-notice ul { display:grid; gap:6px; margin:0; padding-left:16px; list-style:disc; }
+.ui-confirm-with-notices > .ui-panel-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.ui-confirm-with-notices > .ui-panel-actions .btn { min-height:44px; }
+
+/* Month selection shared with published retrospective history. */
+.ui-month-search { display:flex; align-items:center; gap:6px; flex:0 0 auto; position:relative; min-width:0; }
+.ui-month-trigger { min-height:44px; padding:0; border:0; background:transparent; color:var(--color-text); font:inherit; font-size:20px; font-weight:800; white-space:nowrap; text-align:left; cursor:pointer; }
+.ui-month-search input[type=month] { position:static; width:auto; height:44px; opacity:1; font:inherit; }
+.ui-month-search [hidden] { display:none; }
+.ui-month-dialog .ui-month-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin-top:12px; }
+.ui-month-dialog .ui-month-grid button { border-radius:10px; }
+
+/* Calendar Actual edit is the reference for every sheet close glyph. */
+:root { --ui-sheet-close-icon-size:22px; }
+.ui-close-button,
+.lf-date-dialog .lf-date-close { display:grid; place-items:center; flex:0 0 44px; width:44px; min-width:44px; height:44px; min-height:44px; padding:0; font-family:inherit; font-size:var(--ui-sheet-close-icon-size); font-weight:400; line-height:1; }
+.ui-confirm-warning { margin:10px 0 0; color:var(--color-danger-text); font-size:12px; font-weight:600; line-height:1.5; }
+
+.lf-date-dialog .lf-date-close { border:0; border-radius:999px; background:transparent; color:inherit; cursor:pointer; }

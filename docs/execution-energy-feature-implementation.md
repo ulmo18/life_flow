@@ -58,3 +58,9 @@ Existing installations must also allow the 0% milestone in `execution_energy_not
 - `POST /execution-energy/morning`: save today's Calendar condition sheet.
 
 All write routes require CSRF validation. `ExecutionEnergyController` only coordinates requests; `ExecutionEnergyService` owns calculation and validation, and `ExecutionEnergyRepository` owns persistence.
+
+## Calendar condition gauges (2026-11-13)
+
+The Today condition sheet now uses four labelled native 1–5 range gauges for sleep/fatigue/mood/stress with a live current-label/value output and low/middle/high scale captions. Existing saved states are restored; null/unset states display 3 (평소/보통). The perceived-burden choices omit the empty option and default to similar, retaining a saved lower/higher choice. No values are written merely by opening the sheet. Saving midpoint states results in zero morning adjustment under the existing calculation. The POST endpoint, CSRF, five-step direction and replacement calculation are unchanged; legacy null payload compatibility remains. The sheet uses the existing ui-standard-sheet shell and focuses its first range on open.
+
+Changed files: Calendar view/CSS/JS, dashboard.css, tests/calendar_condition.php, this document, calendar-feature-implementation.md and dashboard-feature-implementation.md. PHP tests cover defaults, stored-value restoration, neutral adjustment and bounds. Browser fixtures at 320/390/1024px × two themes × unset/saved records verify current labels, input submission, visible 44px-high gauges, no horizontal overflow and dashboard top/bottom alignment. Manual: drag/tap/arrow-key each gauge, compare the label and value, save/reopen, verify the resulting starting capacity, and check the neutral default before the first save.

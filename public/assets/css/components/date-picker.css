@@ -1,10 +1,10 @@
-.lf-date-dialog { box-sizing:border-box; width:min(100% - 24px, 420px); max-width:420px; max-height:min(90dvh, 620px); margin:auto auto 0; padding:0; border:0; border-radius:18px 18px 0 0; background:var(--color-surface); color:var(--color-text); box-shadow:0 -12px 40px rgba(26,27,58,.2); font:inherit; overflow:auto; }
+.lf-date-dialog { box-sizing:border-box; width:min(100%, 680px); max-width:680px; max-height:min(90dvh, 620px); margin:auto auto 0; padding:0; border:0; border-radius:24px 24px 0 0; background:var(--color-surface); color:var(--color-text); box-shadow:0 -12px 40px rgba(26,27,58,.2); font:inherit; overflow:auto; }
 .lf-date-dialog::backdrop { background:rgba(26,27,58,.48); }
 .lf-date-header { display:flex; align-items:center; justify-content:space-between; min-height:56px; padding:0 16px; border-bottom:1px solid var(--border); font-size:15px; }
 .lf-date-header > strong { min-width:0; overflow-wrap:anywhere; font-weight:700; }
 .lf-date-header > .lf-date-close { flex:0 0 44px; }
 .lf-date-dialog button, .lf-date-dialog select { font:inherit; color:inherit; cursor:pointer; }
-.lf-date-close, .lf-date-navigation button { display:grid; width:44px; height:44px; place-items:center; border:0; background:transparent; font-size:24px; }
+.lf-date-navigation button { display:grid; width:44px; height:44px; place-items:center; border:0; background:transparent; font-size:24px; }
 .lf-date-body { padding:12px 16px calc(16px + env(safe-area-inset-bottom)); }
 .lf-date-navigation { display:flex; align-items:center; justify-content:center; gap:4px; }
 .lf-date-navigation select { min-height:44px; padding:0 6px; border:0; border-radius:8px; background:transparent; font-size:14px; font-weight:700; }
@@ -16,4 +16,24 @@
 .lf-date-grid button:disabled, .lf-date-today:disabled { opacity:.35; cursor:default; }
 .lf-date-today { width:100%; min-height:44px; border:1px solid var(--border); border-radius:10px; background:var(--color-surface); color:var(--color-primary-text) !important; font-weight:700 !important; }
 .lf-date-dialog :focus-visible { outline:2px solid var(--color-focus); outline-offset:2px; }
-@media (min-width:768px) { .lf-date-dialog { margin:auto; border-radius:18px; } }
+
+
+.lf-time-dialog { overflow:hidden; max-height:min(82dvh,720px); }
+.lf-time-dialog[open] { display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
+.lf-time-dialog > .lf-date-body { min-height:0; overflow-y:auto; }
+.lf-time-preview { display:block; text-align:center; font-size:28px; font-weight:700; font-variant-numeric:tabular-nums; margin-bottom:12px; }
+.lf-time-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.lf-time-columns section { min-width:0; }
+.lf-time-columns h3 { margin:0 0 8px; font-size:13px; text-align:center; }
+.lf-time-columns section > div { display:grid; gap:6px; max-height: min(38dvh,300px); overflow-y:auto; overscroll-behavior:contain; padding:3px; }
+.lf-time-columns .ui-choice-button { min-height:44px; width:100%; }
+.lf-time-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:12px 16px max(16px,env(safe-area-inset-bottom)); border-top:1px solid var(--border); }
+select[data-time-picker][hidden] { display:none !important; }
+
+input[type=time][data-time-picker][hidden], select[data-select-sheet][hidden] { display:none !important; }
+.lf-select-dialog[open] { display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; max-height:min(82dvh,720px); }
+.lf-select-body { display:grid; grid-template-rows:auto minmax(0,1fr) auto; min-height:0; gap:10px; padding:12px 16px max(16px,env(safe-area-inset-bottom)); }
+.lf-select-body input { width:100%; min-width:0; min-height:44px; }
+.lf-select-body [hidden] { display:none; }
+.lf-select-options { display:grid; gap:6px; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:3px; }
+.lf-select-options > button { width:100%; min-height:44px; padding:10px; text-align:left; overflow-wrap:anywhere; }

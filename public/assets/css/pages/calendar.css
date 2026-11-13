@@ -2343,3 +2343,38 @@ body[data-theme='dark'] .calendar-actual-form .calendar-additional-records .cale
 #calendarPlanBlockEditForm .calendar-plan-management-action { width:100%; min-height:48px; margin-bottom:var(--space-2); }
 #calendarPlanBlockEditForm .calendar-plan-management[open] { padding-bottom:var(--space-2); }
 #calendarPlanBlockEditForm [data-plan-block-detach] { min-height:44px; border-color:transparent; background:transparent; box-shadow:none; color:var(--color-text-muted); font-size:12px; font-weight:400; }
+
+.calendar-actual-form .calendar-actual-convert { justify-self:start; min-height:44px; padding:8px 0; border:0; border-radius:0; background:transparent; color:var(--color-text-muted); font:inherit; font-size:12px; font-weight:400; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+
+.calendar-actual-form .calendar-actual-convert:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; }
+
+.calendar-condition-gauge { display:grid; gap:2px; min-width:0; }
+.calendar-condition-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.calendar-condition-heading label { font-size:14px; font-weight:600; }
+.calendar-condition-heading output { color:var(--color-text-muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.calendar-condition-gauge input[type=range] { position:static; width:100%; min-width:0; height:44px; margin:0; opacity:1; pointer-events:auto; accent-color:var(--color-primary-text); cursor:pointer; }
+.calendar-condition-gauge input[type=range]:focus-visible { outline:3px solid var(--color-focus); outline-offset:2px; border-radius:var(--radius-sm); }
+.calendar-condition-ticks { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--color-text-muted); }
+
+.calendar-popup.calendar-retrospect-popup { padding:var(--space-4); grid-template-rows:auto minmax(0,1fr); gap:var(--space-3); }
+.calendar-retrospect-header { display:grid; gap:var(--space-2); min-width:0; }
+.calendar-retrospect-header > .calendar-sheet-header { position:static; display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:var(--space-3); min-height:44px; padding:0; background:transparent; }
+.calendar-retrospect-header .calendar-sheet-header > strong { min-width:0; font-size:15px; line-height:1.5; overflow-wrap:anywhere; }
+.calendar-retrospect-header .calendar-sheet-header > .ui-close-button { min-width:44px; min-height:44px; padding:0; background:transparent; }
+.calendar-retrospect-header .calendar-retrospect-navigation { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:0; }
+.calendar-retrospect-header .calendar-retrospect-navigation .btn { width:100%; min-height:44px; padding:8px; border-radius:var(--radius-md); white-space:normal; }
+.calendar-retrospect-popup .calendar-retrospect-report-scroll { min-width:0; min-height:0; padding:0; overscroll-behavior:contain; }
+.calendar-retrospect-popup .daily-report-paper { margin:0; }
+.calendar-retrospect-popup .calendar-retrospect-report-scroll > .muted { margin:0; }
+
+.calendar-template-select{width:100%;margin-bottom:var(--space-3)}
+.calendar-template-dialog form{margin:0}.calendar-template-body{display:grid;gap:var(--space-3);padding:var(--space-4)}
+.calendar-template-warning{color:var(--color-text-muted);font-size:var(--font-size-sm)}.calendar-template-warning strong{color:var(--color-danger,#b44339)}.calendar-template-warning ul{padding-left:20px;margin-bottom:0}
+.calendar-template-consent{display:flex;align-items:center;gap:var(--space-2);min-height:44px}
+.calendar-template-dialog .lf-time-actions{display:flex;gap:var(--space-2);padding:var(--space-4)}.calendar-template-dialog .lf-time-actions .btn{flex:1}
+
+.calendar-template-dialog .calendar-plan-picker{padding:0;border:0;border-radius:0;gap:0;background:transparent}
+
+.calendar-template-dialog[open]{display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.calendar-template-dialog .calendar-plan-picker{grid-template-rows:minmax(0,1fr) auto;min-height:0}
+.calendar-template-body{min-height:0;overflow:auto;overscroll-behavior:contain}

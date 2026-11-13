@@ -43,19 +43,23 @@ final class CalendarController
             'errors' => $_SESSION['errors'] ?? [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'notificationSyncPayload' => $this->notificationService->buildCalendarSyncPayload($userId, $calendar),
+            'kakaoMapKey' => (string) (getenv('KAKAO_MAP_JS_KEY') ?: ''),
             'pageStyles' => [
+                $this->versionedAsset('/assets/css/components/location-fields.css'),
                 $this->versionedAsset('/assets/css/components/routine-state.css'),
                 $this->versionedAsset('/assets/css/components/todo-sheet.css'),
                 $this->versionedAsset('/assets/css/pages/retrospect-report.css'),
                 $this->versionedAsset('/assets/css/pages/calendar.css'),
             ],
             'pageScripts' => [
+                $this->versionedAsset('/assets/js/components/location-fields.js'),
                 '/assets/js/components/time-grid-selection.js',
                 '/assets/js/components/routine-state.js',
                 $this->versionedAsset('/assets/js/components/calendar-energy-input.js'),
                 $this->versionedAsset('/assets/js/components/plan-reminder.js'),
                 $this->versionedAsset('/assets/js/components/todo-followup.js'),
                 $this->versionedAsset('/assets/js/components/calendar-resize-hold.js'),
+                $this->versionedAsset('/assets/js/components/time-picker.js'),
                 $this->versionedAsset('/assets/js/pages/calendar.js'),
             ],
         ]);
@@ -112,6 +116,32 @@ final class CalendarController
 
         $_SESSION['flash_success'] = '일정이 삭제되었습니다.';
         $this->redirect($this->calendarPath($_POST['date'] ?? null));
+    }
+
+    public function convertEventToPlan(): void
+    {
+        if (!Csrf::verify($_POST['_csrf_token'] ?? null)) {
+            $this->respondJson(['ok' => false, 'message' => '요청이 만료되었습니다. 다시 시도해주세요.'], 419);
+        }
+        $eventId = filter_var($_POST['event_id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$eventId || $eventId <= 0 || ($_POST['discard_actual'] ?? '') !== '1') {
+            $this->respondJson(['ok' => false, 'message' => '전환할 일정과 실제 기록 삭제 동의를 확인해주세요.'], 422);
+        }
+        $targetRange = null;
+        if (array_key_exists('start_index', $_POST) || array_key_exists('end_index', $_POST)) {
+            $start = filter_var($_POST['start_index'] ?? null, FILTER_VALIDATE_INT);
+            $end = filter_var($_POST['end_index'] ?? null, FILTER_VALIDATE_INT);
+            if ($start === false || $end === false || $start < 0 || $end > 144 || $start >= $end) {
+                $this->respondJson(['ok' => false, 'message' => '전환할 계획 시간 범위를 확인해주세요.'], 422);
+            }
+            $targetRange = [(int) $start, (int) $end];
+        }
+        $result = $this->calendarService->convertActualEventToPlan($this->userId(), (int) $eventId, $targetRange);
+        if ($result === null) {
+            $this->respondJson(['ok' => false, 'message' => '전환하지 못했습니다. 계획 시간 겹침 또는 일정 변경 여부를 확인해주세요.'], 409);
+        }
+        $_SESSION['flash_success'] = $result['reused'] ? '실제 기록을 제거하고 연결된 계획을 유지했습니다.' : '계획과 할 일로 전환했습니다.';
+        $this->respondJson(['ok' => true, 'redirect' => $this->calendarPath($result['date'], 'plan')]);
     }
 
     public function updateEvent(): void

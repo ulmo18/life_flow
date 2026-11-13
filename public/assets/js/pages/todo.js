@@ -32,6 +32,26 @@
   let createTrigger = null;
   if (!page || !layer || !timeForm || !itemIdInput || !startInput || !endInput) return;
 
+  const carryoverLayer = document.querySelector('[data-todo-carryovers-layer]');
+  let carryoverTrigger = null;
+  function closeCarryovers() {
+    if (!carryoverLayer || carryoverLayer.hidden) return;
+    carryoverLayer.hidden = true;
+    document.body.classList.remove('is-menu-open');
+    carryoverTrigger?.focus({preventScroll:true});
+    carryoverTrigger = null;
+  }
+  document.querySelectorAll('[data-todo-carryovers-open]').forEach(button => button.addEventListener('click', () => {
+    if (!carryoverLayer) return;
+    carryoverTrigger = button;
+    carryoverLayer.hidden = false;
+    document.body.classList.add('is-menu-open');
+    const panel = carryoverLayer.querySelector('[role="dialog"]');
+    panel.scrollTop = 0;
+    panel.querySelector('.ui-close-button').focus({preventScroll:true});
+  }));
+  document.querySelectorAll('[data-todo-carryovers-close]').forEach(button => button.addEventListener('click', closeCarryovers));
+
   const listTabs = Array.from(page.querySelectorAll('[data-todo-list-tab]'));
   const listPanels = Array.from(page.querySelectorAll('[data-todo-list-panel]'));
   function selectListTab(tab, focus = false) {
@@ -416,25 +436,68 @@
   const statusRecord = document.querySelector('[data-todo-status-record]');
   let statusTrigger = null;
   let statusSaving = false;
+  let selectedStatus = null;
+  let statusLoadVersion = 0;
+  let statusNoteLoading = false;
+  let statusNoteReady = false;
+  const statusFollowup = statusLayer?.querySelector('[data-status-followup]');
+  const statusFollowupLabel = statusLayer?.querySelector('[data-status-followup-label]');
+  const statusFollowupNote = statusLayer?.querySelector('[data-status-followup-note]');
+  const statusFollowupMessage = statusLayer?.querySelector('[data-status-followup-message]');
+  const statusSaveActions = statusLayer?.querySelector('[data-status-save-actions]');
+  const statusSaveButton = statusLayer?.querySelector('[data-status-save]');
+  const needsFollowup = status => ['in_progress', 'postponed'].includes(status);
+  function updateStatusDraft() {
+    const visible = needsFollowup(selectedStatus) && statusTrigger?.dataset.statusEditable !== '0';
+    if (statusFollowup) statusFollowup.hidden = !visible;
+    if (statusSaveActions) statusSaveActions.hidden = !visible;
+    if (statusFollowupLabel) statusFollowupLabel.textContent = selectedStatus === 'postponed' ? '미룬 이유 · 다음 행동' : '다음에 할 행동';
+    if (statusSaveButton) statusSaveButton.disabled = statusSaving || statusNoteLoading || !statusNoteReady;
+    if (statusFollowupNote) statusFollowupNote.disabled = statusSaving || statusNoteLoading || !statusNoteReady || statusFollowupNote.dataset.unsupported === '1';
+    if (statusNote && statusTrigger?.dataset.statusEditable !== '0') statusNote.textContent = visible ? '메모는 선택 사항이며, 상태 저장을 누르면 함께 반영됩니다.' : '선택하면 상태를 바로 저장합니다.';
+  }
+  async function loadStatusNote(button) {
+    if (!statusFollowupNote || button.dataset.statusEditable === '0') return;
+    const version = ++statusLoadVersion;
+    statusFollowupNote.value = '';
+    statusFollowupNote.dataset.unsupported = '0';
+    statusNoteLoading = true; statusNoteReady = false;
+    statusFollowupMessage.textContent = '메모를 불러오는 중…'; updateStatusDraft();
+    try {
+      const response = await fetch('/todo/followup?daily_plan_item_id=' + encodeURIComponent(button.dataset.itemId), {headers:{Accept:'application/json'}});
+      const result = await response.json();
+      if (version !== statusLoadVersion || statusTrigger !== button) return;
+      if (!response.ok || !result.ok) throw new Error(result.message || '메모를 불러오지 못했습니다.');
+      statusFollowupNote.value = result.note || '';
+      statusFollowupNote.dataset.unsupported = result.supported ? '0' : '1';
+      statusNoteReady = true;
+      statusFollowupMessage.textContent = result.supported ? '메모 없이도 저장할 수 있어요.' : '현재 메모 저장을 사용할 수 없어 상태만 저장합니다.';
+    } catch (error) {
+      if (version === statusLoadVersion) statusFollowupMessage.textContent = '메모를 불러오지 못했습니다. 닫고 다시 열어 주세요.';
+    } finally {
+      if (version === statusLoadVersion) { statusNoteLoading = false; updateStatusDraft(); }
+    }
+  }
   function closeStatus() {
     if (!statusLayer || statusSaving) return;
     statusLayer.hidden = true;
     document.body.classList.remove('is-menu-open');
     statusTrigger?.focus();
     statusTrigger = null;
+    selectedStatus = null;
+    statusLoadVersion++;
   }
   function updateStatusOptions() {
     statusOptions.forEach(option => {
       option.disabled = statusSaving || statusTrigger?.dataset.statusEditable === '0';
-      option.setAttribute('aria-pressed', String(option.dataset.todoStatusOption === statusTrigger?.dataset.savedStatus));
+      option.setAttribute('aria-pressed', String(option.dataset.todoStatusOption === (selectedStatus || statusTrigger?.dataset.savedStatus)));
     });
+    updateStatusDraft();
   }
   document.querySelectorAll('[data-todo-block-status]').forEach(button => button.addEventListener('click', () => {
-    if (!statusLayer || !button.dataset.itemId) return;
+    if (!statusLayer || !button.dataset.itemId || statusSaving) return;
     statusTrigger = button;
-    window.LifeFlowTodoFollowup?.open(statusLayer.querySelector('[data-todo-followup]'), {
-      itemId:Number(button.dataset.itemId), status:button.dataset.savedStatus, editable:button.dataset.statusEditable !== '0',
-    });
+    selectedStatus = button.dataset.savedStatus;
     if (statusTitle) statusTitle.textContent = button.dataset.blockTitle || '';
     const template = button.parentElement?.querySelector('[data-todo-record-template]');
     if (statusRecord) {
@@ -444,20 +507,22 @@
     if (statusNote) statusNote.textContent = button.dataset.statusEditable === '0' ? '상태를 변경할 수 없는 기록입니다.' : '이 할 일의 상태를 변경합니다.';
     updateStatusOptions();
     statusLayer.hidden = false;
+    loadStatusNote(button);
     const sheet = statusLayer.querySelector('.todo-sheet');
     if (sheet) sheet.scrollTop = 0;
     document.body.classList.add('is-menu-open');
     (statusOptions.find(option => option.getAttribute('aria-pressed') === 'true' && !option.disabled) || statusOptions.find(option => !option.disabled) || statusLayer.querySelector('[data-todo-status-close].ui-close-button'))?.focus();
   }));
   document.querySelectorAll('[data-todo-status-close]').forEach(button => button.addEventListener('click', closeStatus));
-  statusOptions.forEach(option => option.addEventListener('click', async () => {
-    if (!statusTrigger || statusSaving || option.disabled) return;
-    const status = option.dataset.todoStatusOption;
-    if (status === statusTrigger.dataset.savedStatus) { closeStatus(); return; }
+  async function saveSelectedStatus(status, withNote = false) {
+    if (!statusTrigger || statusSaving) return;
+    if (withNote && (!statusNoteReady || statusNoteLoading)) return;
+    const option = statusOptions.find(item => item.dataset.todoStatusOption === status);
     const body = new FormData();
     body.set('_csrf_token', timeForm.querySelector('input[name="_csrf_token"]').value);
     body.set('daily_plan_item_id', statusTrigger.dataset.itemId);
     body.set('status', status);
+    if (withNote && statusFollowupNote?.dataset.unsupported !== '1') body.set('note', statusFollowupNote.value);
     statusSaving = true;
     updateStatusOptions();
     try {
@@ -480,9 +545,8 @@
       });
       sortTodoRows();
       statusSaving = false;
-      if (['in_progress', 'postponed'].includes(status)) {
-        window.LifeFlowTodoFollowup?.setStatus(statusLayer.querySelector('[data-todo-followup]'), status);
-      } else closeStatus();
+      updateStatusOptions();
+      closeStatus();
     } catch (error) {
       statusSaving = false;
       updateStatusOptions();
@@ -490,12 +554,22 @@
       if (window.LifeFlowToast?.show) window.LifeFlowToast.show(message);
       else window.alert(message);
     }
+  }
+  statusOptions.forEach(option => option.addEventListener('click', async () => {
+    if (!statusTrigger || statusSaving || option.disabled) return;
+    selectedStatus = option.dataset.todoStatusOption;
+    updateStatusOptions();
+    if (needsFollowup(selectedStatus)) return;
+    if (selectedStatus === statusTrigger.dataset.savedStatus) { closeStatus(); return; }
+    await saveSelectedStatus(selectedStatus);
   }));
+  statusSaveButton?.addEventListener('click', () => saveSelectedStatus(selectedStatus, true));
 
   document.querySelectorAll('[data-todo-edit-open]').forEach(button => button.addEventListener('click', () => {
     if (!editLayer || !editForm || !editId || !editTitle || editGoalInputs.length === 0) return;
     editTrigger = button;
     editId.value = button.dataset.itemId || '';
+    window.LifeFlowLocation?.open(editForm, 'todo', editId.value);
     editTitle.value = button.dataset.title || '';
     setEditGoal(button.dataset.goalId || '');
     if (editGoalPicker) editGoalPicker.open = false;
@@ -554,7 +628,7 @@
   document.addEventListener('keydown', event => {
     if (event.defaultPrevented || document.querySelector('.lf-date-dialog[open]') || document.getElementById('lifeFlowUiLayer')?.hidden === false) return;
     if (event.key === 'Tab') {
-      const activeLayer = [statusLayer, recurringLayer, editLayer, createLayer, layer].find(item => item && !item.hidden);
+      const activeLayer = [carryoverLayer, statusLayer, recurringLayer, editLayer, createLayer, layer].find(item => item && !item.hidden);
       const panel = activeLayer?.querySelector('[role="dialog"]');
       if (!panel) return;
       const controls = Array.from(panel.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
@@ -566,6 +640,7 @@
       return;
     }
     if (event.key !== 'Escape') return;
+    if (carryoverLayer && !carryoverLayer.hidden) { closeCarryovers(); return; }
     if (statusLayer && !statusLayer.hidden) { closeStatus(); return; }
     if (recurringLayer && !recurringLayer.hidden) { closeRecurring(); return; }
     if (!layer.hidden) close();

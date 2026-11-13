@@ -1,125 +1,72 @@
 <?php require __DIR__ . '/../../layouts/header.php'; ?>
-
 <main class="page tag-page">
-    <section class="tag-page-header">
-        <div>
-            <p class="eyebrow">Tags</p>
-            <h1 class="page-title">일정 태그 관리</h1>
-        </div>
+    <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
+    <?php if (!empty($errors['general'])): ?><div class="msg msg-error"><?= e((string) $errors['general']) ?></div><?php endif; ?>
+    <section class="tag-list-section ui-list-surface" aria-label="태그 목록">
+        <table class="tag-table ui-list-table">
+            <caption class="sr-only">일정 태그 목록</caption>
+            <thead><tr><th scope="col">태그</th><th scope="col">사용 여부</th></tr></thead>
+            <tbody>
+            <?php foreach (($tagData['tags'] ?? []) as $tag): ?>
+                <tr><td>
+                    <?php if (!empty($tag['is_system'])): ?>
+                        <div class="tag-card-title tag-system-title"><span><strong><?= e((string) $tag['name']) ?></strong><svg class="tag-system-icon" viewBox="0 0 24 24" role="img" aria-label="기본 태그"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg></span></div>
+                    <?php else: ?>
+                        <button type="button" class="tag-edit-open tag-card-title" data-tag-open="tagEdit<?= e((string) $tag['id']) ?>" aria-label="<?= e((string) $tag['name']) ?> 태그 수정">
+                            <span class="tag-swatch" style="--tag-color: <?= e((string) $tag['color_hex']) ?>;" aria-hidden="true"></span><strong><?= e((string) $tag['name']) ?></strong><span class="tag-edit-label">수정</span>
+                        </button>
+                    <?php endif; ?>
+                </td><td>
+                    <?php $enabled = (int) ($tag['is_enabled'] ?? 1) === 1; ?>
+                    <form method="post" action="/tags/toggle">
+                        <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
+                        <input type="hidden" name="tag_id" value="<?= e((string) $tag['id']) ?>">
+                        <input type="hidden" name="enabled" value="<?= $enabled ? '0' : '1' ?>">
+                        <button type="submit" class="tag-visibility-toggle <?= $enabled ? 'is-enabled' : '' ?>" role="switch" aria-checked="<?= $enabled ? 'true' : 'false' ?>" aria-label="<?= e((string) $tag['name']) ?> 태그 <?= $enabled ? '비활성화' : '활성화' ?>"><span aria-hidden="true"></span></button>
+                    </form>
+                </td></tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
     </section>
-
-    <?php if (!empty($flashSuccess)): ?>
-        <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
-    <?php endif; ?>
-
-    <?php if (!empty($errors['general'])): ?>
-        <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
-    <?php endif; ?>
-
-    <section class="section tag-form-section">
-        <h2>태그 추가</h2>
-        <form class="tag-form" method="post" action="/tags">
-            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-            <div class="form-group"><label class="form-label" for="tagName">태그명</label>
-            <input class="input" id="tagName" name="name" type="text" maxlength="24" value="<?= e((string) ($old['name'] ?? '')) ?>" <?= !empty($errors['name']) ? 'aria-invalid="true" aria-describedby="tagNameError"' : '' ?> required>
-            <?php if (!empty($errors['name'])): ?>
-                <p class="field-error" id="tagNameError"><?= e((string) $errors['name']) ?></p>
-            <?php endif; ?>
-            </div>
-
-            <fieldset class="tag-palette-grid" <?= !empty($errors['palette']) ? 'aria-describedby="tagPaletteError"' : '' ?>>
-                <legend>색상</legend>
-                <?php foreach (($tagData['palettes'] ?? []) as $palette): ?>
-                    <?php if (!empty($palette['isSystemUsed'])) continue; ?>
-                    <?php $disabled = !empty($palette['isUsed']); ?>
-                    <label class="tag-palette-option <?= $disabled ? 'is-disabled' : '' ?>" style="--tag-color: <?= e((string) $palette['color_hex']) ?>;">
-                        <input type="radio" name="palette_id" value="<?= e((string) $palette['id']) ?>" aria-label="색상 <?= e((string) $palette['color_hex']) ?>" <?= $disabled ? 'disabled' : '' ?> required>
-                        <span aria-hidden="true"></span>
-                    </label>
-                <?php endforeach; ?>
-            </fieldset>
-            <?php if (!empty($errors['palette'])): ?>
-                <p class="field-error" id="tagPaletteError"><?= e((string) $errors['palette']) ?></p>
-            <?php endif; ?>
-
-            <button type="submit" class="btn btn-primary">태그 추가</button>
-        </form>
-    </section>
-
-    <section class="tag-list-section" aria-label="태그 목록">
-        <?php foreach (($tagData['tags'] ?? []) as $tag): ?>
-            <article class="tag-card">
-                <?php if (!empty($tag['is_system'])): ?>
-                    <?php $systemTagEnabled = (int) ($tag['is_enabled'] ?? 1) === 1; ?>
-                    <div class="tag-card-title tag-system-title">
-                        <span>
-                            <strong><?= e((string) $tag['name']) ?></strong>
-                            <small>기본</small>
-                        </span>
-                        <form method="post" action="/tags/system-toggle">
-                            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-                            <input type="hidden" name="tag_id" value="<?= e((string) $tag['id']) ?>">
-                            <input type="hidden" name="enabled" value="<?= $systemTagEnabled ? '0' : '1' ?>">
-                            <button
-                                type="submit"
-                                class="tag-visibility-toggle <?= $systemTagEnabled ? 'is-enabled' : '' ?>"
-                                role="switch"
-                                aria-checked="<?= $systemTagEnabled ? 'true' : 'false' ?>"
-                                aria-label="<?= e((string) $tag['name']) ?> 태그 <?= $systemTagEnabled ? '비활성화' : '활성화' ?>"
-                            ><span aria-hidden="true"></span><b><?= $systemTagEnabled ? '사용 중' : '숨김' ?></b></button>
-                        </form>
-                    </div>
-                <?php else: ?>
-                    <details class="tag-edit-panel">
-                        <summary class="tag-card-title">
-                            <span class="tag-swatch" style="--tag-color: <?= e((string) $tag['color_hex']) ?>;" aria-hidden="true"></span>
-                            <strong><?= e((string) $tag['name']) ?></strong>
-                            <span class="tag-edit-label">수정</span>
-                        </summary>
-                        <form class="tag-form compact" method="post" action="/tags/update">
-                            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-                            <input type="hidden" name="tag_id" value="<?= e((string) $tag['id']) ?>">
-                            <div class="form-group"><label class="form-label" for="tagName<?= e((string) $tag['id']) ?>">태그명</label>
-                            <input class="input" id="tagName<?= e((string) $tag['id']) ?>" name="name" type="text" maxlength="24" value="<?= e((string) $tag['name']) ?>" required></div>
-
-                            <fieldset class="tag-palette-grid">
-                                <legend>색상</legend>
-                                <?php foreach (($tagData['palettes'] ?? []) as $palette): ?>
-                                    <?php if (!empty($palette['isSystemUsed']) && (int) ($tag['palette_id'] ?? 0) !== (int) $palette['id']) continue; ?>
-                                    <?php
-                                    $isCurrent = (int) ($tag['palette_id'] ?? 0) === (int) $palette['id'];
-                                    $disabled = !$isCurrent && !empty($palette['isUsed']);
-                                    ?>
-                                    <label class="tag-palette-option <?= $disabled ? 'is-disabled' : '' ?>" style="--tag-color: <?= e((string) $palette['color_hex']) ?>;">
-                                        <input
-                                            type="radio"
-                                            name="palette_id"
-                                            value="<?= e((string) $palette['id']) ?>"
-                                            aria-label="색상 <?= e((string) $palette['color_hex']) ?>"
-                                            <?= $isCurrent ? 'checked' : '' ?>
-                                            <?= $disabled ? 'disabled' : '' ?>
-                                            required
-                                        >
-                                        <span aria-hidden="true"></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </fieldset>
-                            <button type="submit" class="btn btn-secondary">저장</button>
-                        </form>
-
-                        <form method="post" action="/tags/delete" data-confirm="태그를 삭제할까요? 기존 일정의 태그 연결은 해제됩니다.">
-                            <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
-                            <input type="hidden" name="tag_id" value="<?= e((string) $tag['id']) ?>">
-                            <button type="submit" class="btn btn-ghost">삭제</button>
-                        </form>
-                    </details>
-                <?php endif; ?>
-            </article>
-        <?php endforeach; ?>
-    </section>
+    <button type="button" class="btn btn-primary daily-floating-action" data-tag-open="tagCreate">태그 추가</button>
+    <?php $editingTag = null; require __DIR__ . '/_form-sheet.php'; ?>
+    <?php foreach (($tagData['tags'] ?? []) as $tag): ?>
+        <?php if (empty($tag['is_system'])): ?>
+            <?php $editingTag = $tag; require __DIR__ . '/_form-sheet.php'; ?>
+        <?php endif; ?>
+    <?php endforeach; ?>
 </main>
-
 <script>
+(() => {
+    document.querySelectorAll('[data-tag-sheet]').forEach(sheet => {
+        const opener = document.querySelector('[data-tag-open="' + sheet.id + '"]');
+        let previousOverflow = '';
+        const open = () => {
+            if (sheet.open) return;
+            previousOverflow = document.body.style.overflow;
+            sheet.showModal();
+            document.body.style.overflow = 'hidden';
+        };
+        opener.addEventListener('click', open);
+        sheet.querySelector('[data-tag-close]').addEventListener('click', () => sheet.close());
+        sheet.addEventListener('click', event => {
+            if (event.target !== sheet) return;
+            const rect = sheet.getBoundingClientRect();
+            if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) sheet.close();
+        });
+        sheet.addEventListener('close', () => { document.body.style.overflow = previousOverflow; opener.focus(); });
+        const syncViewport = () => {
+            const viewport = window.visualViewport;
+            sheet.style.setProperty('--tag-viewport-height', (viewport ? viewport.height : window.innerHeight) + 'px');
+            sheet.style.bottom = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) + 'px' : '0px';
+        };
+        window.visualViewport?.addEventListener('resize', syncViewport);
+        window.visualViewport?.addEventListener('scroll', syncViewport);
+        syncViewport();
+        if (sheet.dataset.reopen === 'true') open();
+    });
+})();
 document.querySelectorAll('form[data-confirm]').forEach((form) => {
     let allowSubmit = false;
 
@@ -129,6 +76,15 @@ document.querySelectorAll('form[data-confirm]').forEach((form) => {
         }
 
         event.preventDefault();
+        const ownerSheet = form.closest('dialog');
+        const reopen = Boolean(ownerSheet && ownerSheet.open);
+        if (reopen) {
+            // Native dialogs are above ordinary modal layers; dismiss before confirmation.
+            await new Promise(resolve => {
+                ownerSheet.addEventListener('close', resolve, { once: true });
+                ownerSheet.close();
+            });
+        }
         const confirmed = window.LifeFlowUI && typeof window.LifeFlowUI.confirm === 'function'
             ? await window.LifeFlowUI.confirm({
                 title: '확인',
@@ -141,6 +97,8 @@ document.querySelectorAll('form[data-confirm]').forEach((form) => {
         if (confirmed) {
             allowSubmit = true;
             form.requestSubmit();
+        } else if (reopen) {
+            document.querySelector('[data-tag-open="' + ownerSheet.id + '"]').click();
         }
     });
 });

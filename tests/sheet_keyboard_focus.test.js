@@ -20,7 +20,7 @@ for (const name of ['memo', 'routine', 'routine-today', 'todo', 'plan-actions', 
   vm.runInNewContext(source.slice(start,end), {
     document,layer,addSheet:sheet,editSheet:sheet,sheets:[sheet],activeMode:'modal',modal:sheet,sheet,
     quickLayer:{hidden:false,querySelector(){return sheet;}},
-    statusLayer:{hidden:true},recurringLayer:{hidden:true},editLayer:{hidden:true},createLayer:{hidden:true},
+    carryoverLayer:{hidden:true},closeCarryovers(){closed=true;},statusLayer:{hidden:true},recurringLayer:{hidden:true},editLayer:{hidden:true},createLayer:{hidden:true},
     blockLayer:layer,calendarTodoCreateLayer:{hidden:true},eventForm:null,
     sourceDrag:null,actualSelection:null,actualResize:null,planCopyDrag:null,actualTouchSelection:null,planPlacement:null,
     HTMLElement:class {static [Symbol.hasInstance](value){return !!value;}},

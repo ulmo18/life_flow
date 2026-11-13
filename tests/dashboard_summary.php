@@ -1,0 +1,52 @@
+<?php
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+putenv('DB_CONNECTION=sqlite');
+spl_autoload_register(static function (string $class) use ($root): void {
+    if (str_starts_with($class, 'App\\')) require $root . '/app/' . str_replace('\\', '/', substr($class, 4)) . '.php';
+});
+require $root . '/app/Core/helpers.php';
+$db = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+$db->exec((string) file_get_contents($root . '/sql/schema.sqlite.sql'));
+(new ReflectionProperty(App\Core\Database::class, 'connection'))->setValue(null, $db);
+function check(bool $ok, string $message): void { if (!$ok) throw new RuntimeException($message); }
+$users = new App\Models\User();
+foreach (['owner', 'other'] as $name) $users->create($name . '@example.invalid', password_hash('fixture', PASSWORD_DEFAULT), $name, true);
+$owner = (int) $users->findByEmail('owner@example.invalid')['id'];
+$other = (int) $users->findByEmail('other@example.invalid')['id'];
+$now = new DateTimeImmutable('2026-11-13 12:20:00', new DateTimeZone('Asia/Seoul'));
+$service = new App\Services\DashboardService();
+$empty = $service->getData($owner, $now);
+check($empty['todo']['total'] === 0 && $empty['routine']['total'] === 0 && $empty['nearestEvent'] === null, 'Empty dashboard');
+check((int) $db->query('SELECT COUNT(*) FROM calendar_days')->fetchColumn() === 0, 'Dashboard never creates a calendar day');
+$calendar = new App\Models\CalendarRepository();
+$done = $calendar->createDailyPlanItem($owner, '2026-11-13', '완료', 'D', null, null, null, null);
+$calendar->updateTodoStatus($owner, $done, 'completed');
+$calendar->createDailyPlanItem($owner, '2026-11-13', '진행 계획', 'D', null, 72, 78, null);
+$calendar->createDailyPlanItem($other, '2026-11-13', '다른 사용자', 'D', null, 72, 78, null);
+$actual = $calendar->createActualEvent($owner, '2026-11-13', '진행 실제', 'timed', 73, 75, null, null, '');
+$calendar->createActualEvent($owner, '2026-11-13', '시간 없는 기록', 'unscheduled', null, null, null, null, '');
+$routines = new App\Models\RoutineRepository();
+$routine = $routines->create($owner, null, '오늘 루틴', '2026-11-13', 7, false, null);
+$routines->cycleLogState($owner, $routine, '2026-11-13');
+$routines->create($owner, null, '내일 루틴', '2026-11-14', 7, false, null);
+$data = $service->getData($owner, $now);
+check($data['todo'] === ['total'=>2, 'done'=>1], 'Counts match dated Todo source and exclude other users');
+check($data['routine'] === ['total'=>1, 'done'=>1], 'Routine period and daily completion');
+check($data['nearestEvent']['title'] === '진행 실제' && $data['nearestEvent']['state'] === 'ongoing', 'Ongoing Actual wins overlapping Plan');
+$calendar->softDeleteEvent($owner, $actual);
+check($service->getData($owner, $now)['nearestEvent']['title'] === '진행 계획', 'Plan endpoint is available and deleted Actual excluded');
+$reports = new App\Models\RetrospectRepository();
+$reports->saveDraft($owner, '2026-11-13', ['today_review'=>'draft', 'today_thoughts'=>'', 'tomorrow_plan'=>'']);
+check($service->getData($owner, $now)['retrospect']['state'] === 'draft', 'Draft report state');
+$db->prepare("UPDATE retrospect_reports SET status = 'submitted' WHERE user_id = ?")->execute([$owner]);
+check($service->getData($owner, $now)['retrospect']['state'] === 'submitted', 'Published report state');
+$nearest = new ReflectionMethod(App\Services\DashboardService::class, 'nearestEvent');
+$events = [['id'=>1,'kind'=>'plan','title'=>'past','start'=>60,'end'=>66], ['id'=>2,'kind'=>'plan','title'=>'future','start'=>78,'end'=>84]];
+check($nearest->invoke($service, $events, 12*3600)['title'] === 'future', 'Equal distance prefers upcoming');
+$events[] = ['id'=>3,'kind'=>'actual','title'=>'all day','start'=>0,'end'=>144];
+check($nearest->invoke($service, $events, 23*3600)['endLabel'] === '24:00', 'Midnight boundary');
+$local = $service->getData($owner, new DateTimeImmutable('2026-11-14 00:05:00', new DateTimeZone('Pacific/Kiritimati')));
+check($local['date'] === '2026-11-14' && $local['todo']['total'] === 0, 'User-local date boundary');
+echo "PASS dashboard counts, ownership, report states, nearest events, deletion and local date\n";

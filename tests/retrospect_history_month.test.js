@@ -2,9 +2,9 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const source = fs.readFileSync('public/assets/js/pages/retrospect.js', 'utf8');
+const source = fs.readFileSync('public/assets/js/components/month-picker.js', 'utf8');
 const start = source.indexOf("  const historyMonthInput =");
-const end = source.indexOf("  const dateLayer =", start);
+const end = source.lastIndexOf("})();");
 assert.ok(start >= 0 && end > start);
 const element = () => ({handlers:{}, hidden:false, disabled:false, textContent:'', attrs:{}, classList:{add(){}},
   addEventListener(type, fn){this.handlers[type]=fn;}, setAttribute(key,value){this.attrs[key]=value;}, focus(){},

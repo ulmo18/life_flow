@@ -60,7 +60,7 @@ Legacy fallback cannot carry every custom title/message or guarantee scoped repl
 ## Scenarios
 
 - Retrospect: two daily reminders with the message `회고 알림입니다`.
-- Routine: daily reminder for selected routines at the Settings routine time.
+- Routine: daily reminder at the selected routine’s own valid reminder time; the Settings routine time is a fallback for missing or invalid individual values.
 - Calendar: one-time reminder at the individually selected lead before each enabled, placed Plan block starts with `[계획명] 시작 N분 전입니다.`. Past reminder times are omitted instead of being delivered immediately.
 - Goal: one-time reminder on the goal deadline at the Settings deadline time with `목표 마감일입니다 고생하셨습니다`.
 - Goal D-1: optional one-time reminder one day before the goal deadline.
@@ -71,10 +71,10 @@ Notification preferences are stored in `user_preferences` for both MySQL and SQL
 
 ## Calendar Scheduling Contract
 
-The placed-Plan source issue is resolved by per-block reminder opt-in. Remaining Goal offset and Routine-time issues are tracked in `docs/notification-review.md`.
+Placed Plan reminders, user-zone Goal timestamps and individual Routine time precedence are implemented. Alarm cancellation/account-switch cleanup remains deferred; see `docs/notification-review.md`.
 
 - Calendar page entry is a synchronization event, not a delivery event.
-- Calendar `fireAt` and `startsAt` use ISO 8601 with the signed-in user's time-zone offset (`+09:00` for Asia/Seoul). Goal deadline timestamps currently omit that offset; see the review above.
+- Calendar `fireAt` and `startsAt` use ISO 8601 with the signed-in user's time-zone offset (`+09:00` for Asia/Seoul). Goal deadline and D-1 timestamps also include the user-zone offset and omit past trigger times.
 - The server includes a Calendar Plan item only when `fireAt` is later than the current time in the signed-in user's configured IANA time zone.
 - Android must parse `fireAt` into an absolute instant and persist it with AlarmManager, WorkManager, or an equivalent local scheduler.
 - Android must discard any item whose parsed trigger time is not in the future. It must never convert a past trigger into an immediate notification.
@@ -109,3 +109,15 @@ Manual checks:
 2. Open the To-do status/linked-record sheet. Confirm each placement's saved values. Change one, save, close/reopen, then verify in Schedule.
 3. Move a block, disable its reminder, and delete the other. Check that replacement payloads follow block times and remove obsolete entries without affecting other dates.
 4. Check Settings master and Plan reminder gates. With a supported Android bridge, verify permission, actual delivery, replacement and cancellation on device.
+
+Goal scheduling queries targets using the current user-local date, constructs the deadline in that user’s IANA time zone and subtracts one calendar day for D-1 before formatting each with DATE_ATOM. Host/device time-zone changes do not change the absolute trigger instant. Existing global gates remain. Individual Routine reminder_time accepts valid HH:mm or database TIME HH:mm:ss and is normalized to HH:mm; null/invalid values fall back to Settings. No new alarm cancellation path was added. Changed source: app/Services/NotificationService.php. Regression: tests/notification_timezone_routine.php. Manual checks: configure user New York/device Seoul and compare goal/D-1 clock and instant; set a routine to 16:45 and Settings to 14:00 and verify 16:45 in its sync payload.
+
+## Settings UI (2026-11-13)
+
+The reference settings screen groups master and individual reminders in one divided list. Morning, evening, Routine, Plan, Goal-deadline and day-before gates are all retained. Plan has no global clock input; Routine explains its per-routine time override, and D-1 shares the Goal clock. Each timed reminder uses its existing minute-resolution native time input styled as a pill. Disabling a reminder disables only its time input; omitted time fields preserve the server value and re-enabling restores the draft clock. Master-off leaves individual controls and preferences intact.
+
+Permission and test buttons use existing Android bridge delivery only. Browser-only surfaces show Android-app availability guidance, hide the permission request, and disable the native test action. A native bridge shows permission status as unknown because no state-query API exists. A successful bridge call means the request was handed to the app, not that permission was granted or a notification arrived. No Web Push, permission-query or cancellation integration was added. Explicit settings saves and payload ownership are unchanged.
+
+## Shared reminder-time sheet (2026-11-13)
+
+Settings reminder inputs now use the common time-picker sheet. The original HH:mm input is retained for submission with 1-minute choices, independently of Calendar’s 10-minute indices. Disabled fields preserve their values and disable the corresponding trigger. Each time button retains its validation description. The notification section collapses without affecting checked values or schedule synchronization.

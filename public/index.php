@@ -115,6 +115,7 @@ $router->post('/execution-energy/profile', [$executionEnergyController, 'updateP
 $router->post('/execution-energy/morning', [$executionEnergyController, 'saveMorning'], ['auth']);
 $router->get('/calendar', [$calendarController, 'index'], ['auth']);
 $router->post('/calendar/event', [$calendarController, 'storeEvent'], ['auth']);
+$router->post('/calendar/event/to-plan', [$calendarController, 'convertEventToPlan'], ['auth']);
 $router->post('/calendar/event/update', [$calendarController, 'updateEvent'], ['auth']);
 $router->post('/calendar/event/tag', [$calendarController, 'updateEventTag'], ['auth']);
 $router->post('/calendar/event/delete', [$calendarController, 'deleteEvent'], ['auth']);
@@ -139,7 +140,9 @@ $router->get('/tags', [$calendarTagController, 'index'], ['auth']);
 $router->post('/tags', [$calendarTagController, 'store'], ['auth']);
 $router->post('/tags/update', [$calendarTagController, 'update'], ['auth']);
 $router->post('/tags/delete', [$calendarTagController, 'delete'], ['auth']);
-$router->post('/tags/system-toggle', [$calendarTagController, 'toggleSystem'], ['auth']);
+$router->get('/locations', [new \App\Controllers\LocationController(), 'show'], ['auth']);
+$router->post('/tags/toggle', [$calendarTagController, 'toggle'], ['auth']);
+$router->post('/tags/system-toggle', [$calendarTagController, 'toggle'], ['auth']);
 $router->get('/routine', [$routineController, 'index'], ['auth']);
 $router->get('/manage/routines', [$routineController, 'manage'], ['auth']);
 $router->post('/routine', [$routineController, 'store'], ['auth']);

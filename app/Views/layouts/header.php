@@ -38,7 +38,7 @@ $isMemoActive = $currentPath === '/memo';
 $isExecutionEnergyActive = $currentPath === '/execution-energy';
 $isSearchActive = $currentPath === '/search';
 $isDailyPrimaryPage = in_array($currentPath, ['/calendar', '/routine', '/todo', '/retrospect', '/retrospect/report'], true);
-$isCompactMenuHeader = $currentPath === '/dashboard' || $isPlanActive
+$isCompactMenuHeader = $currentPath === '/settings' || !empty($headerBackToSettings) || $currentPath === '/dashboard' || $isPlanActive
     || $currentPath === '/manage/routines' || str_starts_with($currentPath, '/manage/routines/')
     || $currentPath === '/goal' || str_starts_with($currentPath, '/goal/')
     || $currentPath === '/execution-energy' || str_starts_with($currentPath, '/execution-energy/')
@@ -69,9 +69,10 @@ if ($showAppChrome) {
 </head>
 <body class="<?= $showAppChrome ? 'has-app-chrome-body' : '' ?><?= $showAppChrome && $isDailyPrimaryPage ? ' daily-primary-page' : '' ?>" data-theme="<?= e($themePreference) ?>">
 <div class="app-shell<?= $showAppChrome ? ' has-app-chrome' : '' ?>">
-    <header class="site-header<?= $showAppChrome && $isDailyPrimaryPage ? ' is-daily-primary-header' : '' ?><?= $showAppChrome && $isCompactMenuHeader ? ' is-compact-menu-header' : '' ?>" data-site-header>
+    <header class="site-header<?= $showAppChrome && $isDailyPrimaryPage ? ' is-daily-primary-header' : '' ?><?= $showAppChrome && $isCompactMenuHeader ? ' is-compact-menu-header' : '' ?><?= $showAppChrome && !empty($headerBackToSettings) ? ' has-settings-back' : '' ?>" data-site-header>
         <div class="site-header-inner">
-            <?php if ($showAppChrome): ?><div class="site-brand"><?= e($headerContextLabel) ?></div><?php else: ?><h1 class="site-brand"><a href="/dashboard">LifeFlow</a></h1><?php endif; ?>
+            <?php if ($showAppChrome && !empty($headerBackToSettings)): ?><a class="header-settings-back" href="/settings" aria-label="<?= e(t('settings.back')) ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></a><?php endif; ?>
+            <?php if ($showAppChrome && $isRoutineManageActive): ?><?php require __DIR__ . '/../components/routine-month-navigation.php'; ?><?php elseif ($showAppChrome): ?><div class="site-brand"><?= e($headerContextLabel) ?></div><?php else: ?><h1 class="site-brand"><a href="/dashboard">LifeFlow</a></h1><?php endif; ?>
             <?php if ($showAppChrome): ?>
                 <?php if (is_array($headerGuidance ?? null) && !empty($headerGuidance['message'])): ?>
                     <div class="site-header-guidance">

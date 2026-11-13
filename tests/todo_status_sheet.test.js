@@ -28,7 +28,10 @@ const siblingSymbol = {textContent: '—'};
 button.querySelector = () => buttonSymbol;
 sibling.querySelector = () => siblingSymbol;
 const close = element();
-layer.querySelector = selector => selector === '.todo-sheet' ? {scrollTop: 50} : close;
+const followup = element(), followupLabel = element(), followupInput = element(), followupMessage = element(), saveActions = element(), saveButton = element();
+followupInput.value = '';
+const fields = {'[data-status-followup]':followup,'[data-status-followup-label]':followupLabel,'[data-status-followup-note]':followupInput,'[data-status-followup-message]':followupMessage,'[data-status-save-actions]':saveActions,'[data-status-save]':saveButton};
+layer.querySelector = selector => fields[selector] || (selector === '.todo-sheet' ? {scrollTop:50} : close);
 const options = ['pending', 'completed', 'cancelled', 'postponed', 'in_progress', 'external'].map(value => {
   const option = element({todoStatusOption: value}); option.textContent = value; return option;
 });
@@ -36,6 +39,8 @@ let failure = false;
 let malformed = false;
 let message = '';
 let sortCount = 0;
+let lastBody;
+const settle = () => new Promise(setImmediate);
 const ctx = {
   sortTodoRows() { sortCount++; },
   document: {
@@ -47,7 +52,7 @@ const ctx = {
   FormData: class { constructor() { this.values = {}; } set(key, value) { this.values[key] = value; } },
   SyntaxError,
   TypeError,
-  fetch: async (_url, request) => ({ok: !failure, json: async () => malformed ? JSON.parse('<html>') : failure ? {ok: false, message: '저장 실패'} : {ok: true, status: request.body.values.status}}),
+  fetch: async (url, request) => { if(url.startsWith('/todo/followup?')) return {ok:true,json:async()=>({ok:true,note:'기존 메모',supported:true})}; lastBody=request.body.values;return {ok: !failure, json: async () => malformed ? JSON.parse('<html>') : failure ? {ok: false, message: '저장 실패'} : {ok: true, status: request.body.values.status}}; },
   window: {LifeFlowToast: {show(value) { message = value; }}},
 };
 vm.runInNewContext(source.slice(start, end), ctx);
@@ -89,6 +94,31 @@ vm.runInNewContext(source.slice(start, end), ctx);
   assert.equal(button.dataset.savedStatus, 'completed');
   assert.equal(sibling.dataset.savedStatus, 'completed');
   assert.equal(buttonSymbol.textContent, 'V');
+  assert.equal(layer.hidden, true);
+  button.handlers.click(); await settle();
+  await options[4].handlers.click();
+  assert.equal(button.dataset.savedStatus, 'completed', 'Selecting progress only changes the draft');
+  assert.equal(layer.hidden, false);
+  assert.equal(followup.hidden, false);
+  assert.equal(followupInput.value, '기존 메모', 'Existing note loads before editing');
+  followupInput.value = '다음 단계';
+  await saveButton.handlers.click();
+  assert.equal(button.dataset.savedStatus, 'in_progress');
+  assert.equal(lastBody.note, '다음 단계', 'State and note share one request');
+  assert.equal(layer.hidden, true);
+  assert.ok(options.every(option => !option.disabled));
+  button.handlers.click(); await settle();
+  await options[3].handlers.click();
+  assert.equal(options[3].getAttribute('aria-pressed'), 'true');
+  assert.match(followupLabel.textContent, /미룬 이유/);
+  assert.equal(button.dataset.savedStatus, 'in_progress');
+  followupInput.value = '';
+  failure = true; await saveButton.handlers.click();
+  assert.equal(layer.hidden, false, 'Save failure preserves the draft and sheet');
+  assert.equal(button.dataset.savedStatus, 'in_progress');
+  failure = false; await saveButton.handlers.click();
+  assert.equal(button.dataset.savedStatus, 'postponed');
+  assert.equal(lastBody.note, '', 'Memo is optional');
   assert.equal(layer.hidden, true);
   console.log('PASS item status sheet, shared plans, success and failed save');
 })().catch(error => { console.error(error); process.exitCode = 1; });

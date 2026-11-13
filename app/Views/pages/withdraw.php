@@ -1,5 +1,5 @@
 <?php $title = '회원탈퇴'; ?>
-<?php require __DIR__ . '/../layouts/header.php'; ?>
+<?php $headerBackToSettings = true; require __DIR__ . '/../layouts/header.php'; ?>
 <main class="page">
     <h1 class="page-title">회원탈퇴</h1>
 

@@ -20,14 +20,14 @@ $selectedView = (string) ($selectedView ?? 'daily');
 
 <main class="page retrospect-page" data-retrospect-page data-date="<?= e($date) ?>">
     <h1 class="sr-only">회고</h1>
-    <div class="retrospect-primary-context">
+    <div class="retrospect-primary-context ui-menu-context">
         <?php if ($selectedView === 'history'): $historyMonth = (string) ($history['month'] ?? substr($todayDate, 0, 7)); $historyMonthDate = DateTimeImmutable::createFromFormat('!Y-m', $historyMonth); ?>
         <section class="daily-date-context retrospect-month-context" data-daily-context-date="<?= e($date) ?>" aria-label="발행 이력 월 탐색">
             <div class="daily-date-swipe">
-                <form method="get" action="/retrospect" class="daily-date-picker retrospect-history-month-search">
+                <form method="get" action="/retrospect" class="daily-date-picker ui-month-search">
                     <input type="hidden" name="view" value="history"><input type="hidden" name="date" value="<?= e($date) ?>">
                     <label class="sr-only" for="historyMonth">발행 회고 검색 월</label><input id="historyMonth" type="month" name="month" value="<?= e($historyMonth) ?>" required>
-                    <button type="button" class="retrospect-month-trigger" data-history-month-open aria-haspopup="dialog" aria-controls="historyMonthDialog" hidden></button>
+                    <button type="button" class="ui-month-trigger" data-history-month-open aria-haspopup="dialog" aria-controls="historyMonthDialog" hidden></button>
                     <noscript><button type="submit">보기</button></noscript>
                 </form>
                 <a class="daily-date-arrow" href="/retrospect?view=history&amp;date=<?= e($date) ?>&amp;month=<?= e($historyMonthDate->modify('-1 month')->format('Y-m')) ?>" aria-label="이전 달">&lsaquo;</a>
@@ -50,15 +50,15 @@ $selectedView = (string) ($selectedView ?? 'daily');
     <?php if ($selectedView === 'history'): ?>
         <section class="retrospect-history" aria-labelledby="retrospectHistoryTitle">
             <h2 id="retrospectHistoryTitle" class="sr-only">발행 이력</h2>
-            <dialog id="historyMonthDialog" class="lf-date-dialog retrospect-month-dialog" aria-labelledby="historyMonthTitle">
+            <dialog id="historyMonthDialog" class="lf-date-dialog ui-month-dialog" aria-labelledby="historyMonthTitle">
                 <header class="lf-date-header"><strong id="historyMonthTitle">연·월 선택</strong><button type="button" class="lf-date-close" data-history-month-close aria-label="닫기">×</button></header>
                 <div class="lf-date-body">
                     <div class="lf-date-navigation"><button type="button" data-history-year-prev aria-label="이전 연도">‹</button><strong data-history-year></strong><button type="button" data-history-year-next aria-label="다음 연도">›</button></div>
-                    <div class="lf-date-grid retrospect-month-grid" data-history-month-grid></div>
+                    <div class="lf-date-grid ui-month-grid" data-history-month-grid></div>
                 </div>
             </dialog>
             <?php if (empty($history['items'])): ?>
-                <div class="retrospect-history-table-wrap"><p class="retrospect-history-empty">선택한 달에 발행된 회고가 없습니다.</p></div>
+                <?php $retrospectEmptyLines = ['선택한 달에 발행된 회고가 없습니다.']; require __DIR__ . '/_empty-state.php'; ?>
             <?php else: ?>
                 <div class="retrospect-history-table-wrap"><table class="retrospect-history-table"><caption class="sr-only">발행 회고 목록</caption><thead><tr><th scope="col">발행 회고</th></tr></thead><tbody>
                     <?php foreach ($history['items'] as $item): ?>
@@ -82,7 +82,7 @@ $selectedView = (string) ($selectedView ?? 'daily');
         </section>
     <?php else: ?>
         <?php if ($showEmptyGuide): ?>
-            <section class="retrospect-empty-action"><p>아직 회고할 기록이 없어요.<br>일정에서 하루를 기록해 보세요.</p><a class="btn btn-secondary" href="/calendar?date=<?= e($date) ?>">일정으로 이동</a></section>
+            <section class="retrospect-history"><?php $retrospectEmptyLines = ['아직 회고할 기록이 없어요.', '일정에서 하루를 기록해 보세요.']; $retrospectEmptyAction = ['href' => '/calendar?date=' . rawurlencode($date), 'label' => '일정으로 이동']; require __DIR__ . '/_empty-state.php'; unset($retrospectEmptyAction); ?></section>
         <?php elseif ($showPublishedCard): ?>
             <a class="retrospect-past-paper" href="/retrospect/report?date=<?= e($date) ?>">
                 <span class="retrospect-past-paper-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v15H5zM8 8h4v4H8zM14 8h2M14 11h2M8 15h8M8 17h8"/></svg></span>

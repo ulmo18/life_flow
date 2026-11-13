@@ -332,7 +332,12 @@ final class AuthController
 
     public function dashboard(): void
     {
-        $this->render('pages/dashboard');
+        $config = require __DIR__ . '/../../config/app.php';
+        $this->render('pages/dashboard', [
+            'dashboardApps' => $config['dashboard_apps'] ?? [],
+            'dashboard' => (new \App\Services\DashboardService())->getData((int) ($_SESSION['user_id'] ?? 0)),
+            'pageStyles' => ['/assets/css/pages/dashboard.css?v=' . filemtime(dirname(__DIR__, 2) . '/public/assets/css/pages/dashboard.css')],
+        ]);
     }
 
     public function retrospect(): void
@@ -355,23 +360,27 @@ final class AuthController
         $theme = $this->currentTheme();
         $userId = (int) ($_SESSION['user_id'] ?? 0);
         $preferences = (new UserPreferenceRepository())->get($userId);
+        $draft = $_SESSION['settings_draft'] ?? [];
 
         $this->render('pages/settings', [
             'csrfToken' => Csrf::token(),
             'theme' => $theme,
-            'locale' => I18n::normalizeLocale((string) ($preferences['locale'] ?? 'ko')),
-            'timezone' => (string) ($preferences['timezone'] ?? 'Asia/Seoul'),
+            'locale' => I18n::normalizeLocale((string) ($draft['localization']['locale'] ?? $preferences['locale'] ?? 'ko')),
+            'timezone' => (string) ($draft['localization']['timezone'] ?? $preferences['timezone'] ?? 'Asia/Seoul'),
             'timezoneOptions' => \DateTimeZone::listIdentifiers(),
-            'notificationSettings' => $this->notificationService->settings($userId),
+            'notificationSettings' => $draft['notifications'] ?? $this->notificationService->settings($userId),
+            'hasLocalizationDraft' => isset($draft['localization']),
+            'hasNotificationDraft' => isset($draft['notifications']),
             'notificationSyncPayload' => !empty($_SESSION['notification_sync_settings'])
                 ? $this->notificationService->buildSettingsSyncPayload($userId)
                 : [],
             'flashSuccess' => $_SESSION['flash_success'] ?? null,
             'errors' => $_SESSION['errors'] ?? [],
-            'pageScripts' => ['/assets/js/pages/settings.js'],
+            'pageStyles' => ['/assets/css/pages/settings.css?v=' . filemtime(dirname(__DIR__, 2) . '/public/assets/css/pages/settings.css')],
+            'pageScripts' => ['/assets/js/components/time-picker.js?v=' . filemtime(dirname(__DIR__, 2) . '/public/assets/js/components/time-picker.js'), '/assets/js/components/select-sheet.js?v=' . filemtime(dirname(__DIR__, 2) . '/public/assets/js/components/select-sheet.js'), '/assets/js/pages/settings.js?v=' . filemtime(dirname(__DIR__, 2) . '/public/assets/js/pages/settings.js')],
         ]);
 
-        unset($_SESSION['flash_success'], $_SESSION['errors'], $_SESSION['notification_sync_settings']);
+        unset($_SESSION['flash_success'], $_SESSION['errors'], $_SESSION['notification_sync_settings'], $_SESSION['settings_draft']);
     }
 
     public function updateTheme(): void
@@ -427,10 +436,16 @@ final class AuthController
             $errors['general'] = '로그인이 필요합니다.';
         }
         if ($errors !== []) {
+            $current = (new UserPreferenceRepository())->get($userId);
+            $_SESSION['settings_draft']['localization'] = [
+                'locale' => isset($errors['locale']) ? ($current['locale'] ?? 'ko') : $locale,
+                'timezone' => isset($errors['timezone']) ? ($current['timezone'] ?? 'Asia/Seoul') : $timezone,
+            ];
             $this->redirectWithErrors('/settings', $errors);
         }
 
         (new UserPreferenceRepository())->updateLocaleAndTimezone($userId, $locale, $timezone);
+        unset($_SESSION['settings_draft']['localization']);
         $_SESSION['locale_preference'] = $locale;
         $_SESSION['timezone_preference'] = $timezone;
         date_default_timezone_set($timezone);
@@ -457,10 +472,12 @@ final class AuthController
         );
 
         if (!$validation['ok']) {
+            $_SESSION['settings_draft']['notifications'] = $validation['data'];
             $this->redirectWithErrors('/settings', $validation['errors']);
         }
 
         $this->notificationService->updateSettings($userId, $validation['data']);
+        unset($_SESSION['settings_draft']['notifications']);
         $_SESSION['notification_sync_settings'] = true;
         $_SESSION['flash_success'] = '알림 설정을 저장했습니다.';
 

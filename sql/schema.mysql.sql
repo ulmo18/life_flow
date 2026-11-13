@@ -883,3 +883,15 @@ CREATE TABLE IF NOT EXISTS `wellness_entries` (
   CONSTRAINT `chk_wellness_rating`
     CHECK (`rating` IS NULL OR (`rating` BETWEEN 1 AND 5))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS saved_locations (
+  user_id BIGINT UNSIGNED NOT NULL,
+  entity_type VARCHAR(16) NOT NULL,
+  entity_id BIGINT UNSIGNED NOT NULL,
+  place_name VARCHAR(120) NOT NULL,
+  address VARCHAR(300) NOT NULL,
+  latitude DOUBLE NOT NULL,
+  longitude DOUBLE NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, entity_type, entity_id)
+);

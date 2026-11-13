@@ -420,3 +420,76 @@ Actual-event memo presence is marked by a small dot on the first segment, includ
 The memo indicator uses a 7px contrasting dot on the first actual-event segment. Standalone quick memos are separate records and are not attached to events automatically.
 
 - A quick memo from Calendar is appended to the single owned Actual event containing the current user-local time, so its memo indicator appears. When no event matches, multiple events match, or the combined text would exceed the event memo 500-character limit, it is saved as a standalone memo with a corresponding message. Attached quick memos are stored only in the event, not duplicated as standalone notes; earlier standalone memos are not retroactively linked.
+
+## Tag management layout (2026-11-11)
+
+`/tags` uses the shared header title without repeating a page title. One `ui-list-surface` contains a semantic table with tag and usage columns. System tags retain their existing POST switch; its outer pill border/background is removed while the internal switch track and focus indicator remain. User tags retain inline edit/delete and are shown as active; no new toggle/API is introduced.
+
+The fixed Add button sits above bottom navigation and opens a native modal dialog using `ui-standard-sheet`, `ui-form-sheet`, and fixed header/actions with a scrolling form body. Native dialog supplies focus containment and Escape; close/backdrop restore focus and page scroll. Visual viewport updates keep the sheet above the software keyboard. Failed creation with old input reopens the sheet; existing name/palette errors and values remain. CSRF, escaped values, palette restrictions and endpoints are unchanged.
+
+Changed files: `app/Views/pages/tags/index.php`, `public/assets/css/pages/tags.css`, this document.
+
+Verification: PHP view lint and whitespace checks passed. An isolated rendered fixture in headless Chrome verified the two-column table, opening/closing the dialog, no horizontal overflow, and borderless usage button. This fixture does not verify real save requests or device keyboard behavior.
+
+Manual checks: open `/tags` in light/dark at 320/390px, check single title and table; open Add above the bottom navigator, enter a name/color and save; submit invalid name/palette to check retained values and reopened errors; close via X/Escape/backdrop; edit/delete an existing user tag and toggle a system tag; open the keyboard and verify close/save accessibility.
+
+### Tag controls aligned with To-do Add
+
+The floating action now reuses `daily-floating-action` and reads 태그 추가. The native dialog loads the same `todo-sheet.css`, shell/header, `todo-create-form` spacing and action area as To-do Add; custom structured-body and footer styling were removed. System-tag 기본 text is replaced by an accessible lock icon; usage switches have no outer border or text, with a centered 44px target and a fixed-size track. User-tag 사용 중 text is removed. Table padding is reduced to 4px 8px and the usage column to 68px.
+
+Additional changed file: `app/Controllers/CalendarTagController.php` (versioned shared stylesheet only). PHP view/controller lint and whitespace checks passed. Headless Chrome fixtures in light/dark compared computed shell, header, footer and floating-button styles with To-do reference markup: all matched; switch width was 44px and the dialog had no horizontal overflow. Device keyboard behavior remains a manual check. Manual steps: compare To-do Add and Tag Add button/sheet, check system icons and switch on/off, expand a long-name tag for editing, then verify keyboard and 320px layout.
+
+### Tag editing sheets and custom-tag availability
+
+This section supersedes the earlier inline-edit and system-only usage descriptions. Add/Edit now render the same `_form-sheet.php` partial with unique label/error/form IDs. A user-tag row opens its edit dialog with the current name/color; delete remains confirmation-protected in that dialog. Failed validation reopens only the matching create/edit sheet with the submitted name and palette preserved. System tags remain non-editable.
+
+Both system and owned custom tags use authenticated, CSRF-protected `POST /tags/toggle`; `/tags/system-toggle` remains a compatible alias. `calendar_tag_preferences` now applies to all visible tags through COALESCE(is_enabled,1), so new and existing custom tags without preferences default to enabled. No schema migration is needed. The model verifies system status or ownership and rejects deleted tags before writing a user-scoped preference. Hidden tags remain in management and keep their palette reservation and historical event links; Calendar rejects new assignments while allowing an existing event to retain its own hidden tag.
+
+Changed files for this step: `app/Models/CalendarTagRepository.php`, `app/Models/CalendarRepository.php`, `app/Services/CalendarTagService.php`, `app/Controllers/CalendarTagController.php`, `public/index.php`, `app/Views/pages/tags/index.php`, `app/Views/pages/tags/_form-sheet.php`, `public/assets/css/pages/tags.css`, `tests/calendar_tag_preferences.php`, this document.
+
+Verification: isolated SQLite regression covers enabled-by-default, owner-only toggles, system preferences scoped per user, Calendar selection, preservation of existing event tags, re-enable, and rejection after deletion. PHP lint passed on all seven affected PHP source files. Headless Chrome light/dark fixtures verified matching Add/Edit shell styles, current name/color, two usage switches, unique IDs, delete form association, and no horizontal sheet overflow.
+
+Manual checks: create a tag and check its switch starts on; switch off and reload, confirm it is unavailable for a new schedule but existing records retain it; switch on again. Open an owned tag row, change name/color and save, then submit an invalid/duplicate value to verify that only that edit sheet reopens. Compare Add/Edit in light/dark and with the mobile keyboard; cancel/confirm deletion.
+
+Native edit dialogs close before opening the shared delete confirmation so the confirmation remains visible above page content. Cancelling restores the edit sheet with the unsaved form values intact.
+
+### Tag sheet horizontal edges
+
+Override the native dialog user-agent max-width with `max-width:100%`. The shared shell still sets width to min(100%,680px), so Add/Edit reach both viewport edges on mobile and retain the centered desktop maximum; shared internal padding remains unchanged. Changed files: `public/assets/css/pages/tags.css`, this document. Manual check: open Add and Edit at mobile width and compare the outer edges with To-do Add; check desktop centering as well.
+
+## Place cards and placement management label
+
+The placement drawer management link now reads 반복 할 일 관리, retaining `/plan?view=blocks`. Actual Add/Edit include shared address/place search and persisted map cards; see `location-feature-implementation.md`. The actual-to-plan correction proposal is reviewed in `actual-to-plan-conversion-review.md`; no automatic cross-table move was introduced.
+
+Actual location now sits inside 함께 기록하기 immediately before Memo. Plan-block Edit has a read-only location row sourced from its linked To-do; its location input is excluded from submission. Details, tests and the remaining Kakao domain response are recorded in `location-feature-implementation.md`.
+
+## Correct Actual entered in the wrong grid
+
+Actual Edit offers 계획 일정으로 전환 with explicit discard confirmation. The owner transaction creates/reuses a dated To-do/Plan, preserves the saved time and new-source location, removes Actual-only metadata, and rejects overlap/unauthorized/repeated requests without creating duplicates. See `actual-to-plan-conversion-review.md` for preservation, published-snapshot/routine boundaries, tests and manual steps.
+
+## Actual-to-Plan drag conversion
+
+Dragging an Actual block onto the Plan grid previews its preserved duration at the target range and opens the shared conversion confirmation before any write. Confirm sends the optional target indices; cancel/outside/pointercancel makes no request. Server checks saved duration, ownership, day bounds and Plan overlap, moving a linked Plan when present. Actual-to-Actual moves retain their existing endpoint. The sheet fallback is a muted underline text button. Implementation, changed files and verification are in `actual-to-plan-conversion-review.md`.
+
+## Shared time selection (2026-11-13)
+
+Actual create/edit opt into the common time-picker component through _actual-time-range.php. Start/end layout and duration remain; a bottom sheet now selects hour and minute, with an explicit Apply action. Native select values remain 10-minute indices, start 0–143 and end 1–144. At 24:00 only minute 00 is valid. Programmatic form opening/reset and duration updates synchronize the visible trigger. Native dialog keyboard handling takes priority over the parent Calendar sheet so Escape/Tab cannot close or focus the underlying editor. No persistence, overlap or range validation rules changed.
+
+Manual checks: open different existing Actuals, check current times, apply a new time and duration, cancel a draft, select end 24:00, save/reopen, and compare untimed events. Check Android Chrome keyboard/back and both themes.
+
+## Today condition sheet (2026-11-13)
+
+The + menu’s condition sheet uses standard sheet chrome and labelled 1–5 range gauges. Unset values display midpoint 3, and burden feedback defaults to similar; empty radio choices are omitted. Saved values remain authoritative on reopen. Input/change events update the visible label and aria-valuetext. Submission continues to /execution-energy/morning with existing field names and CSRF; calculation/persistence are unchanged. See execution-energy-feature-implementation.md for tests and manual checks.
+
+## Published Retrospect popup alignment (2026-11-13)
+
+The popup groups title/44px close in one grid row and equal-width previous/next published-date buttons in a second row, within one fixed header block. Both empty and populated states retain the same header structure. The popup uses 16px internal padding on all sides; existing 12px mobile/24px desktop outer insets and safe-area guards remain. Only the report body scrolls. Existing preview fetching, ownership and adjacent-date behavior are unchanged. Browser checks at 320/390/1024px in both themes verify no overlap, 44px move buttons, equal widths, symmetric insets, fixed controls while the real report body scrolls, no overflow and empty-state layout; the populated popup was visually inspected.
+
+### Day-template application (2026-11-14)
+The placement drawer opens a native template dialog. It posts CSRF, selected date, calendar_mode and plan_group_id to the existing /calendar/day-plan endpoint only after required selection and warning acknowledgement. This intentionally uses the regular POST replacement path; the empty-day-only JSON path is not used. Submission exits placement mode to normal/both before navigation; the server redirects to the selected date without a workspace parameter. Plan editor gestures opt into LifeFlowTimeGrid.requireLongPress without changing the default Calendar mouse-selection behavior.
+
+- Actual mouse/pen entry now uses a cancellable 360 ms timer, matching touch entry. Short click and immediate drag never register Actuals. Scroll/pagehide cancels pending entry. Ratio swipe detection accepts mouse/pen at mobile widths as well as touch and captures only after horizontal intent is recognized; held gestures remain reserved for range entry.
+
+- Plan-to-Actual copying and Plan movement reuse LifeFlowCalendarResizeHold with an endpoint-handle exclusion and the original press point for grab offset. Touch uses non-passive touchmove only after activation; mouse captures only after the hold. Cancellation/Escape/blur clears previews and restores native pull-to-refresh; completed holds suppress the trailing detail click. Existing duration, midnight-boundary and overlap checks remain.
+
+- Actual block drag now reuses the shared hold controller. The final release point is recomputed before validation, including touch release. Actual segments expose their owned linked block ID for conflict exclusion. Plan collisions suppress destination preview and prevent conversion confirmation/submission; existing transactional MySQL/SQLite overlap validation remains the final authority.

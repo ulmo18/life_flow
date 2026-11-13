@@ -4,7 +4,7 @@ const vm=require('node:vm');
 const source=fs.readFileSync('public/assets/js/pages/calendar.js','utf8');
 const begin=source.indexOf('  function syncActualDuration(form) {');
 const end=source.indexOf('  function syncActualFormSummary(form)',begin);
-const context={};vm.createContext(context);vm.runInContext(source.slice(begin,end)+'globalThis.refresh=syncActualDuration;',context);
+const context={window:{}};vm.createContext(context);vm.runInContext(source.slice(begin,end)+'globalThis.refresh=syncActualDuration;',context);
 const start={value:'73'},finish={value:'77'},output={textContent:''};
 const form={querySelector(selector){return selector==='[data-actual-duration]'?output:selector.includes('start_index')?start:finish;}};
 context.refresh(form);assert.equal(output.textContent,'40분');

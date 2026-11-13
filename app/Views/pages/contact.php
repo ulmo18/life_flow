@@ -1,5 +1,5 @@
 <?php $title = '문의하기'; ?>
-<?php require __DIR__ . '/../layouts/header.php'; ?>
+<?php $headerBackToSettings = true; require __DIR__ . '/../layouts/header.php'; ?>
 <main class="page">
     <h1 class="page-title">문의하기</h1>
 

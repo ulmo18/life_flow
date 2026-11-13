@@ -128,7 +128,7 @@ final class CalendarRepository
     {
         $sql = 'SELECT ct.id, ct.user_id, ct.palette_id, ct.slug, ct.name, ct.color_hex,
                        ct.sort_order, ct.is_system,
-                       CASE WHEN ct.is_system = 1 THEN COALESCE(ctp.is_enabled, 1) ELSE 1 END AS is_enabled
+                       COALESCE(ctp.is_enabled, 1) AS is_enabled
                 FROM calendar_tags ct
                 LEFT JOIN calendar_tag_preferences ctp
                     ON ctp.tag_id = ct.id AND ctp.user_id = :preference_user_id
@@ -287,11 +287,15 @@ final class CalendarRepository
         return $this->todoStatusSupported = $column !== false && $column->fetchColumn() !== false;
     }
 
-    public function updateTodoStatus(int $userId, int $itemId, string $status): bool
+    public function updateTodoStatus(int $userId, int $itemId, string $status, ?string $note = null): bool
     {
         if (!$this->supportsTodoStatus() || !in_array($status, ['pending', 'completed', 'cancelled', 'postponed', 'in_progress', 'external'], true)) return false;
-        $stmt = $this->db->prepare('UPDATE daily_plan_items SET todo_status = :status, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND deleted_at IS NULL AND daily_plan_id IN (SELECT id FROM daily_plans WHERE user_id = :user_id)');
-        $stmt->execute(['status' => $status, 'id' => $itemId, 'user_id' => $userId]);
+        if ($note !== null && $note !== '' && !$this->supportsTodoFollowup()) return false;
+        $writeNote = $note !== null && $this->supportsTodoFollowup();
+        $stmt = $this->db->prepare('UPDATE daily_plan_items SET todo_status = :status' . ($writeNote ? ', followup_note = :note' : '') . ', updated_at = CURRENT_TIMESTAMP WHERE id = :id AND deleted_at IS NULL AND daily_plan_id IN (SELECT id FROM daily_plans WHERE user_id = :user_id)');
+        $params = ['status' => $status, 'id' => $itemId, 'user_id' => $userId];
+        if ($writeNote) $params['note'] = $note;
+        $stmt->execute($params);
         return $stmt->rowCount() > 0 || $this->getDailyPlanItemForCompletion($userId, $itemId) !== null;
     }
 
@@ -311,7 +315,7 @@ final class CalendarRepository
         $source = $this->supportsTodoCarryover() ? 'dpi.source_carryover_item_id' : 'NULL AS source_carryover_item_id';
         $stmt = $this->db->prepare('SELECT dpi.id, dpi.title, dpi.importance, dpi.goal_id, dpi.estimated_duration_minutes, dpi.todo_status, ' . $note . ', ' . $source . ', cd.calendar_date FROM daily_plan_items dpi
             INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id
-            WHERE dpi.id = :id AND dp.user_id = :user_id AND dpi.deleted_at IS NULL AND dpi.source_block_template_id IS NULL');
+            WHERE dpi.id = :id AND dp.user_id = :user_id AND dpi.deleted_at IS NULL');
         $stmt->execute(['id' => $itemId, 'user_id' => $userId]);
         return $stmt->fetch() ?: null;
     }
@@ -331,11 +335,11 @@ final class CalendarRepository
         $note = $this->supportsTodoFollowup() ? 'dpi.followup_note' : "'' AS followup_note";
         $registered = $this->supportsTodoCarryover() ? '(SELECT copy.id FROM daily_plan_items copy
             INNER JOIN daily_plans copy_plan ON copy_plan.id = copy.daily_plan_id INNER JOIN calendar_days copy_day ON copy_day.id = copy_plan.calendar_day_id
-            WHERE copy.source_carryover_item_id = dpi.id AND copy_plan.user_id = dp.user_id AND copy_day.calendar_date = :target_date LIMIT 1)' : 'NULL';
+            WHERE copy.source_carryover_item_id = dpi.id AND copy.deleted_at IS NULL AND copy_plan.user_id = dp.user_id AND copy_day.calendar_date = :target_date LIMIT 1)' : 'NULL';
         $stmt = $this->db->prepare('SELECT dpi.id, dpi.title, dpi.importance, dpi.todo_status, ' . $note . ', cd.calendar_date, ' . $registered . ' AS registered_item_id
             FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id
             WHERE dp.user_id = :user_id AND cd.calendar_date = :date AND dpi.deleted_at IS NULL
-              AND dpi.source_block_template_id IS NULL AND dpi.todo_status IN (\'in_progress\', \'postponed\')
+              AND dpi.todo_status IN (\'in_progress\', \'postponed\')
             ORDER BY cd.calendar_date DESC, dpi.sort_order ASC, dpi.id ASC');
         $params = ['user_id' => $userId, 'date' => (new \DateTimeImmutable($beforeDate))->modify('-1 day')->format('Y-m-d')];
         if ($this->supportsTodoCarryover()) $params['target_date'] = $beforeDate;
@@ -354,7 +358,7 @@ final class CalendarRepository
     private function findTodoCarryoverRegistration(int $userId, int $sourceId, string $date): ?int
     {
         $stmt = $this->db->prepare('SELECT dpi.id FROM daily_plan_items dpi INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
-            INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id WHERE dp.user_id = :user_id AND cd.calendar_date = :date AND dpi.source_carryover_item_id = :source_id LIMIT 1');
+            INNER JOIN calendar_days cd ON cd.id = dp.calendar_day_id WHERE dp.user_id = :user_id AND cd.calendar_date = :date AND dpi.source_carryover_item_id = :source_id AND dpi.deleted_at IS NULL LIMIT 1');
         $stmt->execute(['user_id' => $userId, 'date' => $date, 'source_id' => $sourceId]);
         $id = $stmt->fetchColumn();
         return $id === false ? null : (int) $id;
@@ -962,7 +966,8 @@ final class CalendarRepository
         ?int $endIndex,
         ?int $estimatedDurationMinutes,
         ?array $placementRange = null,
-        ?int $carryoverSourceId = null
+        ?int $carryoverSourceId = null,
+        array $locationChange = []
     ): ?int {
         try {
             $this->db->beginTransaction();
@@ -1003,6 +1008,13 @@ final class CalendarRepository
                 $dailyPlanId = (int) $this->db->lastInsertId();
             } else {
                 $dailyPlanId = (int) $dailyPlan['id'];
+            }
+
+            if ($carryover !== null) {
+                // Deleted copies must not reserve the daily-plan/source unique key.
+                $stmt = $this->db->prepare('UPDATE daily_plan_items SET source_carryover_item_id = NULL
+                    WHERE daily_plan_id = :plan_id AND source_carryover_item_id = :source_id AND deleted_at IS NOT NULL');
+                $stmt->execute(['plan_id' => $dailyPlanId, 'source_id' => $carryoverSourceId]);
             }
 
             if ($startIndex !== null && $endIndex !== null
@@ -1047,6 +1059,7 @@ final class CalendarRepository
             } elseif ($placementRange !== null) {
                 $this->createInitialDailyPlanBlock($itemId, $placementRange[0], $placementRange[1]);
             }
+            (new LocationRepository())->applyChange($userId, 'todo', $itemId, $locationChange);
             $this->db->commit();
 
             return $itemId;
@@ -1177,7 +1190,8 @@ final class CalendarRepository
         int $itemId,
         string $title,
         string $importance,
-        ?int $goalId
+        ?int $goalId,
+        array $locationChange = []
     ): bool {
         try {
             $this->db->beginTransaction();
@@ -1199,6 +1213,7 @@ final class CalendarRepository
                 'goal_id' => $goalId,
                 'id' => $itemId,
             ]);
+            (new LocationRepository())->applyChange($userId, 'todo', $itemId, $locationChange);
             $this->db->commit();
             return true;
         } catch (Throwable $exception) {
@@ -1227,7 +1242,7 @@ final class CalendarRepository
             $stmt->execute(['user_id' => $userId, 'item_id' => $itemId]);
             $stmt = $this->db->prepare(
                 'UPDATE daily_plan_items
-                 SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                 SET deleted_at = CURRENT_TIMESTAMP, ' . ($this->supportsTodoCarryover() ? 'source_carryover_item_id = NULL, ' : '') . 'updated_at = CURRENT_TIMESTAMP
                  WHERE id = :id AND deleted_at IS NULL'
             );
             $stmt->execute(['id' => $itemId]);
@@ -1253,7 +1268,8 @@ final class CalendarRepository
         ?int $dailyPlanItemId,
         ?int $calendarTagId,
         string $memo,
-        ?int $dailyPlanBlockId = null
+        ?int $dailyPlanBlockId = null,
+        array $locationChange = []
     ): ?int {
         try {
             $this->db->beginTransaction();
@@ -1322,6 +1338,7 @@ final class CalendarRepository
             $stmt->execute($params);
 
             $eventId = (int) $this->db->lastInsertId();
+            (new LocationRepository())->applyChange($userId, 'actual', $eventId, $locationChange);
             $this->db->commit();
 
             return $eventId;
@@ -1346,7 +1363,8 @@ final class CalendarRepository
         ?int $dailyPlanItemId,
         ?int $calendarTagId,
         string $memo,
-        ?int $dailyPlanBlockId = null
+        ?int $dailyPlanBlockId = null,
+        array $locationChange = []
     ): bool {
         try {
             $this->db->beginTransaction();
@@ -1438,6 +1456,7 @@ final class CalendarRepository
                 $this->resetManualStatusIfUnlinked($userId, $oldBlockId);
             }
 
+            (new LocationRepository())->applyChange($userId, 'actual', $eventId, $locationChange);
             $this->db->commit();
             return true;
         } catch (Throwable $exception) {
@@ -1608,7 +1627,8 @@ final class CalendarRepository
         int $endIndex,
         ?int $dailyPlanItemId,
         ?int $calendarTagId,
-        string $memo
+        string $memo,
+        array $locationChange = []
     ): ?int {
         try {
             $this->db->beginTransaction();
@@ -1670,6 +1690,7 @@ final class CalendarRepository
                 return null;
             }
 
+            (new LocationRepository())->applyChange($userId, 'actual', $eventId, $locationChange);
             $this->db->commit();
             return $eventId;
         } catch (Throwable $exception) {
@@ -1678,6 +1699,110 @@ final class CalendarRepository
             }
 
             error_log('[calendar] schedule untimed event failed: ' . $exception->getMessage());
+            return null;
+        }
+    }
+
+    /** Correct an Actual entered in the wrong grid; all changes commit together. */
+    public function convertActualEventToPlan(int $userId, int $eventId, ?array $targetRange = null): ?array
+    {
+        if (!$this->supportsDailyPlanBlocks()) return null;
+        try {
+            $this->db->beginTransaction();
+            $stmt = $this->db->prepare('SELECT calendar_day_id FROM calendar_events WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL');
+            $stmt->execute(['id' => $eventId, 'user_id' => $userId]);
+            $dayId = $stmt->fetchColumn();
+            if ($dayId === false) { $this->db->rollBack(); return null; }
+            $lock = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
+            $stmt = $this->db->prepare('SELECT calendar_date FROM calendar_days WHERE id = :id AND user_id = :user_id' . $lock);
+            $stmt->execute(['id' => $dayId, 'user_id' => $userId]);
+            $date = $stmt->fetchColumn();
+            $stmt = $this->db->prepare('SELECT id, title, start_index, end_index, daily_plan_item_id, daily_plan_block_id
+                FROM calendar_events WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL' . $lock);
+            $stmt->execute(['id' => $eventId, 'user_id' => $userId]);
+            $event = $stmt->fetch();
+            if ($date === false || $event === false || $event['start_index'] === null || $event['end_index'] === null) {
+                $this->db->rollBack(); return null;
+            }
+            $start = (int) $event['start_index'];
+            $end = (int) $event['end_index'];
+            if ($start < 0 || $end > 144 || $start >= $end) { $this->db->rollBack(); return null; }
+            if ($targetRange !== null) {
+                if (count($targetRange) !== 2 || !isset($targetRange[0], $targetRange[1]) || !is_int($targetRange[0]) || !is_int($targetRange[1])
+                    || $targetRange[0] < 0 || $targetRange[1] > 144 || $targetRange[0] >= $targetRange[1]
+                    || $targetRange[1] - $targetRange[0] !== $end - $start) {
+                    $this->db->rollBack(); return null;
+                }
+                [$start, $end] = $targetRange;
+            }
+            $blockId = (int) ($event['daily_plan_block_id'] ?? 0);
+            $itemId = (int) ($event['daily_plan_item_id'] ?? 0);
+            $reused = false;
+            if ($blockId > 0) {
+                $stmt = $this->db->prepare('SELECT dpb.daily_plan_item_id FROM daily_plan_blocks dpb
+                    INNER JOIN daily_plan_items dpi ON dpi.id = dpb.daily_plan_item_id
+                    INNER JOIN daily_plans dp ON dp.id = dpi.daily_plan_id
+                    WHERE dpb.id = :id AND dp.user_id = :user_id AND dp.calendar_day_id = :day_id');
+                $stmt->execute(['id' => $blockId, 'user_id' => $userId, 'day_id' => $dayId]);
+                $source = $stmt->fetchColumn();
+                if ($source === false) { $this->db->rollBack(); return null; }
+                $itemId = (int) $source;
+                $reused = true;
+                if ($targetRange !== null) {
+                    if ($this->hasOverlappingDailyPlanBlockForDay((int) $dayId, $start, $end, $blockId)) {
+                        $this->db->rollBack(); return null;
+                    }
+                    $stmt = $this->db->prepare('UPDATE daily_plan_blocks SET start_index = :start, end_index = :end,
+                        updated_at = CURRENT_TIMESTAMP WHERE id = :id');
+                    $stmt->execute(['start' => $start, 'end' => $end, 'id' => $blockId]);
+                }
+            } else {
+                if ($this->hasOverlappingDailyPlanBlockForDay((int) $dayId, $start, $end)) {
+                    $this->db->rollBack(); return null;
+                }
+                $source = $itemId > 0 ? $this->findOwnedDailyPlanItem($userId, $itemId) : null;
+                if ($source !== null && (int) $source['calendar_day_id'] !== (int) $dayId) {
+                    $this->db->rollBack(); return null;
+                }
+                if ($source === null) {
+                    $plan = $this->getDailyPlanForDay($userId, (int) $dayId);
+                    if ($plan === null) {
+                        $stmt = $this->db->prepare('INSERT INTO daily_plans (user_id, calendar_day_id, source_plan_group_id, name, created_at, updated_at)
+                            VALUES (:user_id, :day_id, NULL, :name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
+                        $stmt->execute(['user_id' => $userId, 'day_id' => $dayId, 'name' => '[' . $date . ']의 계획']);
+                        $planId = (int) $this->db->lastInsertId();
+                    } else { $planId = (int) $plan['id']; }
+                    $stmt = $this->db->prepare('INSERT INTO daily_plan_items (daily_plan_id, title, importance, sort_order, created_at, updated_at)
+                        VALUES (:plan_id, :title, :importance,
+                            (SELECT COALESCE(MAX(existing.sort_order), 0) + 1 FROM daily_plan_items existing WHERE existing.daily_plan_id = :sort_plan_id),
+                            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)');
+                    $stmt->execute(['plan_id' => $planId, 'sort_plan_id' => $planId, 'title' => $event['title'], 'importance' => 'D']);
+                    $itemId = (int) $this->db->lastInsertId();
+                    $locations = new LocationRepository();
+                    $location = $locations->find($userId, 'actual', $eventId);
+                    if ($location !== null) $locations->applyChange($userId, 'todo', $itemId, ['value' => $location]);
+                }
+                $blockId = (int) $this->createInitialDailyPlanBlock($itemId, $start, $end);
+                if ($blockId <= 0) throw new \RuntimeException('Plan block unavailable');
+            }
+            $stmt = $this->db->prepare('UPDATE calendar_events SET memo = :memo, calendar_tag_id = NULL,
+                daily_plan_item_id = NULL, daily_plan_block_id = NULL, plan_template_id = NULL,
+                deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id AND user_id = :user_id AND deleted_at IS NULL');
+            $stmt->execute(['memo' => '', 'id' => $eventId, 'user_id' => $userId]);
+            if ($stmt->rowCount() !== 1) throw new \RuntimeException('Actual changed');
+            $stmt = $this->db->prepare('DELETE FROM execution_energy_event_settings WHERE calendar_event_id = :id AND user_id = :user_id');
+            $stmt->execute(['id' => $eventId, 'user_id' => $userId]);
+            $stmt = $this->db->prepare('DELETE FROM wellness_entries WHERE calendar_event_id = :id AND user_id = :user_id');
+            $stmt->execute(['id' => $eventId, 'user_id' => $userId]);
+            $stmt = $this->db->prepare('DELETE FROM saved_locations WHERE entity_type = :type AND entity_id = :id AND user_id = :user_id');
+            $stmt->execute(['type' => 'actual', 'id' => $eventId, 'user_id' => $userId]);
+            if ($reused) $this->resetManualStatusIfUnlinked($userId, $blockId);
+            $this->db->commit();
+            return ['date' => (string) $date, 'itemId' => $itemId, 'blockId' => $blockId, 'reused' => $reused];
+        } catch (Throwable $exception) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            error_log('[calendar] actual-to-plan conversion failed: ' . $exception->getMessage());
             return null;
         }
     }
@@ -2148,8 +2273,7 @@ final class CalendarRepository
                     AND ct.deleted_at IS NULL
                     AND (ct.is_system = 1 OR ct.user_id = :tag_user_id)
                     AND (
-                        ct.is_system = 0
-                        OR COALESCE(ctp.is_enabled, 1) = 1';
+                        COALESCE(ctp.is_enabled, 1) = 1';
 
         $params = [
             'preference_user_id' => $userId,

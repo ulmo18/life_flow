@@ -34,7 +34,7 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 ## Plan
 - Plan stores reusable daily schedule templates. Editing a template updates that template in place and never changes a date-specific plan already copied into Calendar.
 - Plan has two template levels: a Plan-block library for one reusable activity and a daily template that places copied blocks at specific times. A block template stores title, 10-minute-unit default duration, Eisenhower importance, and an optional goal, but no start or end clock time.
-- The `반복 할 일` page opens with the reusable `할 일 블록` tab first; `하루 템플릿` is the second tab. The explicit `?view=days` link opens daily templates, including after their copy or deletion.
+- The `/plan` page is `하루 템플릿` and directly lists day templates without tabs. Reusable To-do blocks are managed only in `/todo?tab=recurring`; legacy `/plan?view=blocks` links also show day templates.
 - Daily-template editing can mix blocks copied from the Plan-block library with blocks entered directly. Copying isolates the daily template from later library edits or deletion.
 - The Plan list omits the large menu-name introduction so the first plan card or empty state begins at the top of the content area; a screen-reader heading remains available.
 - A plan is built in the same day-grid style as the calendar.
@@ -242,3 +242,21 @@ Read this file before changing menu behavior, menu navigation, calendar presenta
 - Calendar displays standalone memos at their local creation time as grouped Actual-grid markers when the corresponding slot has no Actual block; selecting a marker opens a memo list without creating an event.
 
 - Dashboard hides links to the prototype pages; the working Schedule link remains available. Calendar offers a review link from 22:00 to midnight when today’s review is not submitted.
+
+## Repeated To-do entry point review (2026-11-14)
+
+Reusable To-do templates are managed in the To-do recurring tab, using plan_block_templates and the existing /plan/block-template endpoints. The separate /plan menu now lists day templates only.
+
+The daily To-do tab additionally inserts an enabled template into today’s dated items and marks it used for that date. The Plan-block tab is a library used by Calendar placement and the separate daily-template editor. CRUD is currently duplicated across the two entry points. Recommended future simplification: use the daily recurring tab primarily for selecting/adding to today, and centralize template management in the Plan menu. This review did not remove or merge either UI.
+
+### Day-template editor (2026-11-14)
+- Long press/click an empty time cell (450 ms) to register a schedule; dragging before activation cancels selection so normal scrolling remains available.
+- The registration sheet has 일정 등록 / 반복 일정 tabs. Reusable sources copy title, importance and goal into the selected time range; the original source is unchanged.
+- Tap an existing schedule to edit its title, importance and goal, or delete it. The sheet omits start/end inputs: the selected or existing range is preserved, and time changes use timetable movement/resize handles. Long press its body to move; long press either endpoint handle to resize in 10-minute steps. Handles also accept arrow keys (left/right 10 minutes; up/down one hour).
+- Overlaps and ranges outside 00:00–24:00 are rejected. Invalid/cancelled gestures retain the original block. Changes persist with the page-level template save; existing date-specific plans are unchanged.
+
+- Day-template create/edit uses the focused Calendar Plan appearance: hour-only labels (00–23) on the right, shared importance badges and resize-handle design. Usage and edit-scope guidance appears below the timetable.
+
+- Day-template read-only details reuse the create/edit focused Plan timetable, including right-side hour-only labels and neutral importance badges. The editor’s existing-template save button uses red text/border on the surface background; new-template creation retains its primary action.
+
+- Template-editor endpoint handles remain visible independently of Calendar work-mode visibility rules and use a high-contrast current-color marker.

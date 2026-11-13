@@ -189,3 +189,13 @@ Useful feedback signals:
 - routines that have not started despite being active
 
 - The daily Routine empty state matches the To-do list empty table styling and does not repeat the Routine Management link inside the message.
+
+## Month picker parity (2026-11-13)
+
+Management month selection reuses the published Retrospect history layout: left-aligned year/month trigger followed by previous/next arrows, and a year navigator with a four-column month dialog. Both status tabs preserve status and selected month. The shared `components/month-picker.js` and `ui-month-*` styles now serve both pages; native month input and a submit button remain available without JavaScript.
+
+Manual checks: choose a month, change year, navigate adjacent months, switch status tabs, and verify calendar data and selected month. Escape/backdrop/close should restore focus to the month trigger. Compare both themes with Retrospect history.
+
+## Month navigation placement (2026-11-13)
+
+The management month selector now occupies the shared site header's left label slot, with Search/menu actions on the right. The body contains only the Active/Completed tabs, with no duplicate month row. This corrects the earlier interpretation that placed the selector above the tabs in the content area. Status, month links, picker dialog and calendar data are unchanged. The shared header includes components/routine-month-navigation.php only for /manage/routines.

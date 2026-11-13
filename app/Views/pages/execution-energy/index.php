@@ -3,13 +3,12 @@
 $profile = $energy['profile'] ?? [];
 ?>
 <main class="page execution-energy-page">
-    <h1>실행력 관리</h1>
+    <h1 class="sr-only">실행력</h1>
     <?php if (!empty($flashSuccess)): ?><span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span><?php endif; ?>
     <?php if (!empty($errors['general'])): ?><div class="msg msg-error"><?= e((string) $errors['general']) ?></div><?php endif; ?>
 
     <section class="energy-management-card">
         <h2>개인 기본 실행력</h2>
-        <p>실행력은 의료 평가가 아닌, 계획량을 조절하기 위한 개인 관리 지표입니다. 변경한 기준은 다음 날부터 적용됩니다.</p>
         <form method="post" action="/execution-energy/profile" class="energy-form">
             <input type="hidden" name="_csrf_token" value="<?= e((string) $csrfToken) ?>">
             <label class="form-label" for="energyBaseCapacity">기본 실행력</label>

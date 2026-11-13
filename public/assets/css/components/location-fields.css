@@ -1,0 +1,25 @@
+.location-fields { min-width:0; border:0; border-top:1px solid var(--border); }
+.location-fields > summary { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,auto) 16px; align-items:center; gap:8px; min-height:48px; padding:8px 0; cursor:pointer; list-style:none; font-size:13px; font-weight:400; }
+.location-fields > summary::-webkit-details-marker { display:none; }
+.location-fields > summary::after { margin-left:0; }
+[data-location-summary] { max-width:200px; color:var(--color-text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.location-fields [hidden] { display:none !important; }
+.location-search-controls { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+.location-search-controls .input { width:100%; min-width:0; }
+.location-results { display:grid; gap:0; list-style:none; padding:0; margin:8px 0; max-height:220px; overflow-y:auto; overscroll-behavior:contain; }
+.location-results button { width:100%; min-height:48px; padding:8px; border:0; border-bottom:1px solid var(--border); background:transparent; color:var(--color-text); text-align:left; cursor:pointer; font:inherit; }
+.location-results small { display:block; margin-top:4px; color:var(--color-text-muted); overflow-wrap:anywhere; }
+.location-card { overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--color-surface); }
+.location-map { width:100%; height:154px; background:var(--color-surface-soft); }
+.location-info { padding:12px; }
+.location-info > strong { font-size:14px; font-weight:600; }
+.location-info > p { margin:4px 0 0; color:var(--color-text-muted); font-size:12px; overflow-wrap:anywhere; }
+.location-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin-top:8px; }
+.location-actions .btn, .location-actions a { min-height:44px; display:inline-flex; align-items:center; font-size:12px; }
+.location-actions a { color:var(--color-primary-text); }
+.location-message { margin:8px 0; color:var(--color-text-muted); font-size:12px; line-height:1.5; }
+.location-message:empty { display:none; }
+.location-fields button:focus-visible, .location-fields a:focus-visible { outline:3px solid var(--color-focus); outline-offset:-2px; }
+
+.calendar-additional-records > .location-fields { border-top:0; border-bottom:1px solid var(--border); }
+.location-fields[data-location-readonly][hidden] { display:none; }

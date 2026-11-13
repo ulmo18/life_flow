@@ -8,17 +8,7 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
 ?>
 
 <main class="page memo-page">
-    <section class="memo-header">
-        <div>
-            <p class="eyebrow">Memo</p>
-            <h1 class="page-title"><?= $isTrash ? '메모 휴지통' : '메모' ?></h1>
-        </div>
-        <?php if ($isTrash): ?>
-            <a class="memo-trash-button" href="/memo" aria-label="메모 목록으로 돌아가기">←</a>
-        <?php else: ?>
-            <a class="memo-trash-button" href="/memo?trash=1" aria-label="휴지통 열기">&#128465;</a>
-        <?php endif; ?>
-    </section>
+    <h1 class="sr-only">메모</h1>
 
     <?php if (!empty($flashSuccess)): ?>
         <span data-toast-message="<?= e((string) $flashSuccess) ?>" hidden></span>
@@ -27,12 +17,13 @@ $counts = $memoData['counts'] ?? ['short' => 0, 'long' => 0];
         <div class="msg msg-error"><?= e((string) $errors['general']) ?></div>
     <?php endif; ?>
 
-    <?php if (!$isTrash): ?>
-        <nav class="ui-segmented-tabs memo-type-tabs" aria-label="메모 길이 필터">
-            <a href="/memo?type=short" <?= $selectedType === 'short' ? 'aria-current="page"' : '' ?>>짧은 메모 (<?= e((string) ($counts['short'] ?? 0)) ?>)</a>
-            <a href="/memo?type=long" <?= $selectedType === 'long' ? 'aria-current="page"' : '' ?>>긴 메모 (<?= e((string) ($counts['long'] ?? 0)) ?>)</a>
+    <div class="ui-menu-context">
+        <nav class="ui-segmented-tabs memo-type-tabs" aria-label="메모 분류">
+            <a href="/memo?type=short" <?= !$isTrash && $selectedType === 'short' ? 'aria-current="page"' : '' ?>>짧은 메모 (<?= e((string) ($counts['short'] ?? 0)) ?>)</a>
+            <a href="/memo?type=long" <?= !$isTrash && $selectedType === 'long' ? 'aria-current="page"' : '' ?>>긴 메모 (<?= e((string) ($counts['long'] ?? 0)) ?>)</a>
+            <a href="/memo?trash=1" <?= $isTrash ? 'aria-current="page"' : '' ?>>휴지통</a>
         </nav>
-    <?php endif; ?>
+    </div>
 
     <form class="memo-search" method="get" action="/memo">
         <?php if ($isTrash): ?>
